@@ -1,0 +1,24 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "UnrealHog",
+	"Description": "A PostHog integration for data analytics & collection in Unreal Engine.",
+	"Category": "Other",
+	"CreatedBy": "Trevor Eckhoff",
+	"CreatedByURL": "trevoreckhoff.com",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"CanContainContent": true,
+	"IsBetaVersion": true,
+	"IsExperimentalVersion": false,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "UnrealHog",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	]
+}
