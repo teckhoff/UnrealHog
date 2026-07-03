@@ -137,6 +137,9 @@ public:
 	UFUNCTION()
 	FString GetResolvedHost() const;
 	
+	UFUNCTION()
+	bool IsAnalyticsEnabled() const;
+	
 #if WITH_EDITOR
 	virtual bool CanEditChange(const FProperty* InProperty) const override;
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
@@ -150,10 +153,6 @@ protected:
 	// Whether analytics collection is enabled for this project.
 	UPROPERTY(Config, EditAnywhere, Category="PostHog")
 	bool bAnalyticsEnabled = true;
-	
-	// Whether to automatically initialize the SDK from these project settings.
-	UPROPERTY(Config, EditAnywhere, Category="PostHog")
-	bool bAutoInitialize = true;
 	
 	// The public project API key from PostHog. Should start with "phc_". May be soft-validated in the future.
 	UPROPERTY(Config, EditAnywhere, Category="PostHog", meta = (DisplayName = "Project Public API Key"))
