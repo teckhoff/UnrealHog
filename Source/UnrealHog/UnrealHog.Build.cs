@@ -26,7 +26,11 @@ public class UnrealHog : ModuleRules
 			new string[]
 			{
 				"Core",
-				"DeveloperSettings"
+				"DeveloperSettings",
+				"HTTP",
+				"Json",
+				"JsonUtilities",
+				"Projects"
 				// ... add other public dependencies that you statically link with here ...
 			}
 			);

@@ -138,7 +138,10 @@ public:
 	FString GetResolvedHost() const;
 	
 	UFUNCTION()
-	bool IsAnalyticsEnabled() const;
+	bool IsAnalyticsEnabled() const { return bAnalyticsEnabled; };
+	
+	UFUNCTION()
+	const FString& GetApiKey() const { return ApiKey; }
 	
 #if WITH_EDITOR
 	virtual bool CanEditChange(const FProperty* InProperty) const override;

@@ -24,11 +24,6 @@ FString UPostHogDeveloperSettings::GetResolvedHost() const
 	}
 }
 
-bool UPostHogDeveloperSettings::IsAnalyticsEnabled() const
-{
-	return bAnalyticsEnabled;
-}
-
 #if WITH_EDITOR
 bool UPostHogDeveloperSettings::CanEditChange(const FProperty* InProperty) const
 {
