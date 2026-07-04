@@ -6,6 +6,8 @@
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "PostHogRuntimeSubsystem.generated.h"
 
+
+
 /**
  * 
  */
@@ -19,5 +21,6 @@ public:
 	
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	
-	
+private:
+	FGuid SessionId;
 };
