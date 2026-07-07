@@ -10,6 +10,7 @@
 #include "Logging/PostHogLogger.h"
 #include "Logging/StructuredLog.h"
 #include "SDK/PostHogSdkInfo.h"
+#include "Storage/PostHogStorageProvider.h"
 
 
 bool UPostHogRuntimeSubsystem::ShouldCreateSubsystem(UObject* Outer) const
@@ -29,6 +30,8 @@ void UPostHogRuntimeSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	const FString LibraryVersion = PostHogSdkInfo::GetPluginVersion();
 	const FString UserAgent = PostHogSdkInfo::GetUserAgent();
 	
+	StorageProvider = IPostHogStorageProvider::CreateDefaultProvider();
+	
 	SessionId = FGuid::NewGuid();
 	
 	UE_LOGFMT(LogPostHog, Log, "PostHog Runtime Subsystem Initialized. Plugin {LibraryName} (ver. {Version}) ({Agent})", LibraryName, LibraryVersion, UserAgent);
@@ -37,10 +40,12 @@ void UPostHogRuntimeSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	
 	FPostHogEvent Event(TEXT("login"), SessionId.ToString(EGuidFormats::DigitsWithHyphensLower));
 	Event.SetProcessPersonProfile(false);
+	StorageProvider->SaveEvent(Event.GetEventId(), Event.ToJsonObject());
 	
 	FPostHogEvent Event2(TEXT("started_game"), SessionId.ToString(EGuidFormats::DigitsWithHyphensLower));
 	Event2.SetProcessPersonProfile(false);
 	Event2.SetNumberProperty(TEXT("money"), 10000);
+	StorageProvider->SaveEvent(Event2.GetEventId(), Event2.ToJsonObject());
 	
 	FPostHogBatchPayload Payload(Settings->GetApiKey());
 	Payload.AddEvent(Event);

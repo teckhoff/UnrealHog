@@ -7,7 +7,7 @@
 #include "PostHogRuntimeSubsystem.generated.h"
 
 
-
+class IPostHogStorageProvider;
 /**
  * 
  */
@@ -23,4 +23,6 @@ public:
 	
 private:
 	FGuid SessionId;
+	
+	TUniquePtr<IPostHogStorageProvider> StorageProvider;
 };

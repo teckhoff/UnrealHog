@@ -42,5 +42,7 @@ public:
 	void SetObjectProperty(const FString& Key, FJsonObject& ObjectValue);
 	void SetProcessPersonProfile(bool bProcessPersonProfile);
 	
+	FString GetEventId() const { return EventUuid; };
+	
 	TSharedRef<FJsonObject> ToJsonObject() const;
 };
