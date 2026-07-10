@@ -3,14 +3,12 @@
 
 #include "Storage/PostHogFileStorageProvider.h"
 
-#include "DynamicMesh/DynamicMesh3.h"
 #include "HAL/FileManager.h"
 #include "Logging/PostHogLogger.h"
 #include "Logging/StructuredLog.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "SDK/PostHogSdkInfo.h"
-#include "Logging/PostHogLogger.h"
 
 
 FPostHogFileStorageProvider::FPostHogFileStorageProvider()
