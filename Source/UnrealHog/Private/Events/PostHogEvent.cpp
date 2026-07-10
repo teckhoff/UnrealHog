@@ -3,8 +3,11 @@
 
 #include "Events/PostHogEvent.h"
 
+#include "Engine/Engine.h"
+#include "Engine/GameViewportClient.h"
 #include "Dom/JsonObject.h"
 #include "SDK/PostHogSdkInfo.h"
+#include "GeneralProjectSettings.h"
 
 
 FPostHogEvent::FPostHogEvent(const FString& InEventName, const FString& InDistinctId)
@@ -15,6 +18,43 @@ FPostHogEvent::FPostHogEvent(const FString& InEventName, const FString& InDistin
 {	
 	Properties.SetStringField(TEXT("$lib"), PostHogSdkInfo::GetLibraryName());
 	Properties.SetStringField(TEXT("$lib_version"), PostHogSdkInfo::GetPluginVersion());
+	
+	Properties.SetStringField(TEXT("$platform"), FPlatformProperties::PlatformName());
+	
+	const FString PlatformVariant = FPlatformProperties::PlatformVariantName();
+	
+	if (!PlatformVariant.IsEmpty())
+	{
+		Properties.SetStringField(TEXT("$platform_variant"), PlatformVariant);
+	}
+	
+	const FString OsVersion = FPlatformMisc::GetOSVersion();
+	
+	if (!OsVersion.IsEmpty())
+	{
+		Properties.SetStringField(TEXT("$os_version"), OsVersion);
+	}
+	
+	const FString DeviceMakeAndModel = FPlatformMisc::GetDeviceMakeAndModel();
+	
+	if (!DeviceMakeAndModel.IsEmpty())
+	{
+		Properties.SetStringField(TEXT("$device_model"), DeviceMakeAndModel);
+	}
+	
+	const UGeneralProjectSettings* ProjectSettings = GetDefault<UGeneralProjectSettings>();
+	
+	Properties.SetStringField(TEXT("$app_name"), ProjectSettings->ProjectName);
+	Properties.SetStringField(TEXT("$app_version"), ProjectSettings->ProjectVersion);
+	
+	if (GEngine && GEngine->GameViewport)
+	{
+		FVector2D ViewportSize;
+		GEngine->GameViewport->GetViewportSize(ViewportSize);
+		Properties.SetNumberField(TEXT("$screen_width"), ViewportSize.X);
+		Properties.SetNumberField(TEXT("$screen_height"), ViewportSize.Y);
+	}
+	
 }
 
 void FPostHogEvent::SetStringProperty(const FString& Key, const FString& StringValue)

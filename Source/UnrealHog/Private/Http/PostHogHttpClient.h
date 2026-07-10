@@ -18,7 +18,7 @@ public:
 	
 	explicit FPostHogHttpClient(const FString& InHost);
 	
-	void SendBatch(const FPostHogBatchPayload& Payload, FOnRequestComplete OnComplete) const;
+	FHttpRequestPtr SendBatch(const FPostHogBatchPayload& Payload, FOnRequestComplete OnComplete) const;
 	
 private:
 	static constexpr float TimeoutSeconds = 10.0f;

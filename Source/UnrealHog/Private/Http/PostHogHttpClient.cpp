@@ -18,7 +18,7 @@ FPostHogHttpClient::FPostHogHttpClient(const FString& InHost)
 {
 }
 
-void FPostHogHttpClient::SendBatch(const FPostHogBatchPayload& Payload, FOnRequestComplete OnComplete) const
+FHttpRequestPtr FPostHogHttpClient::SendBatch(const FPostHogBatchPayload& Payload, FOnRequestComplete OnComplete) const
 {
 	FString JsonBody;
 	if (!SerializeJsonObject(Payload.ToJsonObject(), JsonBody))
@@ -30,7 +30,7 @@ void FPostHogHttpClient::SendBatch(const FPostHogBatchPayload& Payload, FOnReque
 			OnComplete(false, 0, TEXT(""));
 		}
 		
-		return;
+		return nullptr;
 	}
 	
 	FHttpRequestRef Request = FHttpModule::Get().CreateRequest();
@@ -68,6 +68,8 @@ void FPostHogHttpClient::SendBatch(const FPostHogBatchPayload& Payload, FOnReque
 		});
 	
 	Request->ProcessRequest();
+	
+	return Request;
 }
 
 FString FPostHogHttpClient::GetBatchUrl() const
