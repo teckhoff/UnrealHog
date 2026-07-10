@@ -4,13 +4,16 @@
 
 #include "PostHogDeveloperSettings.h"
 #include "Dom/JsonObject.h"
-#include "Events/PostHogBatchPayload.h"
+#include "Engine/World.h"
 #include "Events/PostHogEvent.h"
 #include "Http/PostHogHttpClient.h"
 #include "Logging/PostHogLogger.h"
 #include "Logging/StructuredLog.h"
 #include "SDK/PostHogSdkInfo.h"
 #include "Storage/PostHogStorageProvider.h"
+#include "Events/PostHogEventQueue.h"
+#include "TimerManager.h"
+#include "Events/PostHogEventProperties.h"
 
 
 bool UPostHogRuntimeSubsystem::ShouldCreateSubsystem(UObject* Outer) const
@@ -31,28 +34,67 @@ void UPostHogRuntimeSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	const FString UserAgent = PostHogSdkInfo::GetUserAgent();
 	
 	StorageProvider = IPostHogStorageProvider::CreateDefaultProvider();
+	HttpClient = MakeUnique<FPostHogHttpClient>(Settings->GetResolvedHost());
+	EventQueue = MakeUnique<FPostHogEventQueue>(*StorageProvider, *HttpClient, Settings->GetApiKey(), Settings->GetMaxQueueSize(), Settings->GetMaxBatchSize(), Settings->GetFlushEventCount());
 	
 	SessionId = FGuid::NewGuid();
 	
 	UE_LOGFMT(LogPostHog, Log, "PostHog Runtime Subsystem Initialized. Plugin {LibraryName} (ver. {Version}) ({Agent})", LibraryName, LibraryVersion, UserAgent);
 	
-	FPostHogHttpClient* HttpClient = new FPostHogHttpClient(Settings->GetResolvedHost());
-	
-	FPostHogEvent Event(TEXT("login"), SessionId.ToString(EGuidFormats::DigitsWithHyphensLower));
-	Event.SetProcessPersonProfile(false);
-	StorageProvider->SaveEvent(Event.GetEventId(), Event.ToJsonObject());
-	
-	FPostHogEvent Event2(TEXT("started_game"), SessionId.ToString(EGuidFormats::DigitsWithHyphensLower));
-	Event2.SetProcessPersonProfile(false);
-	Event2.SetNumberProperty(TEXT("money"), 10000);
-	StorageProvider->SaveEvent(Event2.GetEventId(), Event2.ToJsonObject());
-	
-	FPostHogBatchPayload Payload(Settings->GetApiKey());
-	Payload.AddEvent(Event);
-	Payload.AddEvent(Event2);
-	
-	HttpClient->SendBatch(Payload, [](bool bSuccess, int32 StatusCode, const FString& ResponseBody)
+	if (UWorld* World = GetWorld())
 	{
-		UE_LOGFMT(LogPostHog, Log, "PostHog Event Sent. Status Code: {StatusCode}, Response Body: {ResponseBody}", StatusCode, ResponseBody);
-	});
+		const float FlushIntervalSeconds = FMath::Max(static_cast<float>(Settings->GetFlushIntervalSeconds()), 1.0f);
+		World->GetTimerManager().SetTimer(
+			FlushTimerHandle,
+			this,
+			&UPostHogRuntimeSubsystem::FlushQueuedEvents,
+			FlushIntervalSeconds,
+			true,
+			FlushIntervalSeconds);
+	}
+}
+
+void UPostHogRuntimeSubsystem::Deinitialize()
+{
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(FlushTimerHandle);
+	}
+	
+	if (EventQueue)
+	{
+		EventQueue->CancelInFlightRequest();
+	}
+	
+	Super::Deinitialize();
+}
+
+void UPostHogRuntimeSubsystem::CaptureEvent(const FString& EventName, UPostHogEventProperties* Properties)
+{
+	FPostHogEvent GeneratedEvent(EventName, SessionId.ToString(EGuidFormats::DigitsWithHyphensLower));
+	
+	// TODO: Check opt-in/opt-out status to determine whether to ProcessProfile.
+	// Currently, default to anonymous events.
+	GeneratedEvent.SetProcessPersonProfile(false);
+	
+	if (Properties)
+	{
+		Properties->ApplyToEvent(GeneratedEvent);
+	}
+	
+	EventQueue->Enqueue(GeneratedEvent);
+}
+
+UPostHogEventProperties* UPostHogRuntimeSubsystem::CreateEventProperties()
+{
+	return NewObject<UPostHogEventProperties>(this);
+}
+
+void UPostHogRuntimeSubsystem::FlushQueuedEvents()
+{
+	if (EventQueue)
+	{
+		UE_LOGFMT(LogPostHog, Log, "Timer Queue Flush!");
+		EventQueue->Flush();
+	}
 }

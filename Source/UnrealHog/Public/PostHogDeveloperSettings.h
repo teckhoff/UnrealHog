@@ -142,6 +142,21 @@ public:
 	
 	UFUNCTION()
 	const FString& GetApiKey() const { return ApiKey; }
+
+	UFUNCTION()
+	int32 GetFlushEventCount() const { return FlushEventCount; }
+
+	UFUNCTION()
+	int32 GetFlushIntervalSeconds() const { return FlushIntervalSeconds; }
+
+	UFUNCTION()
+	int32 GetMaxQueueSize() const { return MaxQueueSize; }
+
+	UFUNCTION()
+	int32 GetMaxBatchSize() const { return MaxBatchSize; }
+
+	UFUNCTION()
+	bool ShouldCaptureApplicationLifecycleEvents() const { return bCaptureApplicationLifecycleEvents; }
 	
 #if WITH_EDITOR
 	virtual bool CanEditChange(const FProperty* InProperty) const override;
