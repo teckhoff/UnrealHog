@@ -12,3 +12,7 @@
 *.patch_*
 *.pdb
 *.target
+
+# Generated PR review/triage reports remain available locally but are not committed.
+/fleet-reports/*
+!/fleet-reports/.gitkeep
