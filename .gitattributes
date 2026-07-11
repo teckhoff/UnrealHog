@@ -1,0 +1,19 @@
+# Normalize line endings: text files are stored with LF in the repository,
+# regardless of any machine's core.autocrlf setting. Working-tree checkout
+# follows each machine's platform default.
+* text=auto
+
+# Explicit text types (belt and braces over auto-detection)
+*.cpp text
+*.h text
+*.cs text
+*.uplugin text
+*.ini text
+*.md text
+.gitignore text
+.gitattributes text
+
+# Never apply EOL conversion to binary content
+*.png binary
+*.uasset binary
+*.umap binary
