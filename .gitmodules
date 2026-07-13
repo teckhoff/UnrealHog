@@ -1,0 +1,3 @@
+[submodule "Docs/Reference/posthog-unity"]
+	path = Docs/Reference/posthog-unity
+	url = https://github.com/PostHog/posthog-unity.git
