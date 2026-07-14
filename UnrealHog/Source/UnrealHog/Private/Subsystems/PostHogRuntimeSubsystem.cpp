@@ -3,6 +3,7 @@
 #include "Subsystems/PostHogRuntimeSubsystem.h"
 
 #include "PostHogDeveloperSettings.h"
+#include "PostHogSettingsValidation.h"
 #include "Dom/JsonObject.h"
 #include "Engine/World.h"
 #include "Events/PostHogEvent.h"
@@ -20,15 +21,23 @@
 bool UPostHogRuntimeSubsystem::ShouldCreateSubsystem(UObject* Outer) const
 {
 	const UPostHogDeveloperSettings* Settings = GetDefault<UPostHogDeveloperSettings>();
-	
-	return Settings->IsAnalyticsEnabled();
+
+	return Settings->IsAnalyticsEnabled() && PostHogSettingsValidation::Validate(*Settings).bIsValid;
 }
 
 void UPostHogRuntimeSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
-	
+
 	const UPostHogDeveloperSettings* Settings = GetDefault<UPostHogDeveloperSettings>();
+
+	const FPostHogSettingsValidationResult ValidationResult = PostHogSettingsValidation::Validate(*Settings);
+
+	if (!ValidationResult.bIsValid)
+	{
+		UE_LOGFMT(LogPostHog, Warning, "PostHog Runtime Subsystem configuration is invalid ({Reason}); aborting initialization.", ValidationResult.FailureReason);
+		return;
+	}
 
 	SessionId = PostHogUuidV7::New();
 
@@ -43,7 +52,7 @@ void UPostHogRuntimeSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	const FString UserAgent = PostHogSdkInfo::GetUserAgent();
 
 	StorageProvider = IPostHogStorageProvider::CreateDefaultProvider();
-	HttpClient = MakeUnique<FPostHogHttpClient>(Settings->GetResolvedHost());
+	HttpClient = MakeUnique<FPostHogHttpClient>(ValidationResult.ResolvedHost);
 	EventQueue = MakeUnique<FPostHogEventQueue>(*StorageProvider, *HttpClient, Settings->GetApiKey(), Settings->GetMaxQueueSize(), Settings->GetMaxBatchSize(), Settings->GetFlushEventCount());
 
 	UE_LOGFMT(LogPostHog, Log, "PostHog Runtime Subsystem Initialized. Plugin {LibraryName} (ver. {Version}) ({Agent})", LibraryName, LibraryVersion, UserAgent);

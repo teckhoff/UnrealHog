@@ -245,4 +245,34 @@ bool FPostHogUuidV7ConcurrencyTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogUuidV7ProductionSmokeTest, "UnrealHog.Utilities.UuidV7.ProductionSmoke", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogUuidV7ProductionSmokeTest::RunTest(const FString& Parameters)
+{
+	constexpr int32 NumValues = 1000;
+
+	TSet<FString> Seen;
+	FString Previous;
+
+	for (int32 Index = 0; Index < NumValues; ++Index)
+	{
+		const FString Current = PostHogUuidV7::New();
+
+		TestFalse(TEXT("Value non-empty"), Current.IsEmpty());
+		TestFalse(TEXT("No duplicate"), Seen.Contains(Current));
+		Seen.Add(Current);
+
+		if (Index > 0)
+		{
+			TestTrue(TEXT("Nondecreasing lexical order"), Current >= Previous);
+		}
+
+		Previous = Current;
+	}
+
+	TestEqual(TEXT("All values unique"), Seen.Num(), NumValues);
+
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS
