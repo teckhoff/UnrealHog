@@ -6,19 +6,11 @@
 
 #include "Misc/AutomationTest.h"
 #include "PostHogDeveloperSettings.h"
+#include "Tests/PostHogTestPropertyHelpers.h"
 #include "UObject/UnrealType.h"
 
 namespace
 {
-	template<typename T>
-	void SetPropertyValue(UObject* Object, const TCHAR* PropertyName, const T& Value)
-	{
-		FProperty* Property = FindFProperty<FProperty>(Object->GetClass(), PropertyName);
-		check(Property);
-		T* ValuePtr = Property->ContainerPtrToValuePtr<T>(Object);
-		*ValuePtr = Value;
-	}
-
 	// Guarantees the process-wide settings CDO is restored to its original values when the
 	// test function returns, whether that is a normal return or an early one from a failed check.
 	struct FScopedDeveloperSettingsCdoRestore
@@ -32,8 +24,8 @@ namespace
 
 		~FScopedDeveloperSettingsCdoRestore()
 		{
-			SetPropertyValue<bool>(Cdo, TEXT("bAnalyticsEnabled"), bOriginalAnalyticsEnabled);
-			SetPropertyValue<FString>(Cdo, TEXT("ApiKey"), OriginalApiKey);
+			UnrealHogTests::SetPropertyValue<bool>(Cdo, TEXT("bAnalyticsEnabled"), bOriginalAnalyticsEnabled);
+			UnrealHogTests::SetPropertyValue<FString>(Cdo, TEXT("ApiKey"), OriginalApiKey);
 		}
 
 		UPostHogDeveloperSettings* Cdo;
@@ -49,24 +41,24 @@ bool FPostHogRuntimeSubsystemGatingTest::RunTest(const FString& Parameters)
 	FScopedDeveloperSettingsCdoRestore RestoreGuard;
 
 	// Case 1: analytics disabled entirely.
-	SetPropertyValue<bool>(RestoreGuard.Cdo, TEXT("bAnalyticsEnabled"), false);
-	SetPropertyValue<FString>(RestoreGuard.Cdo, TEXT("ApiKey"), TEXT("phc_valid_key"));
+	UnrealHogTests::SetPropertyValue<bool>(RestoreGuard.Cdo, TEXT("bAnalyticsEnabled"), false);
+	UnrealHogTests::SetPropertyValue<FString>(RestoreGuard.Cdo, TEXT("ApiKey"), TEXT("phc_valid_key"));
 	{
 		UPostHogRuntimeSubsystem* Subsystem = NewObject<UPostHogRuntimeSubsystem>(GetTransientPackage());
 		TestFalse(TEXT("Disabled analytics prevents subsystem creation"), Subsystem->ShouldCreateSubsystem(GetTransientPackage()));
 	}
 
 	// Case 2: analytics enabled, but whitespace-only API key.
-	SetPropertyValue<bool>(RestoreGuard.Cdo, TEXT("bAnalyticsEnabled"), true);
-	SetPropertyValue<FString>(RestoreGuard.Cdo, TEXT("ApiKey"), TEXT("   "));
+	UnrealHogTests::SetPropertyValue<bool>(RestoreGuard.Cdo, TEXT("bAnalyticsEnabled"), true);
+	UnrealHogTests::SetPropertyValue<FString>(RestoreGuard.Cdo, TEXT("ApiKey"), TEXT("   "));
 	{
 		UPostHogRuntimeSubsystem* Subsystem = NewObject<UPostHogRuntimeSubsystem>(GetTransientPackage());
 		TestFalse(TEXT("Whitespace API key prevents subsystem creation"), Subsystem->ShouldCreateSubsystem(GetTransientPackage()));
 	}
 
 	// Case 3: analytics enabled with a valid key.
-	SetPropertyValue<bool>(RestoreGuard.Cdo, TEXT("bAnalyticsEnabled"), true);
-	SetPropertyValue<FString>(RestoreGuard.Cdo, TEXT("ApiKey"), TEXT("phc_valid_key"));
+	UnrealHogTests::SetPropertyValue<bool>(RestoreGuard.Cdo, TEXT("bAnalyticsEnabled"), true);
+	UnrealHogTests::SetPropertyValue<FString>(RestoreGuard.Cdo, TEXT("ApiKey"), TEXT("phc_valid_key"));
 	{
 		UPostHogRuntimeSubsystem* Subsystem = NewObject<UPostHogRuntimeSubsystem>(GetTransientPackage());
 		TestTrue(TEXT("Valid enabled configuration allows subsystem creation"), Subsystem->ShouldCreateSubsystem(GetTransientPackage()));

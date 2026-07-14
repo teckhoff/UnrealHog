@@ -7,6 +7,7 @@
 #include "Misc/AutomationTest.h"
 #include "Logging/PostHogLogger.h"
 #include "PostHogSettingsValidation.h"
+#include "Tests/PostHogTestPropertyHelpers.h"
 #include "UObject/UnrealType.h"
 
 namespace
@@ -14,23 +15,6 @@ namespace
 	UPostHogDeveloperSettings* MakeTransientSettings()
 	{
 		return NewObject<UPostHogDeveloperSettings>(GetTransientPackage());
-	}
-
-	template<typename T>
-	void SetPropertyValue(UObject* Object, const TCHAR* PropertyName, const T& Value)
-	{
-		FProperty* Property = FindFProperty<FProperty>(Object->GetClass(), PropertyName);
-		check(Property);
-		T* ValuePtr = Property->ContainerPtrToValuePtr<T>(Object);
-		*ValuePtr = Value;
-	}
-
-	template<typename T>
-	T GetPropertyValue(const UObject* Object, const TCHAR* PropertyName)
-	{
-		const FProperty* Property = FindFProperty<FProperty>(Object->GetClass(), PropertyName);
-		check(Property);
-		return *Property->ContainerPtrToValuePtr<T>(Object);
 	}
 }
 
@@ -49,11 +33,11 @@ bool FPostHogSettingsDefaultsTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Default max batch size"), Settings->GetMaxBatchSize(), 50);
 	TestTrue(TEXT("Default lifecycle capture enabled"), Settings->ShouldCaptureApplicationLifecycleEvents());
 
-	TestTrue(TEXT("Default person profiles"), GetPropertyValue<EPostHogPersonProfiles>(Settings, TEXT("PersonProfiles")) == EPostHogPersonProfiles::IdentifiedOnly);
-	TestTrue(TEXT("Default log level"), GetPropertyValue<EPostHogLogLevel>(Settings, TEXT("LogLevel")) == EPostHogLogLevel::Warning);
-	TestFalse(TEXT("Default no anonymous ID reuse"), GetPropertyValue<bool>(Settings, TEXT("bReuseAnonymousId")));
-	TestTrue(TEXT("Default flush on quit enabled"), GetPropertyValue<bool>(Settings, TEXT("bFlushOnQuit")));
-	TestEqual(TEXT("Default flush on quit timeout"), GetPropertyValue<float>(Settings, TEXT("FlushOnQuitTimeoutSeconds")), 3.0f);
+	TestTrue(TEXT("Default person profiles"), UnrealHogTests::GetPropertyValue<EPostHogPersonProfiles>(Settings, TEXT("PersonProfiles")) == EPostHogPersonProfiles::IdentifiedOnly);
+	TestTrue(TEXT("Default log level"), UnrealHogTests::GetPropertyValue<EPostHogLogLevel>(Settings, TEXT("LogLevel")) == EPostHogLogLevel::Warning);
+	TestFalse(TEXT("Default no anonymous ID reuse"), UnrealHogTests::GetPropertyValue<bool>(Settings, TEXT("bReuseAnonymousId")));
+	TestTrue(TEXT("Default flush on quit enabled"), UnrealHogTests::GetPropertyValue<bool>(Settings, TEXT("bFlushOnQuit")));
+	TestEqual(TEXT("Default flush on quit timeout"), UnrealHogTests::GetPropertyValue<float>(Settings, TEXT("FlushOnQuitTimeoutSeconds")), 3.0f);
 
 	return true;
 }
@@ -64,10 +48,10 @@ bool FPostHogSettingsHostResolutionTest::RunTest(const FString& Parameters)
 {
 	UPostHogDeveloperSettings* Settings = MakeTransientSettings();
 
-	SetPropertyValue<EPostHogHost>(Settings, TEXT("HostType"), EPostHogHost::US);
+	UnrealHogTests::SetPropertyValue<EPostHogHost>(Settings, TEXT("HostType"), EPostHogHost::US);
 	TestEqual(TEXT("US resolves"), Settings->GetResolvedHost(), TEXT("https://us.i.posthog.com"));
 
-	SetPropertyValue<EPostHogHost>(Settings, TEXT("HostType"), EPostHogHost::EU);
+	UnrealHogTests::SetPropertyValue<EPostHogHost>(Settings, TEXT("HostType"), EPostHogHost::EU);
 	TestEqual(TEXT("EU resolves"), Settings->GetResolvedHost(), TEXT("https://eu.i.posthog.com"));
 
 	return true;
@@ -78,7 +62,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogSettingsValidConfigTest, "UnrealHog.Con
 bool FPostHogSettingsValidConfigTest::RunTest(const FString& Parameters)
 {
 	UPostHogDeveloperSettings* Settings = MakeTransientSettings();
-	SetPropertyValue<FString>(Settings, TEXT("ApiKey"), TEXT("phc_valid_key"));
+	UnrealHogTests::SetPropertyValue<FString>(Settings, TEXT("ApiKey"), TEXT("phc_valid_key"));
 
 	const FPostHogSettingsValidationResult Result = PostHogSettingsValidation::Validate(*Settings);
 	TestTrue(TEXT("Valid config passes"), Result.bIsValid);
@@ -92,11 +76,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogSettingsInvalidApiKeyTest, "UnrealHog.C
 bool FPostHogSettingsInvalidApiKeyTest::RunTest(const FString& Parameters)
 {
 	UPostHogDeveloperSettings* EmptyKeySettings = MakeTransientSettings();
-	SetPropertyValue<FString>(EmptyKeySettings, TEXT("ApiKey"), TEXT(""));
+	UnrealHogTests::SetPropertyValue<FString>(EmptyKeySettings, TEXT("ApiKey"), TEXT(""));
 	TestFalse(TEXT("Empty API key fails"), PostHogSettingsValidation::Validate(*EmptyKeySettings).bIsValid);
 
 	UPostHogDeveloperSettings* WhitespaceKeySettings = MakeTransientSettings();
-	SetPropertyValue<FString>(WhitespaceKeySettings, TEXT("ApiKey"), TEXT("   "));
+	UnrealHogTests::SetPropertyValue<FString>(WhitespaceKeySettings, TEXT("ApiKey"), TEXT("   "));
 	TestFalse(TEXT("Whitespace API key fails"), PostHogSettingsValidation::Validate(*WhitespaceKeySettings).bIsValid);
 
 	return true;
@@ -107,9 +91,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogSettingsBlankCustomHostNormalizesTest, 
 bool FPostHogSettingsBlankCustomHostNormalizesTest::RunTest(const FString& Parameters)
 {
 	UPostHogDeveloperSettings* Settings = MakeTransientSettings();
-	SetPropertyValue<FString>(Settings, TEXT("ApiKey"), TEXT("phc_valid_key"));
-	SetPropertyValue<EPostHogHost>(Settings, TEXT("HostType"), EPostHogHost::Custom);
-	SetPropertyValue<FString>(Settings, TEXT("Host"), TEXT("   "));
+	UnrealHogTests::SetPropertyValue<FString>(Settings, TEXT("ApiKey"), TEXT("phc_valid_key"));
+	UnrealHogTests::SetPropertyValue<EPostHogHost>(Settings, TEXT("HostType"), EPostHogHost::Custom);
+	UnrealHogTests::SetPropertyValue<FString>(Settings, TEXT("Host"), TEXT("   "));
 
 	const FPostHogSettingsValidationResult Result = PostHogSettingsValidation::Validate(*Settings);
 	TestTrue(TEXT("Blank custom host still validates"), Result.bIsValid);
@@ -123,9 +107,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogSettingsCustomHostUnchangedTest, "Unrea
 bool FPostHogSettingsCustomHostUnchangedTest::RunTest(const FString& Parameters)
 {
 	UPostHogDeveloperSettings* Settings = MakeTransientSettings();
-	SetPropertyValue<FString>(Settings, TEXT("ApiKey"), TEXT("phc_valid_key"));
-	SetPropertyValue<EPostHogHost>(Settings, TEXT("HostType"), EPostHogHost::Custom);
-	SetPropertyValue<FString>(Settings, TEXT("Host"), TEXT("  https://custom.example.com/  "));
+	UnrealHogTests::SetPropertyValue<FString>(Settings, TEXT("ApiKey"), TEXT("phc_valid_key"));
+	UnrealHogTests::SetPropertyValue<EPostHogHost>(Settings, TEXT("HostType"), EPostHogHost::Custom);
+	UnrealHogTests::SetPropertyValue<FString>(Settings, TEXT("Host"), TEXT("  https://custom.example.com/  "));
 
 	const FPostHogSettingsValidationResult Result = PostHogSettingsValidation::Validate(*Settings);
 	TestTrue(TEXT("Custom host validates"), Result.bIsValid);
@@ -146,8 +130,8 @@ bool FPostHogSettingsNumericBoundsTest::RunTest(const FString& Parameters)
 		for (const int32 InvalidValue : InvalidValues)
 		{
 			UPostHogDeveloperSettings* Settings = MakeTransientSettings();
-			SetPropertyValue<FString>(Settings, TEXT("ApiKey"), TEXT("phc_valid_key"));
-			SetPropertyValue<int32>(Settings, FieldName, InvalidValue);
+			UnrealHogTests::SetPropertyValue<FString>(Settings, TEXT("ApiKey"), TEXT("phc_valid_key"));
+			UnrealHogTests::SetPropertyValue<int32>(Settings, FieldName, InvalidValue);
 
 			const bool bIsValid = PostHogSettingsValidation::Validate(*Settings).bIsValid;
 			TestFalse(*FString::Printf(TEXT("%s = %d rejected"), FieldName, InvalidValue), bIsValid);
@@ -163,11 +147,11 @@ bool FPostHogPersonProfilesEnumTest::RunTest(const FString& Parameters)
 {
 	UPostHogDeveloperSettings* Settings = MakeTransientSettings();
 
-	SetPropertyValue<EPostHogPersonProfiles>(Settings, TEXT("PersonProfiles"), EPostHogPersonProfiles::Always);
-	TestTrue(TEXT("Can be set to Always"), GetPropertyValue<EPostHogPersonProfiles>(Settings, TEXT("PersonProfiles")) == EPostHogPersonProfiles::Always);
+	UnrealHogTests::SetPropertyValue<EPostHogPersonProfiles>(Settings, TEXT("PersonProfiles"), EPostHogPersonProfiles::Always);
+	TestTrue(TEXT("Can be set to Always"), UnrealHogTests::GetPropertyValue<EPostHogPersonProfiles>(Settings, TEXT("PersonProfiles")) == EPostHogPersonProfiles::Always);
 
-	SetPropertyValue<EPostHogPersonProfiles>(Settings, TEXT("PersonProfiles"), EPostHogPersonProfiles::Never);
-	TestTrue(TEXT("Can be set to Never"), GetPropertyValue<EPostHogPersonProfiles>(Settings, TEXT("PersonProfiles")) == EPostHogPersonProfiles::Never);
+	UnrealHogTests::SetPropertyValue<EPostHogPersonProfiles>(Settings, TEXT("PersonProfiles"), EPostHogPersonProfiles::Never);
+	TestTrue(TEXT("Can be set to Never"), UnrealHogTests::GetPropertyValue<EPostHogPersonProfiles>(Settings, TEXT("PersonProfiles")) == EPostHogPersonProfiles::Never);
 
 	return true;
 }
@@ -178,11 +162,11 @@ bool FPostHogLogLevelEnumTest::RunTest(const FString& Parameters)
 {
 	UPostHogDeveloperSettings* Settings = MakeTransientSettings();
 
-	SetPropertyValue<EPostHogLogLevel>(Settings, TEXT("LogLevel"), EPostHogLogLevel::Debug);
-	TestTrue(TEXT("Can be set to Debug"), GetPropertyValue<EPostHogLogLevel>(Settings, TEXT("LogLevel")) == EPostHogLogLevel::Debug);
+	UnrealHogTests::SetPropertyValue<EPostHogLogLevel>(Settings, TEXT("LogLevel"), EPostHogLogLevel::Debug);
+	TestTrue(TEXT("Can be set to Debug"), UnrealHogTests::GetPropertyValue<EPostHogLogLevel>(Settings, TEXT("LogLevel")) == EPostHogLogLevel::Debug);
 
-	SetPropertyValue<EPostHogLogLevel>(Settings, TEXT("LogLevel"), EPostHogLogLevel::None);
-	TestTrue(TEXT("Can be set to None"), GetPropertyValue<EPostHogLogLevel>(Settings, TEXT("LogLevel")) == EPostHogLogLevel::None);
+	UnrealHogTests::SetPropertyValue<EPostHogLogLevel>(Settings, TEXT("LogLevel"), EPostHogLogLevel::None);
+	TestTrue(TEXT("Can be set to None"), UnrealHogTests::GetPropertyValue<EPostHogLogLevel>(Settings, TEXT("LogLevel")) == EPostHogLogLevel::None);
 
 	return true;
 }
