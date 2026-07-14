@@ -36,10 +36,10 @@ The Unity SDK emits lowercase, hyphenated UUIDv7 strings, uses a counter to keep
 
 The relevant Unreal Engine 5.8 implementation points are:
 
-- `Docs/Reference/UnrealEngine/Engine/Source/Runtime/Core/Public/Misc/Guid.h`
-- `Docs/Reference/UnrealEngine/Engine/Source/Runtime/Core/Private/Misc/Guid.cpp`
-- `Docs/Reference/UnrealEngine/Engine/Source/Runtime/Core/Private/Unix/UnixPlatformGuid.cpp`
-- `Docs/Reference/UnrealEngine/Engine/Source/Runtime/Core/Private/Windows/WindowsPlatformMisc.cpp`
+- `CI/UnrealEngine/Engine/Source/Runtime/Core/Public/Misc/Guid.h`
+- `CI/UnrealEngine/Engine/Source/Runtime/Core/Private/Misc/Guid.cpp`
+- `CI/UnrealEngine/Engine/Source/Runtime/Core/Private/Unix/UnixPlatformGuid.cpp`
+- `CI/UnrealEngine/Engine/Source/Runtime/Core/Private/Windows/WindowsPlatformMisc.cpp`
 
 `Guid.h` establishes that `FGuid` consists of four `uint32` components. `Guid.cpp` establishes that `DigitsWithHyphensLower` renders those numeric components as `AAAAAAAA-BBBB-BBBB-CCCC-CCCCDDDDDDDD` and that `FGuid::NewGuid()` delegates generation to the platform. The Unix and Windows implementations demonstrate why the plugin cannot infer a UUID version from the `FGuid` API alone.
 

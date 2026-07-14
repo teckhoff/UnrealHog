@@ -40,6 +40,11 @@ if [ ! -f "$uproject" ]; then
     exit 2
 fi
 
+# --- Serialize: one editor instance per staging dir ------------------------
+lock="/tmp/unrealhog-ci.lock"
+exec 9>"$lock"
+flock 9
+
 mkdir -p "$reports"
 
 # --- Sync plugins from this worktree into the host project -----------------
@@ -50,11 +55,6 @@ for plugin_dir in "$repo_root"/UnrealHog*/; do
         --exclude 'Binaries/' --exclude 'Intermediate/' \
         "$plugin_dir" "$stage/Plugins/$plugin_name/"
 done
-
-# --- Serialize: one editor instance per staging dir ------------------------
-lock="/tmp/unrealhog-ci.lock"
-exec 9>"$lock"
-flock 9
 
 # --- Build the host project (compiles the synced plugins) ------------------
 ubt="$engine_root/Engine/Binaries/DotNET/UnrealBuildTool/UnrealBuildTool.exe"

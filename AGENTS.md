@@ -9,17 +9,17 @@ This project reimplements PostHog's C# Unity SDK as an idiomatic Unreal Engine 5
 - `UnrealHog/` contains the SDK plugin. Its nested `AGENTS.md` defines plugin-specific conventions.
 - `Docs/` contains relevant markdown files for architecture and planning, as well as a reference to the Unity SDK for parity matching.
 - `Docs/Reference/posthog-unity` contains the existing Unity SDK.
-- `Docs/Reference/UnrealEngine` is an optional machine-local, gitignored symlink to an Unreal Engine 5.8 source checkout (read-only; may be absent on some machines). It sits on a slow Windows mount and repo-wide searches do not traverse the symlink, so when consulting engine source, target searches explicitly at narrow subtrees such as `Docs/Reference/UnrealEngine/Engine/Source/Runtime/...`.
+- `CI/UnrealEngine` is an optional machine-local, gitignored symlink to an Unreal Engine 5.8 source checkout (read-only; may be absent on some machines). It sits on a slow Windows mount and repo-wide searches do not traverse the symlink, so when consulting engine source, target searches explicitly at narrow subtrees such as `CI/UnrealEngine/Engine/Source/Runtime/...`.
 
 Use repository-relative paths in documentation, tasks, scripts, issues, and pull requests. Never commit machine-specific checkout paths.
 
 If `Docs/Reference/posthog-unity` does not exist, pull the submodule using `git submodule update --init` before performing any work.
 
-If working in a git worktree, run `Scripts/link-engine-source.sh` before consulting engine source; it recreates the gitignored `Docs/Reference/UnrealEngine` symlink by mirroring it from the main checkout, and is a safe no-op when the symlink is absent there.
+If working in a git worktree, run `Scripts/link-engine-source.sh` before consulting engine source; it recreates the gitignored `CI/UnrealEngine` symlink by mirroring it from the main checkout, and is a safe no-op when the symlink is absent there.
 
 Everything under `Docs/Reference/posthog-unity` is read-only third-party reference material; never modify, move, or reformat it, and never copy it verbatim.
 
-`Docs/Reference/UnrealEngine` is a symlink to the local engine source for targeted header lookups only. Search it with explicit paths, never recursively.
+`CI/UnrealEngine` is a symlink to the local engine source for targeted header lookups only. Search it with explicit paths, never recursively.
 
 ## Architecture Invariants
 
