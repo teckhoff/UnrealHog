@@ -28,7 +28,7 @@ bool FPostHogSettingsDefaultsTest::RunTest(const FString& Parameters)
 	// Repository invariant: analytics collection is opt-in, diverging from the Unity default.
 	// Analytics will still be enabled though. This flag is just for whether or not analytics as a whole are enabled
 	// or disabled without removing the plugin.
-	TestTrue(TEXT("Analytics disabled by default"), Settings->IsAnalyticsEnabled());
+	TestTrue(TEXT("Analytics enabled by default"), Settings->IsAnalyticsEnabled());
 
 	TestEqual(TEXT("Default flush event count"), Settings->GetFlushEventCount(), 20);
 	TestEqual(TEXT("Default flush interval seconds"), Settings->GetFlushIntervalSeconds(), 30);

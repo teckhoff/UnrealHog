@@ -168,9 +168,10 @@ private:
 	FString HostEU = "https://eu.i.posthog.com";
 	
 protected:
-	// Whether analytics collection is enabled for this project.
+	// Whether the analytics collection is enabled for this project.
+	// Defaults to true, but a future setting will allow you to set the default user opt-in status.
 	UPROPERTY(Config, EditAnywhere, Category="PostHog")
-	bool bAnalyticsEnabled = false;
+	bool bAnalyticsEnabled = true;
 	
 	// The public project API key from PostHog. Should start with "phc_". May be soft-validated in the future.
 	UPROPERTY(Config, EditAnywhere, Category="PostHog", meta = (DisplayName = "Project Public API Key"))
