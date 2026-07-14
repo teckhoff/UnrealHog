@@ -13,3 +13,6 @@ Intermediate
 *.patch_*
 *.pdb
 *.target
+
+/CI/*
+!/CI/README.md

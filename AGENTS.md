@@ -19,6 +19,8 @@ If working in a git worktree, run `Scripts/link-engine-source.sh` before consult
 
 Everything under `Docs/Reference/posthog-unity` is read-only third-party reference material; never modify, move, or reformat it, and never copy it verbatim.
 
+`Docs/Reference/UnrealEngine` is a symlink to the local engine source for targeted header lookups only. Search it with explicit paths, never recursively.
+
 ## Architecture Invariants
 
 - Project configuration lives in `UDeveloperSettings`. The supported server choices are `US`, `EU`, and `Custom`; US resolves to `https://us.i.posthog.com` and EU resolves to `https://eu.i.posthog.com`.

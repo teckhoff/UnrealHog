@@ -2,6 +2,8 @@
 
 These rules apply to `Plugins/UnrealHog` in addition to the repository-level `AGENTS.md`.
 
+Do not ignore `../AGENTS.md`. Please continue using the pull_request_template.md in `../.github/pull_request_template.md`.
+
 ## Source Layout and API Boundaries
 
 - Put exported SDK headers under `Source/UnrealHog/Public` and implementation-only headers and sources under `Source/UnrealHog/Private`.
