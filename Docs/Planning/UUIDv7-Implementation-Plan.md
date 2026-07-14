@@ -102,7 +102,7 @@ Validate that the result fits the UUIDv7 48-bit unsigned timestamp field before 
 
 Call `FGuid::NewGuid()` only inside the UUIDv7 utility and use its lower 62 payload bits as the random input. This keeps platform entropy acquisition behind Unreal's existing abstraction while the plugin, rather than the platform GUID implementation, owns the timestamp, version, and variant fields.
 
-Treat an invalid all-zero entropy `FGuid` as a generation failure. Retry once to tolerate a transient platform failure; if the second attempt is also invalid, emit an `ensure` and return an empty string. Event and session integration must not enqueue or persist an identifier that failed generation.
+Treat the entropy source as infallible. `FGuid::NewGuid()` cannot fail on any supported platform — platform implementations never signal failure by returning the zero GUID — so generation performs no validity check, retry, or error path on the entropy value. This matches the Unity SDK, where `Guid.NewGuid()` is likewise infallible, and keeps `Generate()` from returning an empty identifier that every caller would otherwise have to handle.
 
 This approach deliberately does not use `FMath::Rand`, `FRandomStream`, MAC addresses, or device identifiers. Those alternatives either have weak collision resistance, expose host information, or introduce deterministic game RNG state into analytics identifiers.
 
@@ -193,8 +193,7 @@ UUID generation must preserve the repository's opt-in invariant.
 5. **Same-millisecond ordering:** Generate multiple values at one injected timestamp and assert uniqueness and strict lexical increase.
 6. **Clock rollback:** Supply a timestamp earlier than the previous call and assert the effective timestamp does not decrease and the next value sorts later.
 7. **Counter rollover:** Generate through counter `0xFFF` with a fixed clock and assert the next value advances the logical timestamp without blocking or duplicating.
-8. **Entropy failure:** Supply invalid entropy twice and assert generation fails explicitly rather than returning a UUID with an all-zero random field.
-9. **Concurrency:** Generate values from multiple worker threads, then assert the expected count, no empty values, no duplicates, and valid version/variant bits.
+8. **Concurrency:** Generate values from multiple worker threads, then assert the expected count, no empty values, no duplicates, and valid version/variant bits.
 
 ### Integration automation tests
 

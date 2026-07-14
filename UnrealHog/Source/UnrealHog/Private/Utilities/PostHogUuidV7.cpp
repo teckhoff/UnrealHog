@@ -59,19 +59,7 @@ namespace PostHogUuidV7
 			RandA = Counter;
 		}
 
-		FGuid Entropy = EntropySource();
-
-		if (!Entropy.IsValid())
-		{
-			Entropy = EntropySource();
-
-			if (!Entropy.IsValid())
-			{
-				ensureMsgf(false, TEXT("PostHogUuidV7: entropy source produced invalid GUID"));
-				return FString();
-			}
-		}
-
+		const FGuid Entropy = EntropySource();
 		const uint64 RandB62 = ((static_cast<uint64>(Entropy.C) << 32) | Entropy.D) & 0x3FFFFFFFFFFFFFFFULL;
 
 		return Pack(TimestampMs, RandA, RandB62);

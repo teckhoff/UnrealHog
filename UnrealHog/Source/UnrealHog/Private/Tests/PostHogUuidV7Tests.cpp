@@ -163,23 +163,6 @@ bool FPostHogUuidV7CounterRolloverTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogUuidV7EntropyFailureTest, "UnrealHog.Utilities.UuidV7.EntropyFailure", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
-
-bool FPostHogUuidV7EntropyFailureTest::RunTest(const FString& Parameters)
-{
-	PostHogUuidV7::FGenerator Generator;
-
-	const auto FixedClock = []() -> uint64 { return 6000000ULL; };
-	const auto InvalidEntropy = []() -> FGuid { return FGuid(); };
-
-	AddExpectedError(TEXT("PostHogUuidV7: entropy source produced invalid GUID"), EAutomationExpectedErrorFlags::Contains, 1);
-
-	const FString Result = Generator.Generate(FixedClock, InvalidEntropy);
-	TestTrue(TEXT("Empty result on entropy failure"), Result.IsEmpty());
-
-	return true;
-}
-
 namespace
 {
 	class FPostHogUuidV7WorkerThread : public FRunnable
