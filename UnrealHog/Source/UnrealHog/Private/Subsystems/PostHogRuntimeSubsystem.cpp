@@ -14,6 +14,7 @@
 #include "Events/PostHogEventQueue.h"
 #include "TimerManager.h"
 #include "Events/PostHogEventProperties.h"
+#include "Utilities/PostHogUuidV7.h"
 
 
 bool UPostHogRuntimeSubsystem::ShouldCreateSubsystem(UObject* Outer) const
@@ -28,17 +29,23 @@ void UPostHogRuntimeSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	Super::Initialize(Collection);
 	
 	const UPostHogDeveloperSettings* Settings = GetDefault<UPostHogDeveloperSettings>();
-	
+
+	SessionId = PostHogUuidV7::New();
+
+	if (SessionId.IsEmpty())
+	{
+		UE_LOGFMT(LogPostHog, Error, "PostHog Runtime Subsystem failed to generate session identifier; aborting initialization.");
+		return;
+	}
+
 	const FString LibraryName = PostHogSdkInfo::GetLibraryName();
 	const FString LibraryVersion = PostHogSdkInfo::GetPluginVersion();
 	const FString UserAgent = PostHogSdkInfo::GetUserAgent();
-	
+
 	StorageProvider = IPostHogStorageProvider::CreateDefaultProvider();
 	HttpClient = MakeUnique<FPostHogHttpClient>(Settings->GetResolvedHost());
 	EventQueue = MakeUnique<FPostHogEventQueue>(*StorageProvider, *HttpClient, Settings->GetApiKey(), Settings->GetMaxQueueSize(), Settings->GetMaxBatchSize(), Settings->GetFlushEventCount());
-	
-	SessionId = FGuid::NewGuid();
-	
+
 	UE_LOGFMT(LogPostHog, Log, "PostHog Runtime Subsystem Initialized. Plugin {LibraryName} (ver. {Version}) ({Agent})", LibraryName, LibraryVersion, UserAgent);
 	
 	if (UWorld* World = GetWorld())
@@ -71,8 +78,20 @@ void UPostHogRuntimeSubsystem::Deinitialize()
 
 void UPostHogRuntimeSubsystem::CaptureEvent(const FString& EventName, UPostHogEventProperties* Properties)
 {
-	FPostHogEvent GeneratedEvent(EventName, SessionId.ToString(EGuidFormats::DigitsWithHyphensLower));
-	
+	if (!EventQueue)
+	{
+		UE_LOGFMT(LogPostHog, Warning, "PostHog Runtime Subsystem not initialized; dropping event {EventName}.", EventName);
+		return;
+	}
+
+	FPostHogEvent GeneratedEvent(EventName, SessionId);
+
+	if (GeneratedEvent.GetEventId().IsEmpty())
+	{
+		UE_LOGFMT(LogPostHog, Error, "PostHog Runtime Subsystem failed to generate an event identifier; dropping event {EventName}.", EventName);
+		return;
+	}
+
 	// TODO: Check opt-in/opt-out status to determine whether to ProcessProfile.
 	// Currently, default to anonymous events.
 	GeneratedEvent.SetProcessPersonProfile(false);

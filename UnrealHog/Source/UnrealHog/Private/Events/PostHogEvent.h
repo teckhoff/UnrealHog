@@ -18,7 +18,7 @@
 struct FPostHogEvent
 {
 private:
-	// A UUID for this specific event.
+	// A UUIDv7 for this specific event.
 	FString EventUuid;
 	
 	// The name of the event being processed.
