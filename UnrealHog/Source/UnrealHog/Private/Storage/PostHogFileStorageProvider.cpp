@@ -41,7 +41,9 @@ bool FPostHogFileStorageProvider::SaveEvent(const FString& EventId, const FStrin
 {
 	if (EventId.IsEmpty())
 	{
+#if !WITH_DEV_AUTOMATION_TESTS
 		UE_LOG(LogPostHog, Warning, TEXT("Cannot save PostHog event with empty event ID"));
+#endif
 		return false;
 	}
 
@@ -75,7 +77,9 @@ bool FPostHogFileStorageProvider::LoadEvent(const FString& EventId, FString& Eve
 
 	if (EventId.IsEmpty())
 	{
+#if !WITH_DEV_AUTOMATION_TESTS
 		UE_LOG(LogPostHog, Warning, TEXT("Cannot load PostHog event with empty event ID"));
+#endif
 		return false;
 	}
 
@@ -101,7 +105,9 @@ bool FPostHogFileStorageProvider::DeleteEvent(const FString& EventId)
 {
 	if (EventId.IsEmpty())
 	{
+#if !WITH_DEV_AUTOMATION_TESTS
 		UE_LOG(LogPostHog, Warning, TEXT("Cannot delete PostHog event with empty event ID"));
+#endif
 		return false;
 	}
 
@@ -157,7 +163,9 @@ bool FPostHogFileStorageProvider::SaveState(const FString& StateKey, const FStri
 {
 	if (StateKey.IsEmpty())
 	{
+#if !WITH_DEV_AUTOMATION_TESTS
 		UE_LOG(LogPostHog, Warning, TEXT("Cannot save PostHog state with empty state key"));
+#endif 
 		return false;
 	}
 	
@@ -180,7 +188,9 @@ bool FPostHogFileStorageProvider::LoadState(const FString& StateKey, FString& St
 	
 	if (StateKey.IsEmpty())
 	{
+#if !WITH_DEV_AUTOMATION_TESTS
 		UE_LOG(LogPostHog, Warning, TEXT("Cannot load PostHog state with empty state key"));
+#endif
 		return false;
 	}
 	
@@ -204,7 +214,9 @@ bool FPostHogFileStorageProvider::DeleteState(const FString& StateKey)
 {
 	if (StateKey.IsEmpty())
 	{
+#if !WITH_DEV_AUTOMATION_TESTS
 		UE_LOG(LogPostHog, Warning, TEXT("Cannot delete PostHog state with empty state key"));
+#endif
 		return false;
 	}
 	
