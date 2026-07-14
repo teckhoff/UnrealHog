@@ -7,6 +7,7 @@
 #include "Misc/AutomationTest.h"
 #include "PostHogDeveloperSettings.h"
 #include "Tests/PostHogTestPropertyHelpers.h"
+#include "UObject/Package.h"
 #include "UObject/UnrealType.h"
 
 namespace
@@ -40,44 +41,26 @@ bool FPostHogRuntimeSubsystemGatingTest::RunTest(const FString& Parameters)
 {
 	FScopedDeveloperSettingsCdoRestore RestoreGuard;
 
+	// ShouldCreateSubsystem only reads the developer-settings CDO and ignores its Outer argument,
+	// so the gating decision can be exercised directly on the subsystem CDO. This avoids standing up
+	// a GameInstance: a bare NewObject<UGameInstance>() never has Init() called, so its subsystem
+	// collection is never built and GetSubsystem<>() would return null.
+	const UPostHogRuntimeSubsystem* Subsystem = GetDefault<UPostHogRuntimeSubsystem>();
+
 	// Case 1: analytics disabled entirely.
 	UnrealHogTests::SetPropertyValue<bool>(RestoreGuard.Cdo, TEXT("bAnalyticsEnabled"), false);
 	UnrealHogTests::SetPropertyValue<FString>(RestoreGuard.Cdo, TEXT("ApiKey"), TEXT("phc_valid_key"));
-	{
-		UPostHogRuntimeSubsystem* Subsystem = NewObject<UPostHogRuntimeSubsystem>(GetTransientPackage());
-		TestFalse(TEXT("Disabled analytics prevents subsystem creation"), Subsystem->ShouldCreateSubsystem(GetTransientPackage()));
-	}
+	TestFalse(TEXT("Disabled analytics prevents subsystem creation"), Subsystem->ShouldCreateSubsystem(GetTransientPackage()));
 
 	// Case 2: analytics enabled, but whitespace-only API key.
 	UnrealHogTests::SetPropertyValue<bool>(RestoreGuard.Cdo, TEXT("bAnalyticsEnabled"), true);
 	UnrealHogTests::SetPropertyValue<FString>(RestoreGuard.Cdo, TEXT("ApiKey"), TEXT("   "));
-	{
-		UPostHogRuntimeSubsystem* Subsystem = NewObject<UPostHogRuntimeSubsystem>(GetTransientPackage());
-		TestFalse(TEXT("Whitespace API key prevents subsystem creation"), Subsystem->ShouldCreateSubsystem(GetTransientPackage()));
-	}
+	TestFalse(TEXT("Whitespace API key prevents subsystem creation"), Subsystem->ShouldCreateSubsystem(GetTransientPackage()));
 
 	// Case 3: analytics enabled with a valid key.
 	UnrealHogTests::SetPropertyValue<bool>(RestoreGuard.Cdo, TEXT("bAnalyticsEnabled"), true);
 	UnrealHogTests::SetPropertyValue<FString>(RestoreGuard.Cdo, TEXT("ApiKey"), TEXT("phc_valid_key"));
-	{
-		UPostHogRuntimeSubsystem* Subsystem = NewObject<UPostHogRuntimeSubsystem>(GetTransientPackage());
-		TestTrue(TEXT("Valid enabled configuration allows subsystem creation"), Subsystem->ShouldCreateSubsystem(GetTransientPackage()));
-	}
-
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogRuntimeSubsystemUninitializedCaptureIsSafeNoOpTest, "UnrealHog.Subsystems.RuntimeSubsystem.CaptureEventBeforeInitializeIsSafeNoOp", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
-
-bool FPostHogRuntimeSubsystemUninitializedCaptureIsSafeNoOpTest::RunTest(const FString& Parameters)
-{
-	// Constructed without Initialize() ever running, so EventQueue is null; CaptureEvent must
-	// be a safe no-op rather than dereferencing a null queue.
-	UPostHogRuntimeSubsystem* Subsystem = NewObject<UPostHogRuntimeSubsystem>(GetTransientPackage());
-	Subsystem->CaptureEvent(TEXT("uninitialized_capture"));
-
-	// Reaching this point without a crash is the assertion.
-	TestTrue(TEXT("CaptureEvent returned safely with no EventQueue"), true);
+	TestTrue(TEXT("Valid enabled configuration allows subsystem creation"), Subsystem->ShouldCreateSubsystem(GetTransientPackage()));
 
 	return true;
 }

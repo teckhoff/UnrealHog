@@ -77,7 +77,7 @@ void UPostHogRuntimeSubsystem::Deinitialize()
 		World->GetTimerManager().ClearTimer(FlushTimerHandle);
 	}
 	
-	if (EventQueue)
+	if (EventQueue.IsValid())
 	{
 		EventQueue->CancelInFlightRequest();
 	}
@@ -87,7 +87,7 @@ void UPostHogRuntimeSubsystem::Deinitialize()
 
 void UPostHogRuntimeSubsystem::CaptureEvent(const FString& EventName, UPostHogEventProperties* Properties)
 {
-	if (!EventQueue)
+	if (!EventQueue.IsValid())
 	{
 		UE_LOGFMT(LogPostHog, Warning, "PostHog Runtime Subsystem not initialized; dropping event {EventName}.", EventName);
 		return;
@@ -120,7 +120,7 @@ UPostHogEventProperties* UPostHogRuntimeSubsystem::CreateEventProperties()
 
 void UPostHogRuntimeSubsystem::FlushQueuedEvents()
 {
-	if (EventQueue)
+	if (EventQueue.IsValid())
 	{
 		UE_LOGFMT(LogPostHog, Log, "Timer Queue Flush!");
 		EventQueue->Flush();
