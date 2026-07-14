@@ -15,6 +15,8 @@ Use repository-relative paths in documentation, tasks, scripts, issues, and pull
 
 If `Docs/Reference/posthog-unity` does not exist, pull the submodule using `git submodule update --init` before performing any work.
 
+If working in a git worktree, run `Scripts/link-engine-source.sh` before consulting engine source; it recreates the gitignored `Docs/Reference/UnrealEngine` symlink by mirroring it from the main checkout, and is a safe no-op when the symlink is absent there.
+
 Everything under `Docs/Reference/posthog-unity` is read-only third-party reference material; never modify, move, or reformat it, and never copy it verbatim.
 
 ## Architecture Invariants
