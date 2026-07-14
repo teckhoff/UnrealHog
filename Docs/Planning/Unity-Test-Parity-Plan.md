@@ -141,17 +141,17 @@ The Unreal library name must not be changed to `posthog-unity`; semantic parity 
 
 ## Detailed parity matrix: `FileStorageProviderTests.cs`
 
-The Unity file contains 26 tests. Seventeen have a synchronous Unreal equivalent now. Nine specifically require pending background writes or concurrent access and are deferred because `FPostHogFileStorageProvider` currently performs synchronous file I/O and declares no multi-threaded contract.
+The Unity file contains 26 tests. All 26 behaviors now have Unreal automation coverage. `FPostHogFileStorageProvider` performs file I/O through an `FPipe`, exposes `FlushPendingWrites()` as the write barrier, and keeps event IDs in memory so pending saves are visible before disk writes complete.
 
-### Port or adapt now
+### Ported or adapted
 
 | Unity test | Unreal assertion |
 | --- | --- |
 | `CreatesQueueDirectory` | Construction under a unique test root creates the event queue directory. Account for UnrealHog's SDK namespace directory. Directory casing is a persistence-format decision; lock the chosen spelling in the test and provide migration if existing `Queue`/`State` names change. |
 | `CreatesStateDirectory` | Construction creates the state directory. |
 | `LoadsExistingEventsFromDisk` | Seed JSON files, construct the provider, and assert `GetEventIds()` returns the extension-free IDs in deterministic lexical order. |
-| `AddsEventToIndex_Immediately` | Adapt to the synchronous design: after successful `SaveEvent`, `GetEventIds()` and `GetEventCount()` immediately include the ID. Do not add an in-memory index solely for this test. |
-| `WritesEventToDisk_Asynchronously` | Adapt the persistence assertion now: successful `SaveEvent` leaves the exact JSON text readable from the event file. The asynchronous timing aspect remains deferred. |
+| `AddsEventToIndex_Immediately` | After successful `SaveEvent`, `GetEventIds()` and `GetEventCount()` immediately include the ID before `FlushPendingWrites()`. |
+| `WritesEventToDisk_Asynchronously` | Successful `SaveEvent` queues the disk write; after `FlushPendingWrites()`, the event file contains the exact JSON text. |
 | `MultipleEvents_AllWrittenToDisk` | Save several IDs and assert every file and value. |
 | `DuplicateEventId_DoesNotDuplicateInIndex` | Saving one ID twice yields one ID and the documented overwrite result. |
 | `NonExistentEvent_ReturnsNull` | Adapt null to Unreal's `false` return and empty out parameter. |
@@ -164,24 +164,17 @@ The Unity file contains 26 tests. Seventeen have a synchronous Unreal equivalent
 | `LoadState_ReturnsStoredState` | Assert successful load and exact content. |
 | `LoadState_NonExistent_ReturnsNull` | Adapt null to `false` plus an empty out parameter. |
 | `DeleteState_RemovesStateFile` | Assert the state file is removed and cannot be loaded. |
+| `WaitsForPendingWrite_BeforeReading` | `LoadEvent()` calls `FlushPendingWrites()` before reading, so an immediate read observes the queued save. |
+| `WaitsForPendingWrite_BeforeDeleting` | A delete after a pending save is accepted immediately and the flush barrier leaves no stale file or index entry. |
+| `BlocksUntilAllWritesComplete` | `FlushPendingWrites()` blocks until ten queued event writes are present on disk. |
+| `WithNoPendingWrites_ReturnsImmediately` | `FlushPendingWrites()` is a no-op when no file write tasks are pending. |
+| `CalledMultipleTimes_DoesNotThrow` | Repeated `FlushPendingWrites()` calls are idempotent and leave state unchanged. |
+| `WaitsForPendingWrites_BeforeClearing` | `ClearEvents()` after pending saves removes queued events and leaves the queue empty after flush. |
+| `ConcurrentSaves_DoNotCorruptIndex` | One hundred concurrent saves are accepted, flushed, and indexed exactly once each. |
+| `ConcurrentSavesAndLoads_DoNotCorrupt` | Concurrent save/load pairs complete with exact JSON round trips. |
+| `ConcurrentSavesAndDeletes_DoNotThrow` | Deleting even IDs from 50 flushed events leaves exactly the 25 odd IDs. |
 
 Add failure-path coverage required by the Unreal interface even though the Unity methods return `void`: empty event IDs/state keys return `false`, failed loads clear their output, and JSON-object overloads serialize valid objects without changing field types.
-
-### Deferred within `FileStorageProviderTests.cs`
-
-| Unity test | Reason for deferral | Activation condition |
-| --- | --- | --- |
-| `WaitsForPendingWrite_BeforeReading` | There are no pending writes in the synchronous provider. | Activate if event writes move to an async task or queued I/O implementation. |
-| `WaitsForPendingWrite_BeforeDeleting` | Same. | Activate with async writes. |
-| `BlocksUntilAllWritesComplete` | No `FlushPendingWrites` operation exists or is needed for synchronous writes. | Activate with async writes or a shutdown write barrier. |
-| `WithNoPendingWrites_ReturnsImmediately` | Same. | Activate when a write barrier exists. |
-| `CalledMultipleTimes_DoesNotThrow` | Same. | Activate when a write barrier exists; require idempotence. |
-| `WaitsForPendingWrites_BeforeClearing` | `ClearEvents()` currently executes after all prior calls have returned. | Activate with async writes. |
-| `ConcurrentSaves_DoNotCorruptIndex` | The provider has no declared multi-thread access contract and no in-memory index. | Activate if storage becomes callable off the owning/game thread. |
-| `ConcurrentSavesAndLoads_DoNotCorrupt` | Same. | Activate with a multi-thread or async storage contract. |
-| `ConcurrentSavesAndDeletes_DoNotThrow` | Same. | Activate with a multi-thread or async storage contract. |
-
-The core save/load/delete assertions corresponding to the three deferred pending-write tests are still covered by the synchronous tests; only their ordering/barrier behavior is deferred.
 
 Add `UnrealHog/Source/UnrealHog/Private/Tests/PostHogFileStorageProviderTests.cpp`. Build a small RAII temporary-directory fixture using a unique path under the platform temp directory. Never use the project's real `Saved/UnrealHog` directory in automation.
 
