@@ -14,6 +14,7 @@
 #include "Dom/JsonObject.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
+#include "Tasks/Task.h"
 
 namespace
 {
@@ -331,6 +332,219 @@ bool FPostHogFileStorageJsonObjectOverloadsTest::RunTest(const FString& Paramete
 	double ValueField = 0.0;
 	TestTrue(TEXT("value field preserved as number"), ParsedObject->TryGetNumberField(TEXT("value"), ValueField));
 	TestEqual(TEXT("value field value"), ValueField, 7.0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogFileStorageWaitsBeforeReadingTest, "UnrealHog.Storage.FileStorageProvider.WaitsForPendingWriteBeforeReading", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogFileStorageWaitsBeforeReadingTest::RunTest(const FString& Parameters)
+{
+	FScopedTestStorageDirectory Fixture;
+	FPostHogFileStorageProvider Provider(Fixture.GetRootPath());
+
+	const FString OriginalJson = TEXT("{\"event\":\"waits-before-reading\"}");
+	TestTrue(TEXT("SaveEvent succeeds"), Provider.SaveEvent(TEXT("event-1"), OriginalJson));
+
+	// No explicit flush: LoadEvent must itself wait for the queued write to land on disk.
+	FString LoadedJson;
+	TestTrue(TEXT("LoadEvent succeeds without an explicit flush"), Provider.LoadEvent(TEXT("event-1"), LoadedJson));
+	TestEqual(TEXT("Loaded JSON matches saved JSON exactly"), LoadedJson, OriginalJson);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogFileStorageWaitsBeforeDeletingTest, "UnrealHog.Storage.FileStorageProvider.WaitsForPendingWriteBeforeDeleting", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogFileStorageWaitsBeforeDeletingTest::RunTest(const FString& Parameters)
+{
+	FScopedTestStorageDirectory Fixture;
+	FPostHogFileStorageProvider Provider(Fixture.GetRootPath());
+
+	TestTrue(TEXT("SaveEvent succeeds"), Provider.SaveEvent(TEXT("event-1"), TEXT("{}")));
+
+	// No explicit flush: DeleteEvent must itself wait for the queued write before removing the file.
+	TestTrue(TEXT("DeleteEvent succeeds without an explicit flush"), Provider.DeleteEvent(TEXT("event-1")));
+	TestFalse(TEXT("Event file absent from disk"), FPaths::FileExists(FPaths::Combine(Fixture.GetQueueDirectory(), TEXT("event-1.json"))));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogFileStorageFlushBlocksUntilCompleteTest, "UnrealHog.Storage.FileStorageProvider.FlushPendingWritesBlocksUntilAllWritesComplete", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogFileStorageFlushBlocksUntilCompleteTest::RunTest(const FString& Parameters)
+{
+	FScopedTestStorageDirectory Fixture;
+	FPostHogFileStorageProvider Provider(Fixture.GetRootPath());
+
+	constexpr int32 EventCount = 10;
+	for (int32 Index = 0; Index < EventCount; ++Index)
+	{
+		Provider.SaveEvent(FString::Printf(TEXT("event-%d"), Index), FString::Printf(TEXT("{\"index\":%d}"), Index));
+	}
+
+	Provider.FlushPendingWrites();
+
+	for (int32 Index = 0; Index < EventCount; ++Index)
+	{
+		const FString EventFilePath = FPaths::Combine(Fixture.GetQueueDirectory(), FString::Printf(TEXT("event-%d.json"), Index));
+		TestTrue(*FString::Printf(TEXT("Event %d file exists after flush"), Index), FPaths::FileExists(EventFilePath));
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogFileStorageFlushWithNoPendingWritesTest, "UnrealHog.Storage.FileStorageProvider.FlushPendingWritesWithNoPendingWritesReturnsImmediately", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogFileStorageFlushWithNoPendingWritesTest::RunTest(const FString& Parameters)
+{
+	FScopedTestStorageDirectory Fixture;
+	FPostHogFileStorageProvider Provider(Fixture.GetRootPath());
+
+	// A fresh provider has no pending writes; flushing must not hang.
+	Provider.FlushPendingWrites();
+
+	TestEqual(TEXT("No events present"), Provider.GetEventCount(), 0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogFileStorageFlushIsIdempotentTest, "UnrealHog.Storage.FileStorageProvider.FlushPendingWritesCalledMultipleTimesIsIdempotent", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogFileStorageFlushIsIdempotentTest::RunTest(const FString& Parameters)
+{
+	FScopedTestStorageDirectory Fixture;
+	FPostHogFileStorageProvider Provider(Fixture.GetRootPath());
+
+	Provider.SaveEvent(TEXT("event-1"), TEXT("{}"));
+
+	Provider.FlushPendingWrites();
+	Provider.FlushPendingWrites();
+	Provider.FlushPendingWrites();
+
+	TestTrue(TEXT("Event file exists after repeated flushes"), FPaths::FileExists(FPaths::Combine(Fixture.GetQueueDirectory(), TEXT("event-1.json"))));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogFileStorageClearWaitsBeforeClearingTest, "UnrealHog.Storage.FileStorageProvider.ClearEventsWaitsForPendingWritesBeforeClearing", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogFileStorageClearWaitsBeforeClearingTest::RunTest(const FString& Parameters)
+{
+	FScopedTestStorageDirectory Fixture;
+	FPostHogFileStorageProvider Provider(Fixture.GetRootPath());
+
+	Provider.SaveEvent(TEXT("event-1"), TEXT("{}"));
+
+	// No explicit flush: ClearEvents must itself wait for the queued write before clearing.
+	TestTrue(TEXT("ClearEvents succeeds without an explicit flush"), Provider.ClearEvents());
+
+	TestEqual(TEXT("No events remain in the index"), Provider.GetEventIds().Num(), 0);
+	TestFalse(TEXT("Event file absent from disk"), FPaths::FileExists(FPaths::Combine(Fixture.GetQueueDirectory(), TEXT("event-1.json"))));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogFileStorageConcurrentSavesTest, "UnrealHog.Storage.FileStorageProvider.ConcurrentSavesDoNotCorruptIndex", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogFileStorageConcurrentSavesTest::RunTest(const FString& Parameters)
+{
+	FScopedTestStorageDirectory Fixture;
+	FPostHogFileStorageProvider Provider(Fixture.GetRootPath());
+
+	constexpr int32 EventCount = 100;
+	TArray<UE::Tasks::FTask> Tasks;
+	Tasks.Reserve(EventCount);
+
+	for (int32 Index = 0; Index < EventCount; ++Index)
+	{
+		const FString EventId = FString::Printf(TEXT("event-%d"), Index);
+		Tasks.Add(UE::Tasks::Launch(UE_SOURCE_LOCATION, [&Provider, EventId]()
+		{
+			Provider.SaveEvent(EventId, TEXT("{}"));
+		}));
+	}
+
+	UE::Tasks::Wait(Tasks);
+	Provider.FlushPendingWrites();
+
+	const TArray<FString> EventIds = Provider.GetEventIds();
+	TestEqual(TEXT("Event count matches concurrent save count"), Provider.GetEventCount(), EventCount);
+
+	TSet<FString> UniqueIds(EventIds);
+	TestEqual(TEXT("No duplicate or missing IDs in the index"), UniqueIds.Num(), EventCount);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogFileStorageConcurrentSavesAndLoadsTest, "UnrealHog.Storage.FileStorageProvider.ConcurrentSavesAndLoadsDoNotCorrupt", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogFileStorageConcurrentSavesAndLoadsTest::RunTest(const FString& Parameters)
+{
+	FScopedTestStorageDirectory Fixture;
+	FPostHogFileStorageProvider Provider(Fixture.GetRootPath());
+
+	constexpr int32 EventCount = 50;
+	TArray<UE::Tasks::TTask<bool>> Tasks;
+	Tasks.Reserve(EventCount);
+
+	for (int32 Index = 0; Index < EventCount; ++Index)
+	{
+		const FString EventId = FString::Printf(TEXT("event-%d"), Index);
+		const FString Expected = FString::Printf(TEXT("{\"index\":%d}"), Index);
+
+		Tasks.Add(UE::Tasks::Launch(UE_SOURCE_LOCATION, [&Provider, EventId, Expected]() -> bool
+		{
+			Provider.SaveEvent(EventId, Expected);
+
+			FString Loaded;
+			return Provider.LoadEvent(EventId, Loaded) && Loaded == Expected;
+		}));
+	}
+
+	// Test* macros are not thread-safe: collect results here on the test thread only.
+	bool bAllMatched = true;
+	for (UE::Tasks::TTask<bool>& Task : Tasks)
+	{
+		bAllMatched &= Task.GetResult();
+	}
+
+	TestTrue(TEXT("Every concurrent save+load pair round-tripped its own data"), bAllMatched);
+	TestEqual(TEXT("Event count matches concurrent save count"), Provider.GetEventCount(), EventCount);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogFileStorageConcurrentSavesAndDeletesTest, "UnrealHog.Storage.FileStorageProvider.ConcurrentSavesAndDeletesDoNotThrow", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogFileStorageConcurrentSavesAndDeletesTest::RunTest(const FString& Parameters)
+{
+	FScopedTestStorageDirectory Fixture;
+	FPostHogFileStorageProvider Provider(Fixture.GetRootPath());
+
+	constexpr int32 EventCount = 50;
+	for (int32 Index = 0; Index < EventCount; ++Index)
+	{
+		Provider.SaveEvent(FString::Printf(TEXT("event-%d"), Index), TEXT("{}"));
+	}
+	Provider.FlushPendingWrites();
+
+	TArray<UE::Tasks::FTask> Tasks;
+	Tasks.Reserve(EventCount / 2);
+
+	for (int32 Index = 0; Index < EventCount; Index += 2)
+	{
+		const FString EventId = FString::Printf(TEXT("event-%d"), Index);
+		Tasks.Add(UE::Tasks::Launch(UE_SOURCE_LOCATION, [&Provider, EventId]()
+		{
+			Provider.DeleteEvent(EventId);
+		}));
+	}
+
+	UE::Tasks::Wait(Tasks);
+	Provider.FlushPendingWrites();
+
+	TestTrue(TEXT("At least half the events remain"), Provider.GetEventCount() >= EventCount / 2);
 
 	return true;
 }

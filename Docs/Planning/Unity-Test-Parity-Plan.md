@@ -141,7 +141,7 @@ The Unreal library name must not be changed to `posthog-unity`; semantic parity 
 
 ## Detailed parity matrix: `FileStorageProviderTests.cs`
 
-The Unity file contains 26 tests. Seventeen have a synchronous Unreal equivalent now. Nine specifically require pending background writes or concurrent access and are deferred because `FPostHogFileStorageProvider` currently performs synchronous file I/O and declares no multi-threaded contract.
+The Unity file contains 26 tests. All 26 now have an Unreal equivalent: seventeen cover direct synchronous save/load/delete/state behavior, and nine cover the pending-write/concurrency contract now that `FPostHogFileStorageProvider` performs event file I/O asynchronously on a `UE::Tasks::FPipe`, backed by an in-memory event-ID index for immediate visibility.
 
 ### Port or adapt now
 
@@ -150,8 +150,8 @@ The Unity file contains 26 tests. Seventeen have a synchronous Unreal equivalent
 | `CreatesQueueDirectory` | Construction under a unique test root creates the event queue directory. Account for UnrealHog's SDK namespace directory. Directory casing is a persistence-format decision; lock the chosen spelling in the test and provide migration if existing `Queue`/`State` names change. |
 | `CreatesStateDirectory` | Construction creates the state directory. |
 | `LoadsExistingEventsFromDisk` | Seed JSON files, construct the provider, and assert `GetEventIds()` returns the extension-free IDs in deterministic lexical order. |
-| `AddsEventToIndex_Immediately` | Adapt to the synchronous design: after successful `SaveEvent`, `GetEventIds()` and `GetEventCount()` immediately include the ID. Do not add an in-memory index solely for this test. |
-| `WritesEventToDisk_Asynchronously` | Adapt the persistence assertion now: successful `SaveEvent` leaves the exact JSON text readable from the event file. The asynchronous timing aspect remains deferred. |
+| `AddsEventToIndex_Immediately` | After successful `SaveEvent`, `GetEventIds()` and `GetEventCount()` immediately include the ID, served from the in-memory `EventIdIndex` rather than a disk scan. |
+| `WritesEventToDisk_Asynchronously` | `SaveEvent` queues the actual write on a `UE::Tasks::FPipe`; `LoadEvent`/`DeleteEvent` wait for pending writes before touching disk, so the exact JSON text is readable once queued. |
 | `MultipleEvents_AllWrittenToDisk` | Save several IDs and assert every file and value. |
 | `DuplicateEventId_DoesNotDuplicateInIndex` | Saving one ID twice yields one ID and the documented overwrite result. |
 | `NonExistentEvent_ReturnsNull` | Adapt null to Unreal's `false` return and empty out parameter. |
@@ -167,21 +167,23 @@ The Unity file contains 26 tests. Seventeen have a synchronous Unreal equivalent
 
 Add failure-path coverage required by the Unreal interface even though the Unity methods return `void`: empty event IDs/state keys return `false`, failed loads clear their output, and JSON-object overloads serialize valid objects without changing field types.
 
-### Deferred within `FileStorageProviderTests.cs`
+### Activated within `FileStorageProviderTests.cs`
 
-| Unity test | Reason for deferral | Activation condition |
-| --- | --- | --- |
-| `WaitsForPendingWrite_BeforeReading` | There are no pending writes in the synchronous provider. | Activate if event writes move to an async task or queued I/O implementation. |
-| `WaitsForPendingWrite_BeforeDeleting` | Same. | Activate with async writes. |
-| `BlocksUntilAllWritesComplete` | No `FlushPendingWrites` operation exists or is needed for synchronous writes. | Activate with async writes or a shutdown write barrier. |
-| `WithNoPendingWrites_ReturnsImmediately` | Same. | Activate when a write barrier exists. |
-| `CalledMultipleTimes_DoesNotThrow` | Same. | Activate when a write barrier exists; require idempotence. |
-| `WaitsForPendingWrites_BeforeClearing` | `ClearEvents()` currently executes after all prior calls have returned. | Activate with async writes. |
-| `ConcurrentSaves_DoNotCorruptIndex` | The provider has no declared multi-thread access contract and no in-memory index. | Activate if storage becomes callable off the owning/game thread. |
-| `ConcurrentSavesAndLoads_DoNotCorrupt` | Same. | Activate with a multi-thread or async storage contract. |
-| `ConcurrentSavesAndDeletes_DoNotThrow` | Same. | Activate with a multi-thread or async storage contract. |
+Event file I/O now runs on a dedicated `UE::Tasks::FPipe`, so the nine tests previously deferred pending an async/threading contract are implemented in `PostHogFileStorageProviderTests.cpp`:
 
-The core save/load/delete assertions corresponding to the three deferred pending-write tests are still covered by the synchronous tests; only their ordering/barrier behavior is deferred.
+| Unity test | Unreal test |
+| --- | --- |
+| `WaitsForPendingWrite_BeforeReading` | `UnrealHog.Storage.FileStorageProvider.WaitsForPendingWriteBeforeReading` |
+| `WaitsForPendingWrite_BeforeDeleting` | `UnrealHog.Storage.FileStorageProvider.WaitsForPendingWriteBeforeDeleting` |
+| `BlocksUntilAllWritesComplete` | `UnrealHog.Storage.FileStorageProvider.FlushPendingWritesBlocksUntilAllWritesComplete` |
+| `WithNoPendingWrites_ReturnsImmediately` | `UnrealHog.Storage.FileStorageProvider.FlushPendingWritesWithNoPendingWritesReturnsImmediately` |
+| `CalledMultipleTimes_DoesNotThrow` | `UnrealHog.Storage.FileStorageProvider.FlushPendingWritesCalledMultipleTimesIsIdempotent` |
+| `WaitsForPendingWrites_BeforeClearing` | `UnrealHog.Storage.FileStorageProvider.ClearEventsWaitsForPendingWritesBeforeClearing` |
+| `ConcurrentSaves_DoNotCorruptIndex` | `UnrealHog.Storage.FileStorageProvider.ConcurrentSavesDoNotCorruptIndex` |
+| `ConcurrentSavesAndLoads_DoNotCorrupt` | `UnrealHog.Storage.FileStorageProvider.ConcurrentSavesAndLoadsDoNotCorrupt` |
+| `ConcurrentSavesAndDeletes_DoNotThrow` | `UnrealHog.Storage.FileStorageProvider.ConcurrentSavesAndDeletesDoNotThrow` |
+
+`FlushPendingWrites()` is a concrete method on `FPostHogFileStorageProvider`, not on `IPostHogStorageProvider`, matching Unity's `FileStorageProvider.FlushPendingWrites()` being absent from `IStorageProvider`. `GetEventIds()`/`GetEventCount()` are served from the in-memory index rather than a disk scan, so they reflect a just-completed `SaveEvent` immediately without waiting on the async write.
 
 Add `UnrealHog/Source/UnrealHog/Private/Tests/PostHogFileStorageProviderTests.cpp`. Build a small RAII temporary-directory fixture using a unique path under the platform temp directory. Never use the project's real `Saved/UnrealHog` directory in automation.
 
@@ -237,7 +239,7 @@ This table accounts for every test file currently present under `PostHog.Unity.T
 | `PostHogEventTests.cs` | Include now | Direct current event behavior; adapt constructor-specific tests. |
 | `PostHogConfigTests.cs` | Include now | Direct current settings and validation behavior. |
 | `SdkInfoTests.cs` | Include now | Direct current SDK metadata behavior. |
-| `FileStorageProviderTests.cs` | Include synchronous subset; defer 9 tests | Direct current persistence behavior; async/threading contract is absent. |
+| `FileStorageProviderTests.cs` | Include all 26 tests | Direct current persistence behavior; event I/O is asynchronous via a `UE::Tasks::FPipe`. |
 | `UuidV7Tests.cs` | Include now; largely already covered | Direct current UUID utility behavior. |
 | `JsonSerializerTests.cs` | Include event/batch subset | Event and batch projection are current; generic serializer/deserializer is not a plugin API. |
 | `PostHogSettingsTests.cs` | Include defaults/exposure/gating subset | Unreal uses one `UDeveloperSettings` layer; future-feature fields do not imply implemented behavior. |
@@ -283,7 +285,7 @@ Keep editor clamping as user guidance, not as the only correctness boundary; `.i
 
 ### 4. Add isolated file storage tests
 
-Port the 17 synchronous cases and interface failure paths using a unique temporary root. Leave the nine async/threading cases visibly deferred. Do not introduce background I/O as part of a test-only parity change.
+Port the 17 synchronous cases and interface failure paths using a unique temporary root, plus the nine async/threading cases now that event I/O runs on a `UE::Tasks::FPipe`.
 
 ### 5. Add runtime gating integration tests
 
@@ -302,7 +304,6 @@ The seam should improve production isolation and must not become a Blueprint API
 
 When a deferred production feature lands, its task must move the associated rows out of this document and into that feature's acceptance tests. In particular:
 
-- async storage activates the nine file-provider rows;
 - session lifecycle activates `SessionManagerTests.cs`;
 - feature flags activate their models, cache, value, tracker, JSON wrapper, LRU, and network retry suites;
 - exception tracking activates Unreal-native integration and stack-frame coverage; and
@@ -334,8 +335,7 @@ On Windows with Unreal Engine 5.8:
 ## Acceptance criteria
 
 - Every behavior in `PostHogEventTests.cs`, `PostHogConfigTests.cs`, and `SdkInfoTests.cs` has an Unreal automation assertion or an explicit Unreal API adaptation documented above.
-- The 17 synchronous behaviors in `FileStorageProviderTests.cs` pass against isolated temporary storage.
-- The nine async/thread-safety file-storage tests remain explicitly deferred until their activation condition exists.
+- All 26 behaviors in `FileStorageProviderTests.cs`, including the nine async/thread-safety cases, pass against isolated temporary storage.
 - All eight UUIDv7 semantics are covered without exposing a public byte-generation API.
 - Event and batch JSON tests validate structure and types without depending on field order.
 - Analytics collection defaults to disabled, and denied or invalid initialization produces no identifier, payload, queue record, file, or HTTP request.

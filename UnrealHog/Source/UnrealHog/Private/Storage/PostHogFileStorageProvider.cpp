@@ -8,25 +8,33 @@
 #include "Logging/StructuredLog.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "Misc/ScopeLock.h"
 #include "SDK/PostHogSdkInfo.h"
 
 
 FPostHogFileStorageProvider::FPostHogFileStorageProvider()
+	: WritePipe(TEXT("PostHogFileStorageProviderPipe"))
 {
 	BasePath = FPaths::Combine(FPaths::ProjectSavedDir(), PostHogSdkInfo::GetLibraryName());
-	
+
 	InitializeDirectories();
+	LoadEventIndexFromDisk();
 }
 
 FPostHogFileStorageProvider::FPostHogFileStorageProvider(const FString& InBasePath)
+	: WritePipe(TEXT("PostHogFileStorageProviderPipe"))
 {
 	BasePath = FPaths::Combine(InBasePath, PostHogSdkInfo::GetLibraryName());
-	
+
 	InitializeDirectories();
+	LoadEventIndexFromDisk();
 }
 
 FPostHogFileStorageProvider::~FPostHogFileStorageProvider()
 {
+	// The pipe must be drained before destruction: queued lambdas capture `this`,
+	// and FPipe's own destructor asserts that no work remains.
+	WritePipe.WaitUntilEmpty();
 }
 
 bool FPostHogFileStorageProvider::SaveEvent(const FString& EventId, const FString& EventJson)
@@ -36,43 +44,56 @@ bool FPostHogFileStorageProvider::SaveEvent(const FString& EventId, const FStrin
 		UE_LOG(LogPostHog, Warning, TEXT("Cannot save PostHog event with empty event ID"));
 		return false;
 	}
-	
-	InitializeDirectories();
-	
-	const FString EventFilePath = GetEventFilePath(EventId);
-	const bool bSaved = FFileHelper::SaveStringToFile(EventJson, *EventFilePath);
-	
-	if (!bSaved)
+
 	{
-		UE_LOG(LogPostHog, Warning, TEXT("Failed to save PostHog event to %s"), *EventFilePath);
+		FScopeLock Lock(&IndexLock);
+		EventIdIndex.AddUnique(EventId);
+		EventIdIndex.Sort();
 	}
-	
-	return bSaved;
+
+	const FString EventFilePath = GetEventFilePath(EventId);
+
+	WritePipe.Launch(UE_SOURCE_LOCATION, [this, EventId, EventFilePath, EventJson]()
+	{
+		const bool bSaved = FFileHelper::SaveStringToFile(EventJson, *EventFilePath);
+
+		if (!bSaved)
+		{
+			UE_LOG(LogPostHog, Warning, TEXT("Failed to save PostHog event to %s"), *EventFilePath);
+
+			FScopeLock Lock(&IndexLock);
+			EventIdIndex.Remove(EventId);
+		}
+	});
+
+	return true;
 }
 
 bool FPostHogFileStorageProvider::LoadEvent(const FString& EventId, FString& EventJson)
 {
 	EventJson.Empty();
-	
+
 	if (EventId.IsEmpty())
 	{
 		UE_LOG(LogPostHog, Warning, TEXT("Cannot load PostHog event with empty event ID"));
 		return false;
 	}
-	
+
+	WritePipe.WaitUntilEmpty();
+
 	const FString EventFilePath = GetEventFilePath(EventId);
 	if (!FPaths::FileExists(EventFilePath))
 	{
 		return false;
 	}
-	
+
 	const bool bLoaded = FFileHelper::LoadFileToString(EventJson, *EventFilePath);
 	if (!bLoaded)
 	{
 		UE_LOG(LogPostHog, Warning, TEXT("Failed to load PostHog event from %s"), *EventFilePath);
 		EventJson.Empty();
 	}
-	
+
 	return bLoaded;
 }
 
@@ -83,42 +104,53 @@ bool FPostHogFileStorageProvider::DeleteEvent(const FString& EventId)
 		UE_LOG(LogPostHog, Warning, TEXT("Cannot delete PostHog event with empty event ID"));
 		return false;
 	}
-	
+
+	WritePipe.WaitUntilEmpty();
+
+	{
+		FScopeLock Lock(&IndexLock);
+		EventIdIndex.Remove(EventId);
+	}
+
 	return DeleteFileIfExists(GetEventFilePath(EventId));
 }
 
 bool FPostHogFileStorageProvider::ClearEvents()
 {
-	bool bAllDeleted = true;
-	
-	for (const FString& EventId : GetEventIds())
+	FlushPendingWrites();
+
+	TArray<FString> EventIdsToDelete;
 	{
-		bAllDeleted &= DeleteEvent(EventId);
+		FScopeLock Lock(&IndexLock);
+		EventIdsToDelete = MoveTemp(EventIdIndex);
+		EventIdIndex.Reset();
 	}
-	
+
+	bool bAllDeleted = true;
+
+	for (const FString& EventId : EventIdsToDelete)
+	{
+		bAllDeleted &= DeleteFileIfExists(GetEventFilePath(EventId));
+	}
+
 	return bAllDeleted;
 }
 
 TArray<FString> FPostHogFileStorageProvider::GetEventIds()
 {
-	TArray<FString> EventFiles;
-	IFileManager::Get().FindFiles(EventFiles, *FPaths::Combine(QueuePath, TEXT("*.json")), true, false);
-	EventFiles.Sort();
-	
-	TArray<FString> EventIds;
-	EventIds.Reserve(EventFiles.Num());
-	
-	for (const FString& EventFile : EventFiles)
-	{
-		EventIds.Add(FPaths::GetBaseFilename(EventFile));
-	}
-	
-	return EventIds;
+	FScopeLock Lock(&IndexLock);
+	return EventIdIndex;
 }
 
 int32 FPostHogFileStorageProvider::GetEventCount()
 {
-	return GetEventIds().Num();
+	FScopeLock Lock(&IndexLock);
+	return EventIdIndex.Num();
+}
+
+void FPostHogFileStorageProvider::FlushPendingWrites()
+{
+	WritePipe.WaitUntilEmpty();
 }
 
 bool FPostHogFileStorageProvider::SaveState(const FString& StateKey, const FString& StateJson)
@@ -177,6 +209,21 @@ bool FPostHogFileStorageProvider::DeleteState(const FString& StateKey)
 	}
 	
 	return DeleteFileIfExists(GetStateFilePath(StateKey));
+}
+
+void FPostHogFileStorageProvider::LoadEventIndexFromDisk()
+{
+	TArray<FString> EventFiles;
+	IFileManager::Get().FindFiles(EventFiles, *FPaths::Combine(QueuePath, TEXT("*.json")), true, false);
+	EventFiles.Sort();
+
+	FScopeLock Lock(&IndexLock);
+	EventIdIndex.Reset(EventFiles.Num());
+
+	for (const FString& EventFile : EventFiles)
+	{
+		EventIdIndex.Add(FPaths::GetBaseFilename(EventFile));
+	}
 }
 
 bool FPostHogFileStorageProvider::InitializeDirectories()
