@@ -8,10 +8,11 @@
 #include "Dom/JsonObject.h"
 #include "SDK/PostHogSdkInfo.h"
 #include "GeneralProjectSettings.h"
+#include "Utilities/PostHogUuidV7.h"
 
 
 FPostHogEvent::FPostHogEvent(const FString& InEventName, const FString& InDistinctId)
-	: EventUuid(FGuid::NewGuid().ToString(EGuidFormats::DigitsWithHyphensLower))
+	: EventUuid(PostHogUuidV7::New())
 	, EventName(InEventName)
 	, DistinctId(InDistinctId)
 	, Timestamp(FDateTime::UtcNow().ToIso8601())

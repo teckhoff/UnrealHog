@@ -36,7 +36,7 @@ public:
 private:
 	void FlushQueuedEvents();
 	
-	FGuid SessionId;
+	FString SessionId;
 	FTimerHandle FlushTimerHandle;
 	
 	TUniquePtr<IPostHogStorageProvider> StorageProvider;
