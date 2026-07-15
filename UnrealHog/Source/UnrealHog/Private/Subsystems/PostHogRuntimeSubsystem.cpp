@@ -158,6 +158,11 @@ void UPostHogRuntimeSubsystem::StartFlushTimer()
 
 void UPostHogRuntimeSubsystem::StopFlushTimer()
 {
+	if (!FlushTimerHandle.IsValid())
+	{
+		return;
+	}
+	
 	if (UWorld* World = GetWorld())
 	{
 		World->GetTimerManager().ClearTimer(FlushTimerHandle);
