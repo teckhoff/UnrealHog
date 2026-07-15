@@ -5,14 +5,13 @@
 
 #include "Events/PostHogBatchPayload.h"
 #include "Events/PostHogEvent.h"
-#include "Http/PostHogHttpClient.h"
 #include "Storage/PostHogStorageProvider.h"
 
-FPostHogEventQueue::FPostHogEventQueue(IPostHogStorageProvider& InStorageProvider, FPostHogHttpClient& InHttpClient,
-	const FString& InApiKey, int32 InMaxQueueSize, int32 InMaxBatchSize, int32 InFlushEventCount) : 
-	StorageProvider(InStorageProvider), 
-	HttpClient(InHttpClient), 
-	ApiKey(InApiKey), 
+FPostHogEventQueue::FPostHogEventQueue(IPostHogStorageProvider& InStorageProvider, IPostHogBatchTransport& InTransport,
+	const FString& InApiKey, int32 InMaxQueueSize, int32 InMaxBatchSize, int32 InFlushEventCount) :
+	StorageProvider(InStorageProvider),
+	Transport(InTransport),
+	ApiKey(InApiKey),
 	MaxQueueSize(FMath::Max(InMaxQueueSize, 1)), 
 	MaxBatchSize(FMath::Max(InMaxBatchSize, 1)),
 	FlushEventCount(FMath::Max(InFlushEventCount, 1))
@@ -86,10 +85,10 @@ void FPostHogEventQueue::Flush()
 	bIsFlushing = true;
 	
 	const FPostHogBatchPayload Payload(ApiKey, BatchEvents);
-	ActiveRequest = HttpClient.SendBatch(Payload, [this, BatchEventIds](bool bSuccess, int32, const FString&)
+	ActiveRequestHandle = Transport.SendBatch(Payload, [this, BatchEventIds](bool bSuccess, int32, const FString&)
 	{
 		bIsFlushing = false;
-		ActiveRequest.Reset();
+		ActiveRequestHandle.Reset();
 		
 		for (const FString& EventId : BatchEventIds)
 		{
@@ -116,15 +115,14 @@ void FPostHogEventQueue::Flush()
 
 void FPostHogEventQueue::CancelInFlightRequest()
 {
-	if (!ActiveRequest.IsValid())
+	if (!ActiveRequestHandle.IsValid())
 	{
 		return;
 	}
-	
-	ActiveRequest->OnProcessRequestComplete().Unbind();
-	ActiveRequest->CancelRequest();
-	ActiveRequest.Reset();
-	
+
+	ActiveRequestHandle->Cancel();
+	ActiveRequestHandle.Reset();
+
 	InFlightEventIds.Reset();
 	bIsFlushing = false;
 }
