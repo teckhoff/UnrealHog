@@ -3,6 +3,7 @@
 #include "Events/PostHogCapturePolicy.h"
 #include "Events/PostHogEvent.h"
 #include "Dom/JsonValue.h"
+#include "Logging/PostHogLogger.h"
 
 namespace
 {
@@ -129,8 +130,16 @@ void UPostHogEventProperties::ApplyToEvent(FPostHogEvent& Event)
 {
 	for (const auto& Property : Properties)
 	{
-		if (Property.Key.IsEmpty() || PostHogCapturePolicy::GetReservedPropertyKeys().Contains(Property.Key))
+		if (Property.Key.IsEmpty())
 		{
+			continue;
+		}
+
+		if (PostHogCapturePolicy::GetReservedPropertyKeys().Contains(Property.Key))
+		{
+#if !WITH_DEV_AUTOMATION_TESTS
+			UE_LOG(LogPostHog, Warning, TEXT("Ignoring attempt to overwrite protected PostHog property \"%s\"; reserved properties are SDK-owned and cannot be overwritten."), *Property.Key);
+#endif
 			continue;
 		}
 

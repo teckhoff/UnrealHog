@@ -107,13 +107,17 @@ EPostHogCaptureResult FPostHogConsentController::CaptureEvent(const FString& Eve
 {
 	if (!PostHogCapturePolicy::IsValidEventName(EventName))
 	{
+#if !WITH_DEV_AUTOMATION_TESTS
 		UE_LOGFMT(LogPostHog, Warning, "PostHog Consent Controller rejected capture with an empty or whitespace-only event name.");
+#endif
 		return EPostHogCaptureResult::InvalidEventName;
 	}
 
 	if (!bIsOptedIn || !EventQueue.IsValid())
 	{
+#if !WITH_DEV_AUTOMATION_TESTS
 		UE_LOGFMT(LogPostHog, Warning, "PostHog Consent Controller has no analytics consent; dropping event {EventName}.", EventName);
+#endif
 		return EPostHogCaptureResult::NotOptedIn;
 	}
 

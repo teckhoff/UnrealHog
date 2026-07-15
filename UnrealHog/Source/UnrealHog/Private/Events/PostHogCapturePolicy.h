@@ -1,7 +1,6 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Containers/Set.h"
 
 /**
  * @brief Single source of truth for capture-composition policy: event name validity and the
