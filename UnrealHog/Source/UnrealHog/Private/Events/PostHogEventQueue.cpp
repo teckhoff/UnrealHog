@@ -127,6 +127,13 @@ void FPostHogEventQueue::CancelInFlightRequest()
 	bIsFlushing = false;
 }
 
+void FPostHogEventQueue::Clear()
+{
+	CancelInFlightRequest();
+	StorageProvider.ClearEvents();
+	EventsQueue.Reset();
+}
+
 int32 FPostHogEventQueue::Num() const
 {
 	return EventsQueue.Num();

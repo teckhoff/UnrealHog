@@ -16,8 +16,10 @@ FPostHogFileStorageProvider::FPostHogFileStorageProvider()
 	: WritePipe(TEXT("PostHogFileStorageProviderPipe"))
 {
 	BasePath = FPaths::Combine(FPaths::ProjectSavedDir(), PostHogSdkInfo::GetLibraryName());
+	QueuePath = FPaths::Combine(BasePath, TEXT("Queue"));
+	StatePath = FPaths::Combine(BasePath, TEXT("State"));
 
-	InitializeDirectories();
+	// Reads existing files only; must not create the Queue directory as a side effect of construction.
 	LoadEventIndexFromDisk();
 }
 
@@ -25,8 +27,10 @@ FPostHogFileStorageProvider::FPostHogFileStorageProvider(const FString& InBasePa
 	: WritePipe(TEXT("PostHogFileStorageProviderPipe"))
 {
 	BasePath = FPaths::Combine(InBasePath, PostHogSdkInfo::GetLibraryName());
+	QueuePath = FPaths::Combine(BasePath, TEXT("Queue"));
+	StatePath = FPaths::Combine(BasePath, TEXT("State"));
 
-	InitializeDirectories();
+	// Reads existing files only; must not create the Queue directory as a side effect of construction.
 	LoadEventIndexFromDisk();
 }
 
@@ -46,6 +50,8 @@ bool FPostHogFileStorageProvider::SaveEvent(const FString& EventId, const FStrin
 #endif
 		return false;
 	}
+
+	EnsureQueueDirectory();
 
 	{
 		FScopeLock Lock(&IndexLock);
@@ -169,8 +175,8 @@ bool FPostHogFileStorageProvider::SaveState(const FString& StateKey, const FStri
 		return false;
 	}
 	
-	InitializeDirectories();
-	
+	EnsureStateDirectory();
+
 	const FString StateFilePath = GetStateFilePath(StateKey);
 	const bool bSaved = FFileHelper::SaveStringToFile(StateJson, *StateFilePath);
 	
@@ -238,19 +244,28 @@ void FPostHogFileStorageProvider::LoadEventIndexFromDisk()
 	}
 }
 
-bool FPostHogFileStorageProvider::InitializeDirectories()
+void FPostHogFileStorageProvider::EnsureQueueDirectory()
 {
-	UE_LOGFMT(LogPostHog, Log, "Using base path \"{BasePath}\".", BasePath);
-	
-	QueuePath = FPaths::Combine(BasePath, TEXT("Queue"));
-	StatePath = FPaths::Combine(BasePath, TEXT("State"));
-	
-	IFileManager& FileManager = IFileManager::Get();
-	
-	const bool bQueueDirectoryReady = FileManager.MakeDirectory(*QueuePath, true);
-	const bool bStateDirectoryReady = FileManager.MakeDirectory(*StatePath, true);
+	FScopeLock Lock(&DirectoryLock);
+	if (bQueueDirectoryReady)
+	{
+		return;
+	}
 
-	return bQueueDirectoryReady && bStateDirectoryReady;
+	UE_LOGFMT(LogPostHog, Log, "Using base path \"{BasePath}\".", BasePath);
+	bQueueDirectoryReady = IFileManager::Get().MakeDirectory(*QueuePath, true);
+}
+
+void FPostHogFileStorageProvider::EnsureStateDirectory()
+{
+	FScopeLock Lock(&DirectoryLock);
+	if (bStateDirectoryReady)
+	{
+		return;
+	}
+
+	UE_LOGFMT(LogPostHog, Log, "Using base path \"{BasePath}\".", BasePath);
+	bStateDirectoryReady = IFileManager::Get().MakeDirectory(*StatePath, true);
 }
 
 FString FPostHogFileStorageProvider::GetEventFilePath(const FString& EventId) const

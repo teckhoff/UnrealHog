@@ -144,6 +144,9 @@ public:
 	const FString& GetApiKey() const { return ApiKey; }
 
 	UFUNCTION()
+	bool GetDefaultUserOptIn() const { return bDefaultUserOptIn; }
+
+	UFUNCTION()
 	int32 GetFlushEventCount() const { return FlushEventCount; }
 
 	UFUNCTION()
@@ -168,14 +171,18 @@ private:
 	FString HostEU = "https://eu.i.posthog.com";
 	
 protected:
-	// Whether the analytics collection is enabled for this project.
-	// Defaults to true, but a future setting will allow you to set the default user opt-in status.
+	// Developer kill switch for analytics collection, independent of the end user's opt-in consent.
+	// When false, the SDK never collects regardless of user opt-in status.
 	UPROPERTY(Config, EditAnywhere, Category="PostHog")
 	bool bAnalyticsEnabled = true;
-	
+
 	// The public project API key from PostHog. Should start with "phc_". May be soft-validated in the future.
 	UPROPERTY(Config, EditAnywhere, Category="PostHog", meta = (DisplayName = "Project Public API Key"))
 	FString ApiKey = "";
+
+	// The end user's default opt-in status for analytics collection before they have made an explicit choice.
+	UPROPERTY(Config, EditAnywhere, Category="PostHog", meta = (DisplayName = "Default User Opt-In"))
+	bool bDefaultUserOptIn = false;
 	
 	// Which host to use for sending analytics events.
 	UPROPERTY(Config, EditAnywhere, Category="PostHog|Host")

@@ -45,7 +45,14 @@ private:
 	mutable FCriticalSection IndexLock;
 	TArray<FString> EventIdIndex;
 
-	bool InitializeDirectories();
+	mutable FCriticalSection DirectoryLock;
+	bool bQueueDirectoryReady = false;
+	bool bStateDirectoryReady = false;
+
+	/** Lazily creates the Queue directory on first write; construction and reads never touch disk. */
+	void EnsureQueueDirectory();
+	/** Lazily creates the State directory on first write; construction and reads never touch disk. */
+	void EnsureStateDirectory();
 	void LoadEventIndexFromDisk();
 	FString GetEventFilePath(const FString& EventId) const;
 	FString GetStateFilePath(const FString& StateKey) const;
