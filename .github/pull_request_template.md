@@ -15,17 +15,28 @@
 <!-- Agents: do NOT claim manual testing you haven't done. State what the agent wasn't able to do and list only the automated tests you (the agent) actually ran. -->
 <!-- Added or changed tests? Name the regression each group catches that no existing test did — if you can't name it, it probably shouldn't be in this PR. https://posthog.com/handbook/engineering/conventions/backend-coding#testing -->
 
+- **Command:** `Scripts/run-windows-tests.sh`
+- **Environment:** <!-- For example: WSL invoking Unreal Automation Tool on Windows. -->
+- **Result:** <!-- Keep exactly one: Passed or Failed. -->
+- **Relevant output:** <!-- Include a concise result or place long output in a details block. -->
+
 ## Docs update
+
+<!-- Describe the docs changed, or write "Not required – <reason>". -->
 
 ## 🤖 Agent context
 
 <!-- Fill this section if an agent co-authored or authored this PR. Remove it for fully human-authored PRs. -->
+
+> This issue or pull request was created by an automated coding agent, not a human.
 
 <!-- Autonomy — keep one of the two options on the line below:
      - "Human-driven (agent-assisted)" when a person directed the work — assign that person as the PR assignee (the DRI).
      - "Fully autonomous" when no human drove it; leave the PR unassigned for the owning team to triage. -->
 
 **Autonomy:** Human-driven (agent-assisted) - or - Fully autonomous
+
+<!-- Name the agent/tool and summarize material implementation decisions in reviewer-facing prose. -->
 
 <!-- Definition of done (agents): not done until each gate below holds. Verify against the named artifact or skill — don't assume. Add gates as the PR touches more areas.
      - Patch coverage: the lines this PR changed are covered, or the uncovered ones are justified under "How did you test this code?". Don't pad untouched code to lift the number. Check the "🧪 Backend test coverage" PR comment (and its patch-coverage artifact).
@@ -43,11 +54,13 @@
 -->
 
 <!-- Overall PR authoring rules for agents:
+- Base branch: normal PRs target `dev`. Pass `--base dev` explicitly when using `gh pr create`; do not rely on the repository default. Never target `main` except for an explicitly requested milestone promotion from this repository's `dev` branch.
 - Title: <type>(<scope>): <description> — type=feat|fix|chore, scope required, lowercase, no period, <72 chars.
   ✅ feat(insights): add retention graph export
   ❌ feat: Added retention export.   (capitalized, period, no scope)
 - Description: high-level rationale, not a step-by-step replay.
 - Body: pass it straight to the creation tool's `body` arg (GitHub MCP `create_pull_request` body, or `gh pr create --body-file -` via stdin) — don't write it to a temp file first; the arg preserves markdown and newlines verbatim.
+- Validation: after publishing, verify `baseRefName` is `dev` with `gh pr view --json baseRefName`, then run `gh pr view --json title,body | python3 Scripts/validate_pr_body.py --json -`; fix the published metadata and rerun until it passes. Only an explicitly requested `dev` to `main` milestone promotion may have a different base.
 - Public OSS repo: no internal customers, incidents, or operational metrics.
 - Draft by default: open new PRs as drafts (`gh pr create --draft`) — drafts run only a narrow CI subset and save runner credits. Fix CI and run affected tests locally before marking ready for review.
 - Labels: apply `skip-agent-review` for trivial/chore PRs that don't need Copilot or Greptile review.
@@ -68,4 +81,3 @@
 - Write from a first person perspective of the author of a human-driven PR. Although if something was done by an agent (i.e. you), make that clear with something like "I (or, actually Claude/Codex/etc.) did blah".
 - For titles, headings, or bolded parts use "Sentence case" rather than "Title Case" (i.e. only capitalize the first word of the title/heading/bold text).
 -->
-
