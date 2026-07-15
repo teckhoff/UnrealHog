@@ -7,7 +7,9 @@
 #include "Misc/Paths.h"
 #include "HAL/FileManager.h"
 #include "HAL/PlatformProcess.h"
+#include "Events/PostHogBatchPayload.h"
 #include "Events/PostHogEvent.h"
+#include "Events/PostHogEventProperties.h"
 #include "Events/PostHogEventQueue.h"
 #include "PostHogDeveloperSettings.h"
 #include "SDK/PostHogSdkInfo.h"
@@ -274,6 +276,192 @@ bool FPostHogConsentControllerPersistsAcrossReinitializeTest::RunTest(const FStr
 		TestFalse(TEXT("Persisted opt-out is honored"), ControllerC.IsOptedIn());
 		TestEqual(TEXT("No transport created when opted out"), ControllerC.GetTransportCreationCount(), 0);
 	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerCaptureEventRejectsInvalidNameTest, "UnrealHog.Consent.ConsentController.CaptureEventRejectsInvalidName", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogConsentControllerCaptureEventRejectsInvalidNameTest::RunTest(const FString& Parameters)
+{
+	FScopedConsentTestStorageDirectory Fixture;
+	FPostHogFakeBatchTransport* LastTransport = nullptr;
+	int32 UuidCounter = 0;
+
+	FPostHogConsentController Controller(MakeStorageFactory(Fixture.GetRootPath()), MakeTransportFactory(LastTransport), MakeUuidGenerator(UuidCounter));
+	UPostHogDeveloperSettings* Settings = MakeTransientSettings(true, true, false);
+
+	Controller.Initialize(*Settings);
+	Controller.SetOptIn(true, *Settings);
+
+	const EPostHogCaptureResult Result = Controller.CaptureEvent(TEXT("   "), nullptr, false);
+
+	TestEqual(TEXT("Whitespace-only name is rejected"), Result, EPostHogCaptureResult::InvalidEventName);
+	TestEqual(TEXT("No event queued"), Controller.GetQueuedEventCount(), 0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerCaptureEventRejectsWithoutConsentTest, "UnrealHog.Consent.ConsentController.CaptureEventRejectsWithoutConsent", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogConsentControllerCaptureEventRejectsWithoutConsentTest::RunTest(const FString& Parameters)
+{
+	FScopedConsentTestStorageDirectory Fixture;
+	FPostHogFakeBatchTransport* LastTransport = nullptr;
+	int32 UuidCounter = 0;
+
+	FPostHogConsentController Controller(MakeStorageFactory(Fixture.GetRootPath()), MakeTransportFactory(LastTransport), MakeUuidGenerator(UuidCounter));
+	UPostHogDeveloperSettings* Settings = MakeTransientSettings(true, true, false);
+
+	Controller.Initialize(*Settings);
+
+	const EPostHogCaptureResult Result = Controller.CaptureEvent(TEXT("ev"), nullptr, false);
+
+	TestEqual(TEXT("Capture without consent is rejected"), Result, EPostHogCaptureResult::NotOptedIn);
+	TestEqual(TEXT("No event queued"), Controller.GetQueuedEventCount(), 0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerCaptureEventNullPropertiesRetainsSdkEnrichmentTest, "UnrealHog.Consent.ConsentController.CaptureEventNullPropertiesRetainsSdkEnrichment", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogConsentControllerCaptureEventNullPropertiesRetainsSdkEnrichmentTest::RunTest(const FString& Parameters)
+{
+	FScopedConsentTestStorageDirectory Fixture;
+	FPostHogFakeBatchTransport* LastTransport = nullptr;
+	int32 UuidCounter = 0;
+
+	FPostHogConsentController Controller(MakeStorageFactory(Fixture.GetRootPath()), MakeTransportFactory(LastTransport), MakeUuidGenerator(UuidCounter));
+	UPostHogDeveloperSettings* Settings = MakeTransientSettings(true, true, false);
+
+	Controller.Initialize(*Settings);
+	Controller.SetOptIn(true, *Settings);
+
+	const EPostHogCaptureResult Result = Controller.CaptureEvent(TEXT("ev"), nullptr, false);
+
+	TestEqual(TEXT("Capture with null properties succeeds"), Result, EPostHogCaptureResult::Success);
+	TestEqual(TEXT("One event queued"), Controller.GetQueuedEventCount(), 1);
+
+	Controller.Flush();
+	TestNotNull(TEXT("Transport created"), LastTransport);
+
+	const TSharedRef<FJsonObject> PayloadJson = LastTransport->GetLastPayload().ToJsonObject();
+	LastTransport->CompleteLast(true, 200, TEXT(""));
+
+	const TArray<TSharedPtr<FJsonValue>>* BatchArray = nullptr;
+	TestTrue(TEXT("Has batch array"), PayloadJson->TryGetArrayField(TEXT("batch"), BatchArray));
+	TestEqual(TEXT("Batch has one event"), BatchArray->Num(), 1);
+
+	const TSharedPtr<FJsonObject> EventObject = (*BatchArray)[0]->AsObject();
+	const TSharedPtr<FJsonObject>* PropertiesObject = nullptr;
+	TestTrue(TEXT("Event has properties object"), EventObject->TryGetObjectField(TEXT("properties"), PropertiesObject));
+
+	FString LibValue;
+	TestTrue(TEXT("properties has $lib"), (*PropertiesObject)->TryGetStringField(TEXT("$lib"), LibValue));
+	TestFalse(TEXT("$lib is non-empty"), LibValue.IsEmpty());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerCaptureEventEnforcesReservedPropertyPrecedenceTest, "UnrealHog.Consent.ConsentController.CaptureEventEnforcesReservedPropertyPrecedence", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogConsentControllerCaptureEventEnforcesReservedPropertyPrecedenceTest::RunTest(const FString& Parameters)
+{
+	FScopedConsentTestStorageDirectory Fixture;
+	FPostHogFakeBatchTransport* LastTransport = nullptr;
+	int32 UuidCounter = 0;
+
+	FPostHogConsentController Controller(MakeStorageFactory(Fixture.GetRootPath()), MakeTransportFactory(LastTransport), MakeUuidGenerator(UuidCounter));
+	UPostHogDeveloperSettings* Settings = MakeTransientSettings(true, true, false);
+
+	Controller.Initialize(*Settings);
+	Controller.SetOptIn(true, *Settings);
+
+	const FString ExpectedSessionId = Controller.GetSessionId();
+
+	UPostHogEventProperties* Properties = NewObject<UPostHogEventProperties>();
+	Properties->AddString(TEXT("$lib"), TEXT("attacker"));
+	Properties->AddString(TEXT("$lib_version"), TEXT("attacker"));
+	Properties->AddBoolean(TEXT("$process_person_profile"), true);
+	Properties->AddString(TEXT("$session_id"), TEXT("attacker-session"));
+	Properties->AddString(TEXT("$groups"), TEXT("attacker-groups"));
+
+	const EPostHogCaptureResult Result = Controller.CaptureEvent(TEXT("ev"), Properties, false);
+	TestEqual(TEXT("Capture succeeds"), Result, EPostHogCaptureResult::Success);
+
+	Controller.Flush();
+	TestNotNull(TEXT("Transport created"), LastTransport);
+
+	const TSharedRef<FJsonObject> PayloadJson = LastTransport->GetLastPayload().ToJsonObject();
+	LastTransport->CompleteLast(true, 200, TEXT(""));
+
+	const TArray<TSharedPtr<FJsonValue>>* BatchArray = nullptr;
+	TestTrue(TEXT("Has batch array"), PayloadJson->TryGetArrayField(TEXT("batch"), BatchArray));
+	TestEqual(TEXT("Batch has one event"), BatchArray->Num(), 1);
+
+	const TSharedPtr<FJsonObject> EventObject = (*BatchArray)[0]->AsObject();
+	const TSharedPtr<FJsonObject>* PropertiesObject = nullptr;
+	TestTrue(TEXT("Event has properties object"), EventObject->TryGetObjectField(TEXT("properties"), PropertiesObject));
+
+	FString LibValue;
+	TestTrue(TEXT("properties has $lib"), (*PropertiesObject)->TryGetStringField(TEXT("$lib"), LibValue));
+	TestEqual(TEXT("$lib is the SDK library name, not the caller's value"), LibValue, FPostHogSdkInfo::GetLibraryName());
+
+	FString LibVersionValue;
+	TestTrue(TEXT("properties has $lib_version"), (*PropertiesObject)->TryGetStringField(TEXT("$lib_version"), LibVersionValue));
+	TestEqual(TEXT("$lib_version is the SDK plugin version, not the caller's value"), LibVersionValue, FPostHogSdkInfo::GetPluginVersion());
+
+	bool bProcessPersonProfileValue = true;
+	TestTrue(TEXT("properties has $process_person_profile"), (*PropertiesObject)->TryGetBoolField(TEXT("$process_person_profile"), bProcessPersonProfileValue));
+	TestFalse(TEXT("$process_person_profile is the SDK-supplied value, not the caller's true"), bProcessPersonProfileValue);
+
+	FString SessionIdValue;
+	TestTrue(TEXT("properties has $session_id"), (*PropertiesObject)->TryGetStringField(TEXT("$session_id"), SessionIdValue));
+	TestEqual(TEXT("$session_id is the controller's session id, not the caller's value"), SessionIdValue, ExpectedSessionId);
+
+	TestFalse(TEXT("$groups from caller input never survives (no group source exists yet)"), (*PropertiesObject)->HasField(TEXT("$groups")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerCaptureEventDuplicateCallerKeyLastWriteWinsTest, "UnrealHog.Consent.ConsentController.CaptureEventDuplicateCallerKeyLastWriteWins", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogConsentControllerCaptureEventDuplicateCallerKeyLastWriteWinsTest::RunTest(const FString& Parameters)
+{
+	FScopedConsentTestStorageDirectory Fixture;
+	FPostHogFakeBatchTransport* LastTransport = nullptr;
+	int32 UuidCounter = 0;
+
+	FPostHogConsentController Controller(MakeStorageFactory(Fixture.GetRootPath()), MakeTransportFactory(LastTransport), MakeUuidGenerator(UuidCounter));
+	UPostHogDeveloperSettings* Settings = MakeTransientSettings(true, true, false);
+
+	Controller.Initialize(*Settings);
+	Controller.SetOptIn(true, *Settings);
+
+	UPostHogEventProperties* Properties = NewObject<UPostHogEventProperties>();
+	Properties->AddString(TEXT("dup"), TEXT("first"));
+	Properties->AddString(TEXT("dup"), TEXT("second"));
+
+	const EPostHogCaptureResult Result = Controller.CaptureEvent(TEXT("ev"), Properties, false);
+	TestEqual(TEXT("Capture succeeds"), Result, EPostHogCaptureResult::Success);
+
+	Controller.Flush();
+	TestNotNull(TEXT("Transport created"), LastTransport);
+
+	const TSharedRef<FJsonObject> PayloadJson = LastTransport->GetLastPayload().ToJsonObject();
+	LastTransport->CompleteLast(true, 200, TEXT(""));
+
+	const TArray<TSharedPtr<FJsonValue>>* BatchArray = nullptr;
+	TestTrue(TEXT("Has batch array"), PayloadJson->TryGetArrayField(TEXT("batch"), BatchArray));
+	TestEqual(TEXT("Batch has one event"), BatchArray->Num(), 1);
+
+	const TSharedPtr<FJsonObject> EventObject = (*BatchArray)[0]->AsObject();
+	const TSharedPtr<FJsonObject>* PropertiesObject = nullptr;
+	TestTrue(TEXT("Event has properties object"), EventObject->TryGetObjectField(TEXT("properties"), PropertiesObject));
+
+	FString DupValue;
+	TestTrue(TEXT("properties has dup"), (*PropertiesObject)->TryGetStringField(TEXT("dup"), DupValue));
+	TestEqual(TEXT("Last-added duplicate key value wins"), DupValue, TEXT("second"));
 
 	return true;
 }

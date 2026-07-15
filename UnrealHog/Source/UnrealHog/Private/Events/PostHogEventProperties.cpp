@@ -1,5 +1,6 @@
 
 #include "Events/PostHogEventProperties.h"
+#include "Events/PostHogCapturePolicy.h"
 #include "Events/PostHogEvent.h"
 #include "Dom/JsonValue.h"
 
@@ -128,7 +129,7 @@ void UPostHogEventProperties::ApplyToEvent(FPostHogEvent& Event)
 {
 	for (const auto& Property : Properties)
 	{
-		if (Property.Key.IsEmpty())
+		if (Property.Key.IsEmpty() || PostHogCapturePolicy::GetReservedPropertyKeys().Contains(Property.Key))
 		{
 			continue;
 		}

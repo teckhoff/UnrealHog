@@ -3,7 +3,6 @@
 #include "Consent/PostHogConsentController.h"
 #include "PostHogDeveloperSettings.h"
 #include "Engine/World.h"
-#include "Events/PostHogEvent.h"
 #include "Http/PostHogHttpClient.h"
 #include "Logging/PostHogLogger.h"
 #include "Logging/StructuredLog.h"
@@ -62,30 +61,31 @@ void UPostHogRuntimeSubsystem::Deinitialize()
 
 void UPostHogRuntimeSubsystem::CaptureEvent(const FString& EventName, UPostHogEventProperties* Properties)
 {
-	if (!ConsentController || !ConsentController->IsOptedIn())
+	if (!ConsentController)
 	{
 		UE_LOGFMT(LogPostHog, Warning, "PostHog Runtime Subsystem has no analytics consent; dropping event {EventName}.", EventName);
 		return;
 	}
 
-	FPostHogEvent GeneratedEvent(EventName, ConsentController->GetSessionId());
-
-	if (GeneratedEvent.GetEventId().IsEmpty())
-	{
-		UE_LOGFMT(LogPostHog, Error, "PostHog Runtime Subsystem failed to generate an event identifier; dropping event {EventName}.", EventName);
-		return;
-	}
-
 	// TODO: Check opt-in/opt-out status to determine whether to ProcessProfile.
 	// Currently, default to anonymous events.
-	GeneratedEvent.SetProcessPersonProfile(false);
+	const EPostHogCaptureResult Result = ConsentController->CaptureEvent(EventName, Properties, /*bProcessPersonProfile=*/false);
 
-	if (Properties)
+	switch (Result)
 	{
-		Properties->ApplyToEvent(GeneratedEvent);
+	case EPostHogCaptureResult::InvalidEventName:
+		UE_LOGFMT(LogPostHog, Warning, "PostHog Runtime Subsystem rejected an empty or whitespace-only event name.");
+		break;
+	case EPostHogCaptureResult::NotOptedIn:
+		UE_LOGFMT(LogPostHog, Warning, "PostHog Runtime Subsystem has no analytics consent; dropping event {EventName}.", EventName);
+		break;
+	case EPostHogCaptureResult::EnqueueFailed:
+		UE_LOGFMT(LogPostHog, Error, "PostHog Runtime Subsystem failed to enqueue event {EventName}.", EventName);
+		break;
+	case EPostHogCaptureResult::Success:
+	default:
+		break;
 	}
-
-	ConsentController->Capture(GeneratedEvent);
 }
 
 UPostHogEventProperties* UPostHogRuntimeSubsystem::CreateEventProperties()

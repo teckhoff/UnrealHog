@@ -15,38 +15,42 @@ FPostHogEvent::FPostHogEvent(const FString& InEventName, const FString& InDistin
 	, EventName(InEventName)
 	, DistinctId(InDistinctId)
 	, Timestamp(FDateTime::UtcNow().ToIso8601())
-{	
+{
+}
+
+void FPostHogEvent::ApplySdkProperties(bool bProcessPersonProfile)
+{
 	Properties.SetStringField(TEXT("$lib"), FPostHogSdkInfo::GetLibraryName());
 	Properties.SetStringField(TEXT("$lib_version"), FPostHogSdkInfo::GetPluginVersion());
-	
+
 	Properties.SetStringField(TEXT("$platform"), FPlatformProperties::PlatformName());
-	
+
 	const FString PlatformVariant = FPlatformProperties::PlatformVariantName();
-	
+
 	if (!PlatformVariant.IsEmpty())
 	{
 		Properties.SetStringField(TEXT("$platform_variant"), PlatformVariant);
 	}
-	
+
 	const FString OsVersion = FPlatformMisc::GetOSVersion();
-	
+
 	if (!OsVersion.IsEmpty())
 	{
 		Properties.SetStringField(TEXT("$os_version"), OsVersion);
 	}
-	
+
 	const FString DeviceMakeAndModel = FPlatformMisc::GetDeviceMakeAndModel();
-	
+
 	if (!DeviceMakeAndModel.IsEmpty())
 	{
 		Properties.SetStringField(TEXT("$device_model"), DeviceMakeAndModel);
 	}
-	
+
 	const UGeneralProjectSettings* ProjectSettings = GetDefault<UGeneralProjectSettings>();
-	
+
 	Properties.SetStringField(TEXT("$app_name"), ProjectSettings->ProjectName);
 	Properties.SetStringField(TEXT("$app_version"), ProjectSettings->ProjectVersion);
-	
+
 	if (GEngine && GEngine->GameViewport)
 	{
 		FVector2D ViewportSize;
@@ -54,7 +58,8 @@ FPostHogEvent::FPostHogEvent(const FString& InEventName, const FString& InDistin
 		Properties.SetNumberField(TEXT("$screen_width"), ViewportSize.X);
 		Properties.SetNumberField(TEXT("$screen_height"), ViewportSize.Y);
 	}
-	
+
+	Properties.SetBoolField(TEXT("$process_person_profile"), bProcessPersonProfile);
 }
 
 void FPostHogEvent::SetStringProperty(const FString& Key, const FString& StringValue)
@@ -80,11 +85,6 @@ void FPostHogEvent::SetObjectProperty(const FString& Key, FJsonObject& ObjectVal
 void FPostHogEvent::SetJsonValueProperty(const FString& Key, const TSharedRef<FJsonValue>& Value)
 {
 	Properties.SetField(Key, Value);
-}
-
-void FPostHogEvent::SetProcessPersonProfile(bool bProcessPersonProfile)
-{
-	Properties.SetBoolField(TEXT("$process_person_profile"), bProcessPersonProfile);
 }
 
 TSharedRef<FJsonObject> FPostHogEvent::ToJsonObject() const
