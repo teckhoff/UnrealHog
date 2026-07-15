@@ -1,12 +1,9 @@
 
 #include "Events/PostHogEvent.h"
 
-#include "Engine/Engine.h"
-#include "Engine/GameViewportClient.h"
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
 #include "SDK/PostHogSdkInfo.h"
-#include "GeneralProjectSettings.h"
 #include "Utilities/PostHogUuidV7.h"
 
 
@@ -20,43 +17,62 @@ FPostHogEvent::FPostHogEvent(const FString& InEventName, const FString& InDistin
 
 void FPostHogEvent::ApplySdkProperties(bool bProcessPersonProfile)
 {
+	ApplySdkProperties(bProcessPersonProfile, FPostHogEventContextProvider::Capture());
+}
+
+void FPostHogEvent::ApplySdkProperties(bool bProcessPersonProfile, const FPostHogEventContext& Context)
+{
 	Properties.SetStringField(TEXT("$lib"), FPostHogSdkInfo::GetLibraryName());
 	Properties.SetStringField(TEXT("$lib_version"), FPostHogSdkInfo::GetPluginVersion());
 
-	Properties.SetStringField(TEXT("$platform"), FPlatformProperties::PlatformName());
+	Properties.SetStringField(TEXT("$platform"), Context.PlatformName);
 
-	const FString PlatformVariant = FPlatformProperties::PlatformVariantName();
-
-	if (!PlatformVariant.IsEmpty())
+	if (!Context.PlatformVariant.IsEmpty())
 	{
-		Properties.SetStringField(TEXT("$platform_variant"), PlatformVariant);
+		Properties.SetStringField(TEXT("$platform_variant"), Context.PlatformVariant);
 	}
 
-	const FString OsVersion = FPlatformMisc::GetOSVersion();
-
-	if (!OsVersion.IsEmpty())
+	if (!Context.OsVersion.IsEmpty())
 	{
-		Properties.SetStringField(TEXT("$os_version"), OsVersion);
+		Properties.SetStringField(TEXT("$os_version"), Context.OsVersion);
 	}
 
-	const FString DeviceMakeAndModel = FPlatformMisc::GetDeviceMakeAndModel();
+	const FString NormalizedOs = PostHogEventContextNormalization::NormalizeOsName(Context.OsLabel);
 
-	if (!DeviceMakeAndModel.IsEmpty())
+	if (!NormalizedOs.IsEmpty())
 	{
-		Properties.SetStringField(TEXT("$device_model"), DeviceMakeAndModel);
+		Properties.SetStringField(TEXT("$os"), NormalizedOs);
 	}
 
-	const UGeneralProjectSettings* ProjectSettings = GetDefault<UGeneralProjectSettings>();
-
-	Properties.SetStringField(TEXT("$app_name"), ProjectSettings->ProjectName);
-	Properties.SetStringField(TEXT("$app_version"), ProjectSettings->ProjectVersion);
-
-	if (GEngine && GEngine->GameViewport)
+	if (!Context.DeviceModel.IsEmpty())
 	{
-		FVector2D ViewportSize;
-		GEngine->GameViewport->GetViewportSize(ViewportSize);
-		Properties.SetNumberField(TEXT("$screen_width"), ViewportSize.X);
-		Properties.SetNumberField(TEXT("$screen_height"), ViewportSize.Y);
+		Properties.SetStringField(TEXT("$device_model"), Context.DeviceModel);
+	}
+
+	if (!Context.DeviceManufacturer.IsEmpty())
+	{
+		Properties.SetStringField(TEXT("$device_manufacturer"), Context.DeviceManufacturer);
+	}
+
+	const FString DeviceType = PostHogEventContextNormalization::MapDeviceType(Context.DeviceFormFactor);
+
+	if (!DeviceType.IsEmpty())
+	{
+		Properties.SetStringField(TEXT("$device_type"), DeviceType);
+	}
+
+	Properties.SetStringField(TEXT("$app_name"), Context.AppName);
+	Properties.SetStringField(TEXT("$app_version"), Context.AppVersion);
+
+	if (!Context.AppBuild.IsEmpty())
+	{
+		Properties.SetStringField(TEXT("$app_build"), Context.AppBuild);
+	}
+
+	if (Context.ScreenWidth.IsSet() && Context.ScreenHeight.IsSet())
+	{
+		Properties.SetNumberField(TEXT("$screen_width"), Context.ScreenWidth.GetValue());
+		Properties.SetNumberField(TEXT("$screen_height"), Context.ScreenHeight.GetValue());
 	}
 
 	Properties.SetBoolField(TEXT("$process_person_profile"), bProcessPersonProfile);

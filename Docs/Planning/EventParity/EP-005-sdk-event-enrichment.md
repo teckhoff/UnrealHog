@@ -2,7 +2,7 @@
 
 ## Status and dependencies
 
-- **State:** Ready
+- **State:** Completed
 - **Blocked by:** EP-003
 - **Blocks:** EP-029
 - **Parity row:** Default SDK, device, screen, and application properties
