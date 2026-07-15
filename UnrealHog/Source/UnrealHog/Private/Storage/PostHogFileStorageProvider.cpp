@@ -13,7 +13,7 @@
 FPostHogFileStorageProvider::FPostHogFileStorageProvider()
 	: WritePipe(TEXT("PostHogFileStorageProviderPipe"))
 {
-	BasePath = FPaths::Combine(FPaths::ProjectSavedDir(), PostHogSdkInfo::GetLibraryName());
+	BasePath = FPaths::Combine(FPaths::ProjectSavedDir(), FPostHogSdkInfo::GetLibraryName());
 	QueuePath = FPaths::Combine(BasePath, TEXT("Queue"));
 	StatePath = FPaths::Combine(BasePath, TEXT("State"));
 
@@ -24,7 +24,7 @@ FPostHogFileStorageProvider::FPostHogFileStorageProvider()
 FPostHogFileStorageProvider::FPostHogFileStorageProvider(const FString& InBasePath)
 	: WritePipe(TEXT("PostHogFileStorageProviderPipe"))
 {
-	BasePath = FPaths::Combine(InBasePath, PostHogSdkInfo::GetLibraryName());
+	BasePath = FPaths::Combine(InBasePath, FPostHogSdkInfo::GetLibraryName());
 	QueuePath = FPaths::Combine(BasePath, TEXT("Queue"));
 	StatePath = FPaths::Combine(BasePath, TEXT("State"));
 

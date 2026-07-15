@@ -5,7 +5,7 @@
 /**
  * 
  */
-class PostHogSdkInfo
+class FPostHogSdkInfo
 {
 public:
 	static FString GetLibraryName();
@@ -13,5 +13,5 @@ public:
 	static FString GetUserAgent();
 	
 private:
-	PostHogSdkInfo() = delete;
+	FPostHogSdkInfo() = delete;
 };
