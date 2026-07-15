@@ -1,5 +1,3 @@
-// Trevor Eckhoff, 2026. All rights reserved.
-
 #include "Subsystems/PostHogRuntimeSubsystem.h"
 
 #include "Consent/PostHogConsentController.h"

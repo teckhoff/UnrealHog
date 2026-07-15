@@ -1,5 +1,3 @@
-// Trevor Eckhoff, 2026. All rights reserved.
-
 
 #include "Events/PostHogEventProperties.h"
 #include "Events/PostHogEvent.h"

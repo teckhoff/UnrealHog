@@ -1,5 +1,3 @@
-// Trevor Eckhoff, 2026. All rights reserved.
-
 #include "SDK/PostHogSdkInfo.h"
 
 #if WITH_DEV_AUTOMATION_TESTS

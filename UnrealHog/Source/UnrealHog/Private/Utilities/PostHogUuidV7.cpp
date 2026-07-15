@@ -1,5 +1,3 @@
-// Trevor Eckhoff, 2026. All rights reserved.
-
 #include "Utilities/PostHogUuidV7.h"
 
 #include "Misc/DateTime.h"
