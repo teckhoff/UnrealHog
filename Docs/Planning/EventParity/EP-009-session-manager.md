@@ -2,7 +2,7 @@
 
 ## Status and dependencies
 
-- **State:** Blocked
+- **State:** Ready
 - **Blocked by:** EP-002
 - **Blocks:** EP-016, EP-027, EP-029
 - **Parity row:** Unity `SessionManager` and `$session_id`

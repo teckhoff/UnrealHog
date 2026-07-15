@@ -2,7 +2,7 @@
 
 ## Status and dependencies
 
-- **State:** Blocked
+- **State:** Ready
 - **Blocked by:** EP-002
 - **Blocks:** EP-008, EP-010, EP-011, EP-014, EP-017, EP-029
 - **Parity row:** Unity `IdentityManager`

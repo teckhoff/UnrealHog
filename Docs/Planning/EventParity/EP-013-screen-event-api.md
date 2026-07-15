@@ -2,7 +2,7 @@
 
 ## Status and dependencies
 
-- **State:** Blocked
+- **State:** Ready
 - **Blocked by:** EP-002, EP-003, EP-004
 - **Blocks:** EP-029
 - **Parity row:** Unity `Screen`

@@ -2,7 +2,7 @@
 
 ## Status and dependencies
 
-- **State:** Ready
+- **State:** Completed
 - **Blocked by:** None
 - **Blocks:** EP-004–EP-006, EP-008, EP-011–EP-017, EP-029
 - **Parity row:** Unity dictionary/list/null event property serialization

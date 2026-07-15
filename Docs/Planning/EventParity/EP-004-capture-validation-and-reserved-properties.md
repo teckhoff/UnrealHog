@@ -2,7 +2,7 @@
 
 ## Status and dependencies
 
-- **State:** Blocked
+- **State:** Completed
 - **Blocked by:** EP-002, EP-003
 - **Blocks:** EP-006, EP-008, EP-010–EP-017, EP-029
 - **Parity row:** `CaptureInternal` input validation and property merge order
