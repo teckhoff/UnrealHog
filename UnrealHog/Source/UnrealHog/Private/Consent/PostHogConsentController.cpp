@@ -1,5 +1,3 @@
-// Trevor Eckhoff, 2026. All rights reserved.
-
 #include "Consent/PostHogConsentController.h"
 
 #include "Dom/JsonObject.h"

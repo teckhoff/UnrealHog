@@ -1,5 +1,3 @@
-// Trevor Eckhoff, 2026. All rights reserved.
-
 #include "Events/PostHogEvent.h"
 
 #if WITH_DEV_AUTOMATION_TESTS

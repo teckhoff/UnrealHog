@@ -1,6 +1,4 @@
-﻿// Trevor Eckhoff, 2026. All rights reserved.
-
-#pragma once
+﻿#pragma once
 
 #include "CoreMinimal.h"
 #include "PostHogLogger.generated.h"

@@ -1,5 +1,3 @@
-// Trevor Eckhoff, 2026. All rights reserved.
-
 #include "Utilities/PostHogUuidV7.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
