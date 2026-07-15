@@ -7,7 +7,17 @@ class IPostHogStorageProvider;
 class IPostHogBatchTransport;
 class FPostHogEventQueue;
 class UPostHogDeveloperSettings;
+class UPostHogEventProperties;
 struct FPostHogEvent;
+
+// Outcome of FPostHogConsentController::CaptureEvent, observable by callers and tests.
+enum class EPostHogCaptureResult : uint8
+{
+	Success,
+	InvalidEventName,
+	NotOptedIn,
+	EnqueueFailed
+};
 
 /**
  * @brief Owns the opt-in/opt-out lifecycle and the runtime collaborators (storage, transport,
@@ -42,6 +52,13 @@ public:
 	bool IsOptedIn() const { return bIsOptedIn; }
 
 	bool Capture(const FPostHogEvent& Event);
+
+	// Single producer path for composing a capture: validates the event name, then layers
+	// persisted super properties, call properties, SDK-owned properties, session id, and groups
+	// (in that precedence order) before enqueuing via Capture(). Reserved keys in CallProperties
+	// are stripped by UPostHogEventProperties::ApplyToEvent, never overriding SDK-owned values.
+	EPostHogCaptureResult CaptureEvent(const FString& EventName, UPostHogEventProperties* CallProperties, bool bProcessPersonProfile);
+
 	void Flush();
 
 	const FString& GetSessionId() const { return SessionId; }
@@ -58,6 +75,11 @@ private:
 
 	void PersistOptIn(bool bOptIn) const;
 	static bool TryLoadPersistedOptIn(IPostHogStorageProvider& StorageProvider, bool& OutOptedIn);
+
+	// Extension points for future EPs. No-ops today: EP-004 does not implement super-property,
+	// session, or group storage, but CaptureEvent's precedence order already reserves their slot.
+	void ApplySuperProperties(FPostHogEvent& Event) const;
+	void ApplyGroups(FPostHogEvent& Event) const;
 
 	FStorageProviderFactory StorageProviderFactory;
 	FTransportFactory TransportFactory;

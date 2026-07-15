@@ -41,8 +41,11 @@ public:
 	void SetNumberProperty(const FString& Key, double NumberValue);
 	void SetObjectProperty(const FString& Key, FJsonObject& ObjectValue);
 	void SetJsonValueProperty(const FString& Key, const TSharedRef<FJsonValue>& Value);
-	void SetProcessPersonProfile(bool bProcessPersonProfile);
-	
+
+	// Populates the SDK-owned properties ($lib, $lib_version, platform/device/app info,
+	// $process_person_profile). Not called by the constructor so callers control composition order.
+	void ApplySdkProperties(bool bProcessPersonProfile);
+
 	FString GetEventId() const { return EventUuid; };
 	
 	TSharedRef<FJsonObject> ToJsonObject() const;

@@ -1,7 +1,9 @@
 #include "Consent/PostHogConsentController.h"
 
 #include "Dom/JsonObject.h"
+#include "Events/PostHogCapturePolicy.h"
 #include "Events/PostHogEvent.h"
+#include "Events/PostHogEventProperties.h"
 #include "Events/PostHogEventQueue.h"
 #include "Http/PostHogBatchTransport.h"
 #include "Logging/PostHogLogger.h"
@@ -99,6 +101,63 @@ bool FPostHogConsentController::Capture(const FPostHogEvent& Event)
 	}
 
 	return EventQueue->Enqueue(Event);
+}
+
+EPostHogCaptureResult FPostHogConsentController::CaptureEvent(const FString& EventName, UPostHogEventProperties* CallProperties, bool bProcessPersonProfile)
+{
+	if (!PostHogCapturePolicy::IsValidEventName(EventName))
+	{
+#if !WITH_DEV_AUTOMATION_TESTS
+		UE_LOGFMT(LogPostHog, Warning, "PostHog Consent Controller rejected capture with an empty or whitespace-only event name.");
+#endif
+		return EPostHogCaptureResult::InvalidEventName;
+	}
+
+	if (!bIsOptedIn || !EventQueue.IsValid())
+	{
+#if !WITH_DEV_AUTOMATION_TESTS
+		UE_LOGFMT(LogPostHog, Warning, "PostHog Consent Controller has no analytics consent; dropping event {EventName}.", EventName);
+#endif
+		return EPostHogCaptureResult::NotOptedIn;
+	}
+
+	FPostHogEvent GeneratedEvent(EventName, SessionId);
+
+	ApplySuperProperties(GeneratedEvent);
+
+	if (CallProperties)
+	{
+		CallProperties->ApplyToEvent(GeneratedEvent);
+	}
+
+	GeneratedEvent.ApplySdkProperties(bProcessPersonProfile);
+
+	if (!SessionId.IsEmpty())
+	{
+		GeneratedEvent.SetStringProperty(TEXT("$session_id"), SessionId);
+	}
+
+	ApplyGroups(GeneratedEvent);
+
+	if (!Capture(GeneratedEvent))
+	{
+		UE_LOGFMT(LogPostHog, Error, "PostHog Consent Controller failed to enqueue event {EventName}.", EventName);
+		return EPostHogCaptureResult::EnqueueFailed;
+	}
+
+	return EPostHogCaptureResult::Success;
+}
+
+void FPostHogConsentController::ApplySuperProperties(FPostHogEvent& Event) const
+{
+	// EP-004 does not implement super-property storage; a later EP populates persisted
+	// super properties here, ahead of call/SDK/session/group precedence.
+}
+
+void FPostHogConsentController::ApplyGroups(FPostHogEvent& Event) const
+{
+	// EP-004 does not implement group storage; a later EP populates persisted group
+	// associations here, after SDK/session precedence is applied.
 }
 
 void FPostHogConsentController::Flush()
