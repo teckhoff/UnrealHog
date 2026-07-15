@@ -207,14 +207,13 @@ Tests must not contact PostHog or require credentials.
 
 ### Platform verification
 
-Run the following on Windows with Unreal Engine 5.8:
+Zeroshot workers and validators run in WSL. Perform source inspection, repository-provided platform-neutral checks, test fixture review, and searches for forbidden call sites, then run the Windows-side Unreal Automation gate:
 
-1. Build the plugin for an Editor target.
-2. Run the focused UnrealHog UUIDv7 automation tests.
-3. Run the affected event, queue, consent, and subsystem automation tests.
+1. If the required `CI` symlinks are missing from the worktree, run `Scripts/ci-paths.sh` first.
+2. Run `Scripts/run-windows-tests.sh` to build the Editor target and execute the UnrealHog Automation suite.
+3. Verify the focused UUIDv7 tests and the affected event, queue, consent, and subsystem tests pass.
 4. Verify at least one generated event payload in the isolated test harness has a lowercase UUIDv7 `uuid` and no direct `FGuid` generation path remains in the callers.
-
-WSL agents must not invoke Windows Unreal executables. In WSL, limit verification to source inspection, repository-provided platform-neutral checks, test fixture review, and searches for forbidden call sites. Record the Windows build and automation suite as required manual or external-CI verification until a self-hosted Windows runner is available.
+5. Record the script output as a required Zeroshot validation gate.
 
 ## Acceptance criteria
 
@@ -260,6 +259,6 @@ Keep the implementation in one scoped pull request:
 2. Replace event UUID creation and cover persistence/payload identity.
 3. Replace subsystem session state and cover consent/failure behavior.
 4. Run source-search and platform-neutral checks in WSL.
-5. Complete the Windows Editor build and focused automation suite.
+5. Run `Scripts/run-windows-tests.sh` and record the passing Unreal Automation output as the Zeroshot validation gate; run `Scripts/ci-paths.sh` first if the required `CI` symlinks are missing from the worktree.
 
 The pull request must identify the affected event UUID and session identifier parity behaviors, list the Windows execution environment, and include the repository's required automated-agent notice.

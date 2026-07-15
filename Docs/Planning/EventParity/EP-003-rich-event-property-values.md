@@ -25,6 +25,7 @@ Represent every JSON value needed by custom events and SDK-generated events with
 - Existing scalar builder nodes remain source/Blueprint compatible.
 - Empty keys are rejected consistently without affecting other properties.
 - Windows Automation covers recursive values, copying, and JSON types.
+- Run `Scripts/ci-paths.sh` first if the required `CI` symlinks are missing from the worktree, then run `Scripts/run-windows-tests.sh`; the Unreal Automation tests must pass and their output must be recorded as a Zeroshot validation gate.
 
 ## Exclusions
 

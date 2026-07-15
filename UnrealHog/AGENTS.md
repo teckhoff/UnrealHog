@@ -2,7 +2,7 @@
 
 These rules apply to `Plugins/UnrealHog` in addition to the repository-level `AGENTS.md`.
 
-Do not ignore `../AGENTS.md`. Please continue using the pull_request_template.md in `../.github/pull_request_template.md`.
+DO NOT IGNORE `../AGENTS.md`. CONTINUE USING THE PULL REQUEST TEMPLATE LOCATED AT `../.github/pull_request_template.md`.
 
 ## Source Layout and API Boundaries
 

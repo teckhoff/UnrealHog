@@ -26,6 +26,7 @@ Parse stored event JSON into a sendable event while preserving its original UUID
 - Missing, malformed, or incorrectly typed required fields fail without a generated replacement.
 - Tests compare parsed JSON structure rather than key order or formatting.
 - Windows Automation and platform-neutral fixture validation pass.
+- Run `Scripts/ci-paths.sh` first if the required `CI` symlinks are missing from the worktree, then run `Scripts/run-windows-tests.sh`; the Unreal Automation tests must pass and their output must be recorded as a Zeroshot validation gate.
 
 ## Exclusions
 

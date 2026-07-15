@@ -25,7 +25,8 @@ Avoid starting HTTP delivery when Unreal can authoritatively report that the pla
 - Reachable and unknown states proceed through normal batching and error policy.
 - A transition from offline to reachable allows the next flush to drain without re-enqueueing.
 - The reachability adapter has no public SDK surface and tests use a fake provider.
-- Windows verifies any platform delegate/module integration; WSL performs static checks only.
+- The Windows-side Unreal Automation gate verifies any platform delegate/module integration in addition to the WSL static checks.
+- Run `Scripts/ci-paths.sh` first if the required `CI` symlinks are missing from the worktree, then run `Scripts/run-windows-tests.sh`; the Unreal Automation tests must pass and their output must be recorded as a Zeroshot validation gate.
 
 ## Exclusions
 
@@ -35,4 +36,3 @@ Avoid starting HTTP delivery when Unreal can authoritatively report that the pla
 ## Unity references
 
 - `Docs/Reference/posthog-unity/com.posthog.unity/Runtime/Core/EventQueue.cs` (`Application.internetReachability` check)
-

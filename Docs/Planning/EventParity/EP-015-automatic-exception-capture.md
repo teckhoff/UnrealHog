@@ -26,6 +26,7 @@ Connect supported Unreal exception/error signals to EP-014 without duplicate sub
 - Debounce boundary tests are deterministic and separate distinct exceptions after the interval.
 - Handler removal is proven before subsystem destruction.
 - Windows build and Automation run against Unreal delegates or a private adapter seam, never by crashing the test process.
+- Run `Scripts/ci-paths.sh` first if the required `CI` symlinks are missing from the worktree, then run `Scripts/run-windows-tests.sh`; the Unreal Automation tests must pass and their output must be recorded as a Zeroshot validation gate.
 
 ## Exclusions
 

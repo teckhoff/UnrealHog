@@ -26,6 +26,7 @@ Eliminate the process-only event array so every persisted event—including reco
 - Enqueue, count, and threshold behavior reflect asynchronous writes through the storage index.
 - Cancellation leaves unsent persisted records eligible for the next queue instance.
 - Tests use fake storage/transport and include current-run plus prior-run records.
+- Run `Scripts/ci-paths.sh` first if the required `CI` symlinks are missing from the worktree, then run `Scripts/run-windows-tests.sh`; the Unreal Automation tests must pass and their output must be recorded as a Zeroshot validation gate.
 
 ## Exclusions
 

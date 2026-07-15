@@ -25,6 +25,7 @@ Apply the queue limit across current and prior runs without deleting an in-fligh
 - Active batch records are never removed beneath a request.
 - Delete/save failures leave the index and disk in a documented consistent state and are observable.
 - Tests cover capacity `1`, multiple in-flight IDs, restart state, and failure injection.
+- Run `Scripts/ci-paths.sh` first if the required `CI` symlinks are missing from the worktree, then run `Scripts/run-windows-tests.sh`; the Unreal Automation tests must pass and their output must be recorded as a Zeroshot validation gate.
 
 ## Exclusions
 

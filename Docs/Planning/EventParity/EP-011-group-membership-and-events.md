@@ -26,6 +26,7 @@ Persist group membership with identity and emit Unity-compatible group profile e
 - A group event contains its new membership in `$groups` and the expected group-identify fields.
 - Updating one group type does not remove other memberships.
 - Windows Automation covers persistence, replacement, clearing, nested properties, and reserved precedence.
+- Run `Scripts/ci-paths.sh` first if the required `CI` symlinks are missing from the worktree, then run `Scripts/run-windows-tests.sh`; the Unreal Automation tests must pass and their output must be recorded as a Zeroshot validation gate.
 
 ## Exclusions
 

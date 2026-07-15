@@ -26,6 +26,7 @@ Track installation/version state and produce the Unity-observable lifecycle even
 - Foreground after background emits Opened with `from_background=true`; repeated identical signals do not duplicate events.
 - Disabled or opted-out operation emits no lifecycle event and performs no event-state write.
 - Tests inject application metadata and lifecycle transitions.
+- Run `Scripts/ci-paths.sh` first if the required `CI` symlinks are missing from the worktree, then run `Scripts/run-windows-tests.sh`; the Unreal Automation tests must pass and their output must be recorded as a Zeroshot validation gate.
 
 ## Exclusions
 

@@ -25,6 +25,7 @@ Recover from oversized batches by reducing local send and threshold sizes withou
 - A later retry sends smaller batches and can drain successfully without regenerating events.
 - A `413` at batch size one retains the event and does not loop immediately.
 - Tests combine fake `413` and success responses with injected time.
+- Run `Scripts/ci-paths.sh` first if the required `CI` symlinks are missing from the worktree, then run `Scripts/run-windows-tests.sh`; the Unreal Automation tests must pass and their output must be recorded as a Zeroshot validation gate.
 
 ## Exclusions
 

@@ -4,9 +4,9 @@
 
 This task set covers behavioral parity with the Unity SDK for events delivered through PostHog's `/batch` endpoint. It includes capture semantics, consent, identity and sessions, event-producing APIs, persistence, batching, retry, lifecycle delivery, and isolated verification. Feature-flag fetching and session-replay transport are excluded; the `$feature_flag_called` producer remains recorded as an externally blocked ingress task.
 
-Each `EP-###` file is one independently reviewable change. A task whose **Blocked by** list is non-empty must not begin until every listed task is complete. Completing a prerequisite means its acceptance criteria pass, its Windows build/Automation requirements have been recorded, and the change is available to the dependent task.
+Each `EP-###` file is one independently reviewable change. A task whose **Blocked by** list is non-empty must not begin until every listed task is complete. Completing a prerequisite means its acceptance criteria pass, its Unreal Automation results from `Scripts/run-windows-tests.sh` have been recorded as a Zeroshot validation gate, and the change is available to the dependent task.
 
-All paths and references are repository-relative. Unity sources are behavioral references only and must remain unchanged. Tests must use fake storage, clocks, and HTTP and must never contact PostHog. WSL agents perform static/platform-neutral checks only; compilation and Unreal Automation execution are required on Windows.
+All paths and references are repository-relative. Unity sources are behavioral references only and must remain unchanged. Tests must use fake storage, clocks, and HTTP and must never contact PostHog. Zeroshot workers and validators run in WSL and must perform all available static/platform-neutral checks. They must also run the Windows-side Unreal Automation gate with `Scripts/run-windows-tests.sh` and record its output; if the required `CI` symlinks are missing from the worktree, run `Scripts/ci-paths.sh` first.
 
 ## Dependency graph
 
@@ -71,4 +71,3 @@ EP-017 is verified separately when the feature-flag subsystem exists.
 | [EP-027](EP-027-background-and-shutdown-flush.md) | Background persistence and bounded final flush | EP-002, EP-016, EP-022, EP-026 |
 | [EP-028](EP-028-offline-flush-gate.md) | Skip HTTP while the platform is known offline | EP-022, EP-024 |
 | [EP-029](EP-029-core-ingress-acceptance-suite.md) | End-to-end isolated core ingress acceptance suite | EP-001–EP-016, EP-018–EP-028 |
-

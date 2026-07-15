@@ -26,6 +26,7 @@ Pause repeated transient delivery attempts using Unity's deterministic linear ba
 - Success clears the pause and the next transient failure starts again at 5 seconds.
 - Permanent failures do not enter retry backoff.
 - No test uses wall-clock sleeping.
+- Run `Scripts/ci-paths.sh` first if the required `CI` symlinks are missing from the worktree, then run `Scripts/run-windows-tests.sh`; the Unreal Automation tests must pass and their output must be recorded as a Zeroshot validation gate.
 
 ## Exclusions
 

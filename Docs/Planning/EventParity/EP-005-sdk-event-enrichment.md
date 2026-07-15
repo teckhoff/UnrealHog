@@ -24,6 +24,7 @@ Add the missing Unity-observable default properties using Unreal-native platform
 - Mobile, desktop, and web-like platform mappings have focused cases where supported by Unreal targets.
 - SDK-owned values are constructed independently of user property input.
 - Existing Unreal-specific `$platform` and `$platform_variant` fields may remain as additive metadata.
+- Run `Scripts/ci-paths.sh` first if the required `CI` symlinks are missing from the worktree, then run `Scripts/run-windows-tests.sh`; the Unreal Automation tests must pass and their output must be recorded as a Zeroshot validation gate.
 
 ## Exclusions
 

@@ -25,6 +25,7 @@ Allow reusable properties to be registered once, persisted, and merged into ever
 - Unregister/clear affects only future events and persists the removal.
 - Blank keys and malformed stored JSON are safe and observable without blocking capture.
 - Tests cover all rich value types and source-object independence.
+- Run `Scripts/ci-paths.sh` first if the required `CI` symlinks are missing from the worktree, then run `Scripts/run-windows-tests.sh`; the Unreal Automation tests must pass and their output must be recorded as a Zeroshot validation gate.
 
 ## Exclusions
 

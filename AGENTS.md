@@ -19,7 +19,7 @@ If working in a git worktree, run `Scripts/link-engine-source.sh` before consult
 
 Everything under `Docs/Reference/posthog-unity` is read-only third-party reference material; never modify, move, or reformat it, and never copy it verbatim.
 
-`CI/UnrealEngine` is a symlink to the local engine source for targeted header lookups only. Search it with explicit paths, never recursively.
+`CI/UnrealEngine` is a symlink to the local engine source for targeted header lookups only. Do NOT edit any files in this folder. Search it with explicit paths, never recursively.
 
 ## Architecture Invariants
 
@@ -36,11 +36,12 @@ Every change should be traceable to a scoped task with explicit acceptance crite
 
 ## Build and Verification Environment
 
-Builds and automation tests are required to be done on Windows.
+Zeroshot workers and validators run in WSL. In that environment, perform all available non-editor verification: inspect diffs and generated-file boundaries, check header/module conventions, validate fixtures and JSON logic with runnable isolated tests, and run any repository-provided platform-neutral checks.
 
-Zeroshot workers and validators run in WSL and must not attempt to invoke Windows Unreal executables. In that environment, perform all available non-editor verification: inspect diffs and generated-file boundaries, check header/module conventions, validate fixtures and JSON logic with runnable isolated tests, and run any repository-provided platform-neutral checks. Record the Windows build and Automation suite as required manual or external-CI verification when those checks cannot run locally.
-
-Do not configure an agent quality gate that requires an Unreal build until a self-hosted Windows CI runner exists. Once available, the gate should query that external CI status rather than launching Unreal from WSL.
+Zeroshot validators are able to perform automation testing using the Unreal Automation Tool. To perform this testing:
+- If the required `CI` symlinks do not exist in the worktree, run `Scripts/ci-paths.sh` first.
+- Run `Scripts/run-windows-tests.sh`
+- Record and verify the output as a validation gate for Zeroshot.
 
 ## Commits, Issues, and Pull Requests
 
@@ -52,7 +53,11 @@ Every issue or pull request created by an agent must include this notice promine
 
 If possible, also include the model of the agent running.
 
-Use the pull request table located in `.github/pull_request_template.md`.
+ALL PULL REQUESTS MUST FOLLOW THE TEMPLATE OUTLINED IN `.github/pull_request_template.md`.
+
+ALL PULL REQUESTS MUST INCLUDE THE RESULTS OF THE UNREAL AUTOMATION TOOL TESTING.
+
+ALL PULL REQUESTS MUST MAKE EXPLAIN WHAT WAS WORKED ON PER THE PULL REQUEST TEMPLATE LOCATED AT `.github/pull_request_template.md`
 
 ## Task Protocol
 Work only within the scope of the assigned pull request or task file. If the task conflicts with this document, stop and surface the conflict in the PR body rather than resolving it silently.

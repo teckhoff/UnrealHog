@@ -313,7 +313,7 @@ When a deferred production feature lands, its task must move the associated rows
 
 ### WSL/non-editor checks
 
-WSL workers must not launch Windows Unreal executables. They can:
+Zeroshot workers and validators run in WSL and perform all available non-editor checks:
 
 - inspect the diff and generated-file boundaries;
 - verify all new test files are guarded by `WITH_DEV_AUTOMATION_TESTS`;
@@ -322,15 +322,15 @@ WSL workers must not launch Windows Unreal executables. They can:
 - confirm every deferred Unity test file remains represented in the audit; and
 - run any repository-provided platform-neutral checks.
 
-### Required Windows verification
+### Required Zeroshot Unreal verification
 
-On Windows with Unreal Engine 5.8:
+From WSL, use the Windows-side Unreal Automation gate:
 
-1. Build the plugin for an Editor target.
-2. Run `UnrealHog.*` automation tests, including the existing UUID tests.
-3. Repeat the file-storage suite to expose leaked files or order dependence.
-4. Run configuration/runtime gating tests with no PostHog credentials and verify no network request is issued.
-5. Confirm the test-owned temporary directories are removed after the run.
+1. If the required `CI` symlinks are missing from the worktree, run `Scripts/ci-paths.sh` first.
+2. Run `Scripts/run-windows-tests.sh`; it builds the Editor target and executes the `UnrealHog.*` automation tests, including the existing UUID tests.
+3. Repeat the gate when needed to expose leaked files or order dependence in the file-storage suite.
+4. Verify configuration/runtime gating tests use no PostHog credentials, issue no network request, and remove test-owned temporary directories.
+5. Record the script output as a required Zeroshot validation gate.
 
 ## Acceptance criteria
 
@@ -343,7 +343,7 @@ On Windows with Unreal Engine 5.8:
 - SDK User-Agent is `<UnrealHog library name>/<plugin descriptor version>`.
 - No test contacts PostHog or requires credentials.
 - Every Unity test file has a disposition in the full-suite audit.
-- Focused automation passes in a Windows Unreal Engine 5.8 Editor build; WSL verification is recorded as non-editor-only.
+- `Scripts/run-windows-tests.sh` passes and its Unreal Automation output is recorded as a Zeroshot validation gate; run `Scripts/ci-paths.sh` first if the required `CI` symlinks are missing from the worktree.
 
 ## Exclusions
 

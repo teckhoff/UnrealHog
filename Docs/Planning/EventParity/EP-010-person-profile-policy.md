@@ -24,6 +24,7 @@ Replace the hard-coded anonymous-only behavior with policy derived from `EPostHo
 - Identify changes subsequent event behavior without mutating already queued events.
 - Default `IdentifiedOnly` anonymous capture remains profileless.
 - The setting is read through a validated runtime snapshot rather than the mutable CDO during capture.
+- Run `Scripts/ci-paths.sh` first if the required `CI` symlinks are missing from the worktree, then run `Scripts/run-windows-tests.sh`; the Unreal Automation tests must pass and their output must be recorded as a Zeroshot validation gate.
 
 ## Exclusions
 

@@ -26,6 +26,7 @@ Create a single capture-composition path that rejects unusable event names and p
 - Duplicate caller keys use deterministic last-write behavior inside the caller builder.
 - Valid null property input is safe and retains SDK enrichment.
 - Tests prove reserved precedence for `$lib`, `$lib_version`, `$process_person_profile`, `$session_id`, and `$groups`.
+- Run `Scripts/ci-paths.sh` first if the required `CI` symlinks are missing from the worktree, then run `Scripts/run-windows-tests.sh`; the Unreal Automation tests must pass and their output must be recorded as a Zeroshot validation gate.
 
 ## Exclusions
 

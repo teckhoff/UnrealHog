@@ -25,7 +25,8 @@ Keep the game-instance subsystem callable while ensuring identifiers, event payl
 - Opt-in with valid settings enables capture once; repeated calls are idempotent.
 - Opt-out clears queued events and prevents new ones; re-opt-in creates a fresh runtime session without duplicating delegates or timers.
 - Invalid configuration cannot be bypassed by runtime opt-in.
-- Tests use injected collaborator factories/counters; Windows build and Automation execution are required.
+- Tests use injected collaborator factories/counters to verify lifecycle behavior without live services.
+- Run `Scripts/ci-paths.sh` first if the required `CI` symlinks are missing from the worktree, then run `Scripts/run-windows-tests.sh`; the Unreal Automation tests must pass and their output must be recorded as a Zeroshot validation gate.
 
 ## Exclusions
 

@@ -24,7 +24,8 @@ Allow queue behavior to be tested without Unreal's live HTTP stack while preserv
 - Queue tests can complete or cancel requests without constructing `FHttpModule` or contacting a network.
 - A synchronous send-start failure completes exactly once with status `0`.
 - Cancellation prevents a late callback from accessing a destroyed queue.
-- Windows build and focused Automation tests pass; WSL verification is limited to source/diff inspection.
+- Run `Scripts/ci-paths.sh` first if the required `CI` symlinks are missing from the worktree, then run `Scripts/run-windows-tests.sh`; the Unreal Automation tests must pass and their output must be recorded as a Zeroshot validation gate.
+- Do NOT modify any testing scripts in response to failed test. Make a note of the failed test to be deferred to a human. You may still modify non-test project files in response to failed tests.
 
 ## Exclusions
 

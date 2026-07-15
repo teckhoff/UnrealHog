@@ -26,6 +26,7 @@ Stop using the game-instance session UUID as `distinct_id` and maintain a persis
 - Malformed state is replaced with a valid anonymous identity and a warning.
 - No identity state read/write or UUID generation occurs before consent.
 - Tests use in-memory storage and never touch the project's real Saved directory.
+- Run `Scripts/ci-paths.sh` first if the required `CI` symlinks are missing from the worktree, then run `Scripts/run-windows-tests.sh`; the Unreal Automation tests must pass and their output must be recorded as a Zeroshot validation gate.
 
 ## Exclusions
 

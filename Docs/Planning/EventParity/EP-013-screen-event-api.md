@@ -24,6 +24,7 @@ Expose a focused screen-view producer that enters the same consent, composition,
 - Blank screen names are rejected before event creation.
 - Calls before consent or after opt-out create no event side effects.
 - Windows Automation covers null/populated properties and consent gating.
+- Run `Scripts/ci-paths.sh` first if the required `CI` symlinks are missing from the worktree, then run `Scripts/run-windows-tests.sh`; the Unreal Automation tests must pass and their output must be recorded as a Zeroshot validation gate.
 
 ## Exclusions
 

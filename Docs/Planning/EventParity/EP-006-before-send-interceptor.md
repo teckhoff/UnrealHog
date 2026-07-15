@@ -25,6 +25,7 @@ Allow C++ consumers to inspect, modify, or drop a fully composed event immediate
 - A drop or failure creates no queue record or HTTP request.
 - No hook leaves capture behavior unchanged and allocation overhead bounded.
 - Windows Automation covers modify, drop, and failure paths.
+- Run `Scripts/ci-paths.sh` first if the required `CI` symlinks are missing from the worktree, then run `Scripts/run-windows-tests.sh`; the Unreal Automation tests must pass and their output must be recorded as a Zeroshot validation gate.
 
 ## Exclusions
 

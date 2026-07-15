@@ -26,6 +26,7 @@ Maintain an in-memory session ID distinct from user identity and attach it to ca
 - Reset integration can start a new session without generating it before consent.
 - Session state is not persisted across game-instance lifetimes.
 - Windows Automation uses a fake clock; no sleep-based test is allowed.
+- Run `Scripts/ci-paths.sh` first if the required `CI` symlinks are missing from the worktree, then run `Scripts/run-windows-tests.sh`; the Unreal Automation tests must pass and their output must be recorded as a Zeroshot validation gate.
 
 ## Exclusions
 

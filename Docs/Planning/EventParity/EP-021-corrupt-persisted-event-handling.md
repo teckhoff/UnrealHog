@@ -25,6 +25,7 @@ Prevent unreadable or malformed queue records from permanently blocking later va
 - A failed corrupt-record deletion ends the attempt without repeated immediate reads.
 - Valid legacy events are never classified as corrupt solely because their UUID is not v7.
 - Tests cover mixed valid/corrupt order and storage exceptions/failures.
+- Run `Scripts/ci-paths.sh` first if the required `CI` symlinks are missing from the worktree, then run `Scripts/run-windows-tests.sh`; the Unreal Automation tests must pass and their output must be recorded as a Zeroshot validation gate.
 
 ## Exclusions
 

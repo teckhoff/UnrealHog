@@ -24,6 +24,7 @@ When feature flags become available, route deduplicated flag access events throu
 - Disabled tracking and missing flag details are safe and do not affect flag evaluation.
 - The event inherits all standard identity, session, profile, before-send, queue, and retry behavior.
 - Tests use a fake flag result source and assert the exact available metadata fields.
+- Run `Scripts/ci-paths.sh` first if the required `CI` symlinks are missing from the worktree, then run `Scripts/run-windows-tests.sh`; the Unreal Automation tests must pass and their output must be recorded as a Zeroshot validation gate.
 
 ## Exclusions
 

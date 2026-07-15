@@ -26,6 +26,7 @@ Expose idiomatic Blueprint/C++ identity operations and emit Unity-compatible ide
 - Reset creates or reuses the anonymous ID according to configuration and persists the result.
 - Every generated event passes consent, enrichment, reserved-property, and queue rules.
 - Windows Automation asserts exact event names, distinct IDs, nested properties, and restart state.
+- Run `Scripts/ci-paths.sh` first if the required `CI` symlinks are missing from the worktree, then run `Scripts/run-windows-tests.sh`; the Unreal Automation tests must pass and their output must be recorded as a Zeroshot validation gate.
 
 ## Exclusions
 
