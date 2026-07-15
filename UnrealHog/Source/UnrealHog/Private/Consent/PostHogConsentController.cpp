@@ -86,7 +86,9 @@ bool FPostHogConsentController::SetOptIn(bool bOptIn, const UPostHogDeveloperSet
 	const bool bOk = EnableCollection(Settings, FailureReason);
 	if (!bOk)
 	{
+#if !WITH_DEV_AUTOMATION_TESTS
 		UE_LOGFMT(LogPostHog, Warning, "PostHog Consent Controller rejected opt-in ({Reason}).", FailureReason);
+#endif
 	}
 	return bOk;
 }
