@@ -35,12 +35,12 @@ namespace
 
 		FString GetQueueDirectory() const
 		{
-			return FPaths::Combine(RootPath, PostHogSdkInfo::GetLibraryName(), TEXT("Queue"));
+			return FPaths::Combine(RootPath, FPostHogSdkInfo::GetLibraryName(), TEXT("Queue"));
 		}
 
 		FString GetStateDirectory() const
 		{
-			return FPaths::Combine(RootPath, PostHogSdkInfo::GetLibraryName(), TEXT("State"));
+			return FPaths::Combine(RootPath, FPostHogSdkInfo::GetLibraryName(), TEXT("State"));
 		}
 
 	private:

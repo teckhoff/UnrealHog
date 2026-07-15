@@ -16,8 +16,8 @@ FPostHogEvent::FPostHogEvent(const FString& InEventName, const FString& InDistin
 	, DistinctId(InDistinctId)
 	, Timestamp(FDateTime::UtcNow().ToIso8601())
 {	
-	Properties.SetStringField(TEXT("$lib"), PostHogSdkInfo::GetLibraryName());
-	Properties.SetStringField(TEXT("$lib_version"), PostHogSdkInfo::GetPluginVersion());
+	Properties.SetStringField(TEXT("$lib"), FPostHogSdkInfo::GetLibraryName());
+	Properties.SetStringField(TEXT("$lib_version"), FPostHogSdkInfo::GetPluginVersion());
 	
 	Properties.SetStringField(TEXT("$platform"), FPlatformProperties::PlatformName());
 	

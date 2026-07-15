@@ -34,9 +34,9 @@ void UPostHogRuntimeSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 	if (ConsentController->IsOptedIn())
 	{
-		const FString LibraryName = PostHogSdkInfo::GetLibraryName();
-		const FString LibraryVersion = PostHogSdkInfo::GetPluginVersion();
-		const FString UserAgent = PostHogSdkInfo::GetUserAgent();
+		const FString LibraryName = FPostHogSdkInfo::GetLibraryName();
+		const FString LibraryVersion = FPostHogSdkInfo::GetPluginVersion();
+		const FString UserAgent = FPostHogSdkInfo::GetUserAgent();
 
 		UE_LOGFMT(LogPostHog, Log, "PostHog Runtime Subsystem Initialized with active consent. Plugin {LibraryName} (ver. {Version}) ({Agent})", LibraryName, LibraryVersion, UserAgent);
 

@@ -42,7 +42,7 @@ TSharedPtr<IPostHogBatchRequestHandle> FPostHogHttpClient::SendBatch(const FPost
 	Request->SetURL(GetBatchUrl());
 	Request->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
 	Request->SetHeader(TEXT("Accept"), TEXT("application/json"));
-	Request->SetHeader(TEXT("User-Agent"), PostHogSdkInfo::GetUserAgent());
+	Request->SetHeader(TEXT("User-Agent"), FPostHogSdkInfo::GetUserAgent());
 	Request->SetContentAsString(JsonBody);
 	Request->SetTimeout(TimeoutSeconds);
 	
