@@ -30,6 +30,9 @@ bool FPostHogSettingsDefaultsTest::RunTest(const FString& Parameters)
 	// or disabled without removing the plugin.
 	TestTrue(TEXT("Analytics enabled by default"), Settings->IsAnalyticsEnabled());
 
+	// Repository invariant: the end user's default consent state is opt-out.
+	TestFalse(TEXT("Default user opt-in is opt-out"), Settings->GetDefaultUserOptIn());
+
 	TestEqual(TEXT("Default flush event count"), Settings->GetFlushEventCount(), 20);
 	TestEqual(TEXT("Default flush interval seconds"), Settings->GetFlushIntervalSeconds(), 30);
 	TestEqual(TEXT("Default max queue size"), Settings->GetMaxQueueSize(), 1000);
@@ -178,7 +181,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogSettingsConfigFlagsTest, "UnrealHog.Con
 
 bool FPostHogSettingsConfigFlagsTest::RunTest(const FString& Parameters)
 {
-	const TCHAR* ConfigBackedFields[] = { TEXT("bAnalyticsEnabled"), TEXT("ApiKey"), TEXT("HostType"), TEXT("Host"), TEXT("FlushEventCount") };
+	const TCHAR* ConfigBackedFields[] = { TEXT("bAnalyticsEnabled"), TEXT("ApiKey"), TEXT("bDefaultUserOptIn"), TEXT("HostType"), TEXT("Host"), TEXT("FlushEventCount") };
 
 	for (const TCHAR* FieldName : ConfigBackedFields)
 	{

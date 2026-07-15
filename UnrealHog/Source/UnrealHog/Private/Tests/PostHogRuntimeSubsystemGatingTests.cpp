@@ -35,9 +35,9 @@ namespace
 	};
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogRuntimeSubsystemGatingTest, "UnrealHog.Subsystems.RuntimeSubsystem.ShouldCreateSubsystemGating", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogRuntimeSubsystemAlwaysCreatesTest, "UnrealHog.Subsystems.RuntimeSubsystem.AlwaysCreatesSubsystemRegardlessOfConsentOrConfig", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 
-bool FPostHogRuntimeSubsystemGatingTest::RunTest(const FString& Parameters)
+bool FPostHogRuntimeSubsystemAlwaysCreatesTest::RunTest(const FString& Parameters)
 {
 	FScopedDeveloperSettingsCdoRestore RestoreGuard;
 
@@ -47,15 +47,18 @@ bool FPostHogRuntimeSubsystemGatingTest::RunTest(const FString& Parameters)
 	// collection is never built and GetSubsystem<>() would return null.
 	const UPostHogRuntimeSubsystem* Subsystem = GetDefault<UPostHogRuntimeSubsystem>();
 
+	// The subsystem must always be creatable so consent can be granted later at runtime;
+	// CaptureEvent/Flush remain safe no-ops in any of these misconfigured or opted-out states.
+
 	// Case 1: analytics disabled entirely.
 	UnrealHogTests::SetPropertyValue<bool>(RestoreGuard.Cdo, TEXT("bAnalyticsEnabled"), false);
 	UnrealHogTests::SetPropertyValue<FString>(RestoreGuard.Cdo, TEXT("ApiKey"), TEXT("phc_valid_key"));
-	TestFalse(TEXT("Disabled analytics prevents subsystem creation"), Subsystem->ShouldCreateSubsystem(GetTransientPackage()));
+	TestTrue(TEXT("Disabled analytics still allows subsystem creation"), Subsystem->ShouldCreateSubsystem(GetTransientPackage()));
 
 	// Case 2: analytics enabled, but whitespace-only API key.
 	UnrealHogTests::SetPropertyValue<bool>(RestoreGuard.Cdo, TEXT("bAnalyticsEnabled"), true);
 	UnrealHogTests::SetPropertyValue<FString>(RestoreGuard.Cdo, TEXT("ApiKey"), TEXT("   "));
-	TestFalse(TEXT("Whitespace API key prevents subsystem creation"), Subsystem->ShouldCreateSubsystem(GetTransientPackage()));
+	TestTrue(TEXT("Whitespace API key still allows subsystem creation"), Subsystem->ShouldCreateSubsystem(GetTransientPackage()));
 
 	// Case 3: analytics enabled with a valid key.
 	UnrealHogTests::SetPropertyValue<bool>(RestoreGuard.Cdo, TEXT("bAnalyticsEnabled"), true);

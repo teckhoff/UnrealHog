@@ -21,6 +21,10 @@ public:
 	bool Enqueue(const FPostHogEvent& Event);
 	void Flush();
 	void CancelInFlightRequest();
+
+	// Cancels any in-flight send, clears all persisted and in-memory queued events.
+	void Clear();
+
 	int32 Num() const;
 
 private:

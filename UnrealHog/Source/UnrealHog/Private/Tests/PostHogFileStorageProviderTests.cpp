@@ -50,15 +50,32 @@ namespace
 	};
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogFileStorageCreatesDirectoriesTest, "UnrealHog.Storage.FileStorageProvider.CreatesQueueAndStateDirectories", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogFileStorageConstructionCreatesNoDirectoriesTest, "UnrealHog.Storage.FileStorageProvider.ConstructionCreatesNoDirectoriesOnDisk", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 
-bool FPostHogFileStorageCreatesDirectoriesTest::RunTest(const FString& Parameters)
+bool FPostHogFileStorageConstructionCreatesNoDirectoriesTest::RunTest(const FString& Parameters)
 {
 	FScopedTestStorageDirectory Fixture;
 	FPostHogFileStorageProvider Provider(Fixture.GetRootPath());
 
-	TestTrue(TEXT("Queue directory exists"), IFileManager::Get().DirectoryExists(*Fixture.GetQueueDirectory()));
-	TestTrue(TEXT("State directory exists"), IFileManager::Get().DirectoryExists(*Fixture.GetStateDirectory()));
+	TestFalse(TEXT("Queue directory not created by construction alone"), IFileManager::Get().DirectoryExists(*Fixture.GetQueueDirectory()));
+	TestFalse(TEXT("State directory not created by construction alone"), IFileManager::Get().DirectoryExists(*Fixture.GetStateDirectory()));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogFileStorageCreatesDirectoriesLazilyTest, "UnrealHog.Storage.FileStorageProvider.CreatesQueueAndStateDirectoriesLazilyOnFirstWrite", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogFileStorageCreatesDirectoriesLazilyTest::RunTest(const FString& Parameters)
+{
+	FScopedTestStorageDirectory Fixture;
+	FPostHogFileStorageProvider Provider(Fixture.GetRootPath());
+
+	Provider.SaveEvent(TEXT("event-1"), TEXT("{}"));
+	Provider.FlushPendingWrites();
+	TestTrue(TEXT("Queue directory exists after first SaveEvent"), IFileManager::Get().DirectoryExists(*Fixture.GetQueueDirectory()));
+
+	Provider.SaveState(TEXT("session"), TEXT("{}"));
+	TestTrue(TEXT("State directory exists after first SaveState"), IFileManager::Get().DirectoryExists(*Fixture.GetStateDirectory()));
 
 	return true;
 }
@@ -69,10 +86,9 @@ bool FPostHogFileStorageLoadsExistingEventsTest::RunTest(const FString& Paramete
 {
 	FScopedTestStorageDirectory Fixture;
 
-	// Seed files before construction so InitializeDirectories() creates the tree first.
-	{
-		FPostHogFileStorageProvider SeedProvider(Fixture.GetRootPath());
-	}
+	// Seed files by creating the Queue directory directly; directory creation is otherwise
+	// lazy and only happens on the first actual write.
+	IFileManager::Get().MakeDirectory(*Fixture.GetQueueDirectory(), true);
 
 	FFileHelper::SaveStringToFile(TEXT("{\"a\":1}"), *FPaths::Combine(Fixture.GetQueueDirectory(), TEXT("bbb.json")));
 	FFileHelper::SaveStringToFile(TEXT("{\"a\":2}"), *FPaths::Combine(Fixture.GetQueueDirectory(), TEXT("aaa.json")));
