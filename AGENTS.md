@@ -66,12 +66,12 @@ Creating or updating a pull request is incomplete until all of these conditions 
 5. Include the automated-agent notice above verbatim.
 6. Under `How did you test this code?`, include the command, environment, actual result, and relevant output from `Scripts/run-windows-tests.sh`. Never claim a test that was not run.
 7. Open new pull requests as drafts.
-8. After creating or editing the pull request, retrieve its published base, title, and body from GitHub. Confirm `baseRefName` is `dev`, then run `gh pr view --json title,body | python3 Scripts/validate_pr_body.py --json -`.
-9. If validation fails, update the pull request and validate again. Do not report completion while validation fails.
+8. After creating or editing the pull request, retrieve its published base, title, and body from GitHub. Confirm `baseRefName` is `dev` and the published metadata meets the requirements above.
+9. If the published metadata does not meet those requirements, update the pull request and check it again. Do not report completion until it complies.
 
 Do not use `gh pr create --fill`, generated commit summaries, or an independently invented body as a substitute for the repository template.
 
-Reviewers must inspect both the patch and the published pull request metadata. Reject a normal pull request unless its base branch is `dev`; reject a pull request into `main` unless it is an explicitly requested milestone promotion from this repository's `dev` branch. Also reject the result if the title or body fails `Scripts/validate_pr_body.py`, omits or reorders a template section, leaves a section empty, lacks the automated-agent notice, or does not record the actual Unreal Automation Tool result. Do not approve based only on code correctness.
+Reviewers must inspect both the patch and the published pull request metadata. Reject a normal pull request unless its base branch is `dev`; reject a pull request into `main` unless it is an explicitly requested milestone promotion from this repository's `dev` branch. Also reject the result if the title or body omits or reorders a template section, leaves a section empty, lacks the automated-agent notice, or does not record the actual Unreal Automation Tool result. Do not approve based only on code correctness.
 
 ## Task Protocol
 Work only within the scope of the assigned pull request or task file. If the task conflicts with this document, stop and surface the conflict in the PR body rather than resolving it silently.

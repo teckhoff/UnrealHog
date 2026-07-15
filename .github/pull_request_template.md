@@ -60,7 +60,7 @@
   ❌ feat: Added retention export.   (capitalized, period, no scope)
 - Description: high-level rationale, not a step-by-step replay.
 - Body: pass it straight to the creation tool's `body` arg (GitHub MCP `create_pull_request` body, or `gh pr create --body-file -` via stdin) — don't write it to a temp file first; the arg preserves markdown and newlines verbatim.
-- Validation: after publishing, verify `baseRefName` is `dev` with `gh pr view --json baseRefName`, then run `gh pr view --json title,body | python3 Scripts/validate_pr_body.py --json -`; fix the published metadata and rerun until it passes. Only an explicitly requested `dev` to `main` milestone promotion may have a different base.
+- Published metadata: after publishing, verify `baseRefName` is `dev` with `gh pr view --json baseRefName` and check that the title and body meet the rules above. Only an explicitly requested `dev` to `main` milestone promotion may have a different base.
 - Public OSS repo: no internal customers, incidents, or operational metrics.
 - Draft by default: open new PRs as drafts (`gh pr create --draft`) — drafts run only a narrow CI subset and save runner credits. Fix CI and run affected tests locally before marking ready for review.
 - Labels: apply `skip-agent-review` for trivial/chore PRs that don't need Copilot or Greptile review.
