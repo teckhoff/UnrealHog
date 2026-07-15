@@ -37,8 +37,8 @@ bool FPostHogEventContextMapsDeviceTypeTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Desktop maps"), MapDeviceType(EPostHogDeviceFormFactor::Desktop), TEXT("Desktop"));
 	TestEqual(TEXT("Web maps"), MapDeviceType(EPostHogDeviceFormFactor::Web), TEXT("Web"));
 	TestEqual(TEXT("Console omitted"), MapDeviceType(EPostHogDeviceFormFactor::Console), TEXT(""));
-	TestEqual(TEXT("Tv omitted"), MapDeviceType(EPostHogDeviceFormFactor::Tv), TEXT(""));
-	TestEqual(TEXT("Xr omitted"), MapDeviceType(EPostHogDeviceFormFactor::Xr), TEXT(""));
+	TestEqual(TEXT("Tv omitted"), MapDeviceType(EPostHogDeviceFormFactor::TV), TEXT(""));
+	TestEqual(TEXT("Xr omitted"), MapDeviceType(EPostHogDeviceFormFactor::XR), TEXT(""));
 	TestEqual(TEXT("Server omitted"), MapDeviceType(EPostHogDeviceFormFactor::Server), TEXT(""));
 	TestEqual(TEXT("Unknown omitted"), MapDeviceType(EPostHogDeviceFormFactor::Unknown), TEXT(""));
 

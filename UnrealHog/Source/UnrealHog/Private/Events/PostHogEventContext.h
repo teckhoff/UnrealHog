@@ -11,8 +11,8 @@ enum class EPostHogDeviceFormFactor : uint8
 	Mobile,
 	Web,
 	Console,
-	Tv,
-	Xr,
+	TV,
+	XR,
 	Server
 };
 
