@@ -46,7 +46,7 @@ EP-017 is verified separately when the feature-flag subsystem exists.
 | [EP-002](EP-002-runtime-consent-lifecycle.md) | Runtime opt-in/out without pre-consent side effects | None | ✅ |
 | [EP-003](EP-003-rich-event-property-values.md) | Null, object, and array property values | None | ✅ |
 | [EP-004](EP-004-capture-validation-and-reserved-properties.md) | Capture validation and SDK-owned property precedence | EP-002, EP-003 | ✅ |
-| [EP-005](EP-005-sdk-event-enrichment.md) | Missing Unity-equivalent SDK properties | EP-003 | ❌ |
+| [EP-005](EP-005-sdk-event-enrichment.md) | Missing Unity-equivalent SDK properties | EP-003 | ✅ |
 | [EP-006](EP-006-before-send-interceptor.md) | Modify or drop fully enriched events | EP-004 | ❌ |
 | [EP-007](EP-007-persistent-identity-manager.md) | Persistent anonymous and identified identity state | EP-002 | ❌ |
 | [EP-008](EP-008-identify-reset-and-alias-apis.md) | Identity-producing public event APIs | EP-003, EP-004, EP-007 | ❌ |

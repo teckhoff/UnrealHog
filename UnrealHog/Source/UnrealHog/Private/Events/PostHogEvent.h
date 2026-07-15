@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Dom/JsonObject.h"
+#include "Events/PostHogEventContext.h"
 
 class FJsonValue;
 
@@ -30,7 +31,8 @@ private:
 	// A timestamp in ISO 8601 format.
 	FString Timestamp;
 	
-	// A JSON object containing the event properties. Always contains $lib and $lib_version.
+	// A JSON object containing the event properties. Always contains $lib, $lib_version, and the
+	// other SDK-owned default properties populated by ApplySdkProperties.
 	FJsonObject Properties;
 	
 public:
@@ -43,8 +45,13 @@ public:
 	void SetJsonValueProperty(const FString& Key, const TSharedRef<FJsonValue>& Value);
 
 	// Populates the SDK-owned properties ($lib, $lib_version, platform/device/app info,
-	// $process_person_profile). Not called by the constructor so callers control composition order.
+	// $process_person_profile) by capturing a fresh FPostHogEventContext. Not called by the
+	// constructor so callers control composition order.
 	void ApplySdkProperties(bool bProcessPersonProfile);
+
+	// Same as above, but serializes from a caller-supplied Context instead of capturing one, so
+	// tests can inject deterministic platform/app/screen values.
+	void ApplySdkProperties(bool bProcessPersonProfile, const FPostHogEventContext& Context);
 
 	FString GetEventId() const { return EventUuid; };
 	
