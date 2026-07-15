@@ -10,6 +10,15 @@
 #include "GeneralProjectSettings.h"
 #include "Utilities/PostHogUuidV7.h"
 
+FPostHogEvent::FPostHogEvent(FRehydratedEventTag, const FString& InEventUuid, const FString& InEventName,
+	const FString& InDistinctId, const FString& InTimestamp, const FJsonObject& InProperties)
+	: EventUuid(InEventUuid)
+	, EventName(InEventName)
+	, DistinctId(InDistinctId)
+	, Timestamp(InTimestamp)
+	, Properties(InProperties)
+{
+}
 
 FPostHogEvent::FPostHogEvent(const FString& InEventName, const FString& InDistinctId)
 	: EventUuid(PostHogUuidV7::New())

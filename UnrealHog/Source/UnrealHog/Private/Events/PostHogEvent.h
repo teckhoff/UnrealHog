@@ -5,6 +5,12 @@
 #include "CoreMinimal.h"
 #include "Dom/JsonObject.h"
 
+namespace PostHogEventRehydration
+{
+	struct FResult;
+	FResult TryParsePersistedEventJson(const FString& EventJson);
+}
+
 /**
  * @brief Represents an event to be processed by PostHog analytics.
  *
@@ -18,6 +24,10 @@
 struct FPostHogEvent
 {
 private:
+	struct FRehydratedEventTag
+	{
+	};
+
 	// A UUIDv7 for this specific event.
 	FString EventUuid;
 	
@@ -30,8 +40,13 @@ private:
 	// A timestamp in ISO 8601 format.
 	FString Timestamp;
 	
-	// A JSON object containing the event properties. Always contains $lib and $lib_version.
+	// A JSON object containing the event properties.
 	FJsonObject Properties;
+
+	FPostHogEvent(FRehydratedEventTag, const FString& InEventUuid, const FString& InEventName,
+		const FString& InDistinctId, const FString& InTimestamp, const FJsonObject& InProperties);
+
+	friend PostHogEventRehydration::FResult PostHogEventRehydration::TryParsePersistedEventJson(const FString& EventJson);
 	
 public:
 	FPostHogEvent(const FString& InEventName, const FString& InDistinctId);

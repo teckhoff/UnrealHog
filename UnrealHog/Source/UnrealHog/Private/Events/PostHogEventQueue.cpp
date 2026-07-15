@@ -5,6 +5,8 @@
 
 #include "Events/PostHogBatchPayload.h"
 #include "Events/PostHogEvent.h"
+#include "Events/PostHogEventRehydration.h"
+#include "Logging/PostHogLogger.h"
 #include "Storage/PostHogStorageProvider.h"
 
 FPostHogEventQueue::FPostHogEventQueue(IPostHogStorageProvider& InStorageProvider, IPostHogBatchTransport& InTransport,
@@ -16,11 +18,41 @@ FPostHogEventQueue::FPostHogEventQueue(IPostHogStorageProvider& InStorageProvide
 	MaxBatchSize(FMath::Max(InMaxBatchSize, 1)),
 	FlushEventCount(FMath::Max(InFlushEventCount, 1))
 {
+	LoadPersistedEvents();
 }
 
 FPostHogEventQueue::~FPostHogEventQueue()
 {
 	CancelInFlightRequest();
+}
+
+void FPostHogEventQueue::LoadPersistedEvents()
+{
+	for (const FString& EventId : StorageProvider.GetEventIds())
+	{
+		FString EventJson;
+		if (!StorageProvider.LoadEvent(EventId, EventJson))
+		{
+			UE_LOG(LogPostHog, Warning, TEXT("Skipping persisted PostHog event '%s': file could not be loaded."), *EventId);
+			continue;
+		}
+
+		PostHogEventRehydration::FResult Result = PostHogEventRehydration::TryParsePersistedEventJson(EventJson);
+		if (!Result.IsSuccess())
+		{
+			UE_LOG(LogPostHog, Warning, TEXT("Skipping persisted PostHog event '%s': %s"), *EventId, *Result.Diagnostic);
+			continue;
+		}
+
+		const FPostHogEvent& Event = Result.Event.GetValue();
+		if (Event.GetEventId() != EventId)
+		{
+			UE_LOG(LogPostHog, Warning, TEXT("Skipping persisted PostHog event '%s': JSON uuid '%s' does not match storage key."), *EventId, *Event.GetEventId());
+			continue;
+		}
+
+		EventsQueue.Add(Event);
+	}
 }
 
 bool FPostHogEventQueue::Enqueue(const FPostHogEvent& Event)

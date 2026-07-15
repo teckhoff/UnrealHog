@@ -1,0 +1,35 @@
+{
+  "uuid": "018f9b2e-8d10-7c9c-8f3a-8ec0b8f29b3d",
+  "event": "persisted-current-v7",
+  "distinct_id": "current-distinct-id",
+  "timestamp": "2026-07-15T07:43:12.107Z",
+  "properties": {
+    "string_value": "alpha",
+    "integer_value": 42,
+    "decimal_value": 42.75,
+    "bool_value": true,
+    "null_value": null,
+    "array_value": [
+      "first",
+      2,
+      3.5,
+      false,
+      null,
+      {
+        "nested": "object"
+      }
+    ],
+    "object_value": {
+      "child_string": "beta",
+      "child_integer": 7,
+      "child_decimal": 7.25,
+      "child_bool": false,
+      "child_null": null,
+      "child_array": [
+        1,
+        "two",
+        null
+      ]
+    }
+  }
+}

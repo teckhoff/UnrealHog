@@ -1,0 +1,35 @@
+{
+  "uuid": "550e8400-e29b-41d4-a716-446655440000",
+  "event": "persisted-legacy-v4",
+  "distinct_id": "legacy-distinct-id",
+  "timestamp": "2025-01-02T03:04:05.006Z",
+  "properties": {
+    "string_value": "legacy",
+    "integer_value": 1001,
+    "decimal_value": 1001.125,
+    "bool_value": false,
+    "null_value": null,
+    "array_value": [
+      "legacy-first",
+      5,
+      6.75,
+      true,
+      null,
+      {
+        "nested": "legacy-object"
+      }
+    ],
+    "object_value": {
+      "child_string": "delta",
+      "child_integer": 11,
+      "child_decimal": 11.5,
+      "child_bool": true,
+      "child_null": null,
+      "child_array": [
+        3,
+        "four",
+        null
+      ]
+    }
+  }
+}

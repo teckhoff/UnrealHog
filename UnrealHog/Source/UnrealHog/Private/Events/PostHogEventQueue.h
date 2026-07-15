@@ -40,4 +40,5 @@ private:
 	TSharedPtr<IPostHogBatchRequestHandle> ActiveRequestHandle;
 	bool bIsFlushing = false;
 
+	void LoadPersistedEvents();
 };
