@@ -47,17 +47,31 @@ Zeroshot validators are able to perform automation testing using the Unreal Auto
 
 Use concise imperative commit subjects. Pull requests should summarize behavior changes, tests and their execution environment, linked issues, the affected parity row, and screenshots when editor settings or Blueprint UI changes.
 
+Agents must open normal pull requests against `dev`, including when the repository's default branch is `main`. With `gh`, pass `--base dev` explicitly instead of relying on the repository default. Never open a feature or maintenance pull request against `main`. The only permitted pull request into `main` is a milestone promotion from this repository's `dev` branch, and an agent must not create that promotion unless the user explicitly requests it.
+
 Every issue or pull request created by an agent must include this notice prominently in its body:
 
 > This issue or pull request was created by an automated coding agent, not a human.
 
 If possible, also include the model of the agent running.
 
-ALL PULL REQUESTS MUST FOLLOW THE TEMPLATE OUTLINED IN `.github/pull_request_template.md`.
+### Pull request completion contract
 
-ALL PULL REQUESTS MUST INCLUDE THE RESULTS OF THE UNREAL AUTOMATION TOOL TESTING.
+Creating or updating a pull request is incomplete until all of these conditions hold:
 
-ALL PULL REQUESTS MUST MAKE EXPLAIN WHAT WAS WORKED ON PER THE PULL REQUEST TEMPLATE LOCATED AT `.github/pull_request_template.md`
+1. Set the pull request base to `dev` and verify the published base branch. The only exception is an explicitly requested milestone promotion from `dev` to `main`.
+2. Read `.github/pull_request_template.md` immediately before composing the pull request body.
+3. Preserve every required heading from the template, in the same order.
+4. Fill every section with reviewer-facing content. Do not submit empty sections or template instructions as answers.
+5. Include the automated-agent notice above verbatim.
+6. Under `How did you test this code?`, include the command, environment, actual result, and relevant output from `Scripts/run-windows-tests.sh`. Never claim a test that was not run.
+7. Open new pull requests as drafts.
+8. After creating or editing the pull request, retrieve its published base, title, and body from GitHub. Confirm `baseRefName` is `dev`, then run `gh pr view --json title,body | python3 Scripts/validate_pr_body.py --json -`.
+9. If validation fails, update the pull request and validate again. Do not report completion while validation fails.
+
+Do not use `gh pr create --fill`, generated commit summaries, or an independently invented body as a substitute for the repository template.
+
+Reviewers must inspect both the patch and the published pull request metadata. Reject a normal pull request unless its base branch is `dev`; reject a pull request into `main` unless it is an explicitly requested milestone promotion from this repository's `dev` branch. Also reject the result if the title or body fails `Scripts/validate_pr_body.py`, omits or reorders a template section, leaves a section empty, lacks the automated-agent notice, or does not record the actual Unreal Automation Tool result. Do not approve based only on code correctness.
 
 ## Task Protocol
 Work only within the scope of the assigned pull request or task file. If the task conflicts with this document, stop and surface the conflict in the PR body rather than resolving it silently.

@@ -1,0 +1,138 @@
+{
+  "name": "UnrealHog Two-Tier Conductor (Complexity × TaskType)",
+  "description": "UnrealHog-focused conductor: classifies complexity and task type, preserves the requested task boundary, and routes enriched Unreal Engine plugin context to the appropriate cluster config via helpers.getConfig().",
+  "agents": [
+    {
+      "id": "junior-conductor",
+      "role": "conductor",
+      "modelLevel": "level2",
+      "useDirectApi": true,
+      "outputFormat": "json",
+      "jsonSchema": {
+        "type": "object",
+        "properties": {
+          "complexity": {
+            "type": "string",
+            "enum": ["TRIVIAL", "SIMPLE", "STANDARD", "CRITICAL", "UNCERTAIN"],
+            "description": "Task complexity level"
+          },
+          "taskType": {
+            "type": "string",
+            "enum": ["INQUIRY", "TASK", "DEBUG"],
+            "description": "Type of work: INQUIRY (read-only), TASK (implement / known fix), DEBUG (investigate unknown root cause)"
+          },
+          "reasoning": {
+            "type": "string",
+            "description": "Why this classification (1-2 sentences)"
+          },
+          "taskFocus": {
+            "type": "string",
+            "description": "Concrete requested outcome and scope boundary for downstream agents (1-2 sentences)"
+          }
+        },
+        "required": ["complexity", "taskType", "reasoning", "taskFocus"]
+      },
+      "prompt": {
+        "system": "You are the JUNIOR CONDUCTOR for UnrealHog, an Unreal Engine 5.8 C++ analytics SDK plugin. Classify the actual requested deliverable and preserve its scope. Do not turn a focused parity row, bug, test, documentation update, or repository-automation request into a generic SDK audit, broad refactor, or do-everything task.\n\n## Your job\nReturn the existing complexity and taskType classifications plus taskFocus: a concrete 1-2 sentence outcome and boundary that downstream coder and reviewer agents must follow. Base taskFocus on the request's acceptance criteria, exclusions, parity row, and named files when supplied. Do not invent adjacent parity work.\n\n## UnrealHog domain\n- Runtime code is an idiomatic Unreal Engine 5.8 C++ plugin; Unity under Docs/Reference/posthog-unity is read-only behavioral reference, not code to translate mechanically.\n- Project configuration belongs in UDeveloperSettings; runtime orchestration belongs in a UGameInstanceSubsystem.\n- Analytics is opt-in. Creating payloads, queue records, files, or HTTP requests before permission is a critical invariant.\n- Normal tests must use deterministic seams and fake storage, clocks, GUIDs, and HTTP rather than live PostHog credentials.\n- Work is normally one scoped parity task. Do not absorb other parity rows or unrelated cleanup.\n\n## Complexity (pick one)\n- TRIVIAL - One-file mechanical metadata, comment, or documentation change with no behavior change.\n- SIMPLE - Small isolated change in 1-2 files with low behavioral risk.\n- STANDARD - Multi-file implementation, Unreal API change, SDK behavior change, persistence/queue/HTTP work, or meaningful test coverage. DEFAULT CHOICE.\n- CRITICAL - ONLY when directly changing consent gating that could collect before opt-in, PII or sensitive payload handling, secrets/credentials, destructive persisted-data behavior, authentication/authorization, payment processing, or production deployment/live infrastructure.\n- UNCERTAIN - The request lacks enough information to choose safely; escalate to the senior conductor.\n\nIf unsure between STANDARD and CRITICAL, choose STANDARD. CRITICAL is rare and reserved for direct risk, not code that merely mentions analytics, storage, privacy, CI, or security. Tests, refactors, dependency seams, settings UI, template enforcement, and read-only Unity parity analysis are not CRITICAL unless they directly alter a listed critical behavior.\n\n## Task type (pick one)\n- INQUIRY - Read-only explanation, parity analysis, review, or investigation with no requested mutation.\n- TASK - Implement a new scoped capability, test, refactor, documentation change, or repository automation.\n- DEBUG - Diagnose or fix broken behavior, a failing test/build, regression, or unknown root cause.\n\n## UnrealHog examples\n- \"Compare Unity capture validation with the Unreal implementation\" -> SIMPLE + INQUIRY. Focus only on reporting the named parity gap.\n- \"Implement EP-004 capture validation and its tests\" -> STANDARD + TASK. Focus only on EP-004 acceptance criteria and exclusions.\n- \"Fix events being persisted before analytics opt-in\" -> CRITICAL + DEBUG because it directly violates the consent invariant.\n- \"Add PR-template validation for Zeroshot\" -> STANDARD + TASK because it changes multi-file repository automation but not runtime SDK behavior.\n- \"Correct one typo in a planning document\" -> TRIVIAL + TASK.\n\n## Output rules\n1. Output ONLY valid JSON with complexity, taskType, reasoning, and taskFocus.\n2. complexity must be exactly one of TRIVIAL, SIMPLE, STANDARD, CRITICAL, UNCERTAIN.\n3. taskType must be exactly one of INQUIRY, TASK, DEBUG.\n4. reasoning explains the classification; taskFocus states what must be accomplished and what adjacent work remains out of scope.\n\nTask: {{ISSUE_OPENED.content.text}}"
+      },
+      "contextStrategy": {
+        "sources": [
+          { "topic": "ISSUE_OPENED", "priority": "required", "strategy": "latest", "amount": 1 }
+        ],
+        "format": "chronological",
+        "maxTokens": 100000
+      },
+      "triggers": [
+        {
+          "topic": "ISSUE_OPENED",
+          "logic": {
+            "engine": "javascript",
+            "script": "return message.sender === 'system' && !message.metadata?._republished;"
+          },
+          "action": "execute_task"
+        }
+      ],
+      "hooks": {
+        "onComplete": {
+          "action": "publish_message",
+          "transform": {
+            "engine": "javascript",
+            "script": "const { complexity, taskType, reasoning, taskFocus } = result;\nconst taskText = triggeringMessage.content?.text || '';\n\nif (complexity === 'UNCERTAIN') {\n  return {\n    topic: 'CONDUCTOR_ESCALATE',\n    content: {\n      text: reasoning,\n      data: { complexity, taskType, reasoning, taskFocus, taskText }\n    }\n  };\n}\n\nconst config = helpers.getConfig(complexity, taskType);\nconst executionText = buildExecutionText(taskText, taskFocus);\n\nreturn {\n  topic: 'CLUSTER_OPERATIONS',\n  content: {\n    text: `[${complexity}:${taskType}] ${reasoning}`,\n    data: {\n      complexity,\n      taskType,\n      taskFocus,\n      operations: [\n        { action: 'load_config', config },\n        { action: 'publish', topic: 'ISSUE_OPENED', content: { text: executionText }, metadata: { _republished: true } }\n      ]\n    }\n  }\n};\n\nfunction buildExecutionText(originalTask, focus) {\n  return `${originalTask}\n\n## Conductor task focus\n${focus}\n\n## UnrealHog execution contract (mandatory)\n- Complete the focused requested outcome and its explicit acceptance criteria. Do not expand into a generic repository audit, broad refactor, all parity rows, or unrelated cleanup.\n- Read the root AGENTS.md and every applicable nested AGENTS.md before acting. Treat the named task or planning file as the scope boundary.\n- Preserve observable PostHog Unity SDK behavior while implementing idiomatic Unreal Engine 5.8 C++; never edit Docs/Reference/posthog-unity or CI/UnrealEngine.\n- Preserve opt-in collection, UDeveloperSettings configuration, UGameInstanceSubsystem orchestration, and test isolation unless the scoped task explicitly changes one of those behaviors.\n- Verify proportionally, then run Scripts/run-windows-tests.sh and record the real Unreal Automation result. Never claim a check that did not run.\n- Reviewers must evaluate the requested acceptance criteria, exclusions, relevant parity row, generated-file boundaries, and published PR metadata, not only general code quality.\n- For implementation or debug work, open a draft PR with base dev explicitly. Read and fully populate .github/pull_request_template.md, include the automated-agent notice, verify baseRefName is dev, and run gh pr view --json title,body | python3 Scripts/validate_pr_body.py --json -. Repair failures before reporting completion. Never use gh pr create --fill.\n- A PR into main is allowed only for a user-requested milestone promotion from this repository's dev branch.`;\n}"
+          }
+        }
+      }
+    },
+    {
+      "id": "senior-conductor",
+      "role": "conductor",
+      "modelLevel": "level3",
+      "useDirectApi": true,
+      "outputFormat": "json",
+      "jsonSchema": {
+        "type": "object",
+        "properties": {
+          "complexity": {
+            "type": "string",
+            "enum": ["TRIVIAL", "SIMPLE", "STANDARD", "CRITICAL"],
+            "description": "Task complexity (no UNCERTAIN - must decide)"
+          },
+          "taskType": {
+            "type": "string",
+            "enum": ["INQUIRY", "TASK", "DEBUG"],
+            "description": "Type of work after analysis (INQUIRY/TASK/DEBUG)"
+          },
+          "reasoning": {
+            "type": "string",
+            "description": "Detailed explanation"
+          },
+          "taskFocus": {
+            "type": "string",
+            "description": "Definitive requested outcome and scope boundary for downstream agents"
+          }
+        },
+        "required": ["complexity", "taskType", "reasoning", "taskFocus"]
+      },
+      "prompt": {
+        "system": "You are the SENIOR CONDUCTOR for UnrealHog, an Unreal Engine 5.8 C++ reimplementation of PostHog's Unity SDK. The junior conductor was uncertain. Make a definitive classification without broadening the requested work.\n\nReturn the existing complexity and taskType plus taskFocus: a precise outcome, acceptance boundary, and explicit exclusion of adjacent work. Use the original issue, any named planning/parity task, and the junior's analysis. Do not convert one parity row or bug into a full SDK review, speculative architecture rewrite, or do-everything task.\n\n## Domain invariants\n- Docs/Reference/posthog-unity is read-only behavioral reference; implementation must be idiomatic Unreal C++, not a mechanical translation.\n- Configuration belongs in UDeveloperSettings and runtime orchestration in a UGameInstanceSubsystem.\n- Analytics is opt-in; no payload, queue record, file, or HTTP request may exist before permission.\n- Normal tests must not use live PostHog credentials and should isolate clocks, GUIDs, storage, and HTTP.\n- Scoped task acceptance criteria, exclusions, and parity rows control the work.\n\n## Complexity (pick one; UNCERTAIN is not allowed)\n- TRIVIAL - One-file mechanical metadata, comment, or documentation change with no behavior change.\n- SIMPLE - Small isolated 1-2 file change with low behavioral risk.\n- STANDARD - Multi-file work, user-visible or SDK behavior, Unreal API changes, persistence, queueing, HTTP, settings, or meaningful tests. DEFAULT CHOICE.\n- CRITICAL - ONLY direct changes to pre-consent collection gates, PII/sensitive payload handling, secrets/credentials, destructive persisted-data behavior, authentication/authorization, payments, or production deployment/live infrastructure.\n\nChoose STANDARD rather than CRITICAL when risk is indirect. Tests, refactors, dependency seams, repository automation, settings UI, and parity analysis are not CRITICAL merely because they touch analytics, privacy, storage, CI, or security-adjacent code.\n\n## Task type\n- INQUIRY - Read-only explanation, parity analysis, review, or investigation without requested mutation.\n- TASK - New scoped implementation, test, refactor, docs, or repository automation.\n- DEBUG - Broken behavior, failed test/build, regression, or unknown root cause that must be diagnosed or fixed.\n\n## Rules\n1. Output ONLY valid JSON with complexity, taskType, reasoning, and taskFocus.\n2. complexity must be exactly TRIVIAL, SIMPLE, STANDARD, or CRITICAL.\n3. taskType must be exactly INQUIRY, TASK, or DEBUG.\n4. You must decide. If uncertain between STANDARD and CRITICAL, select STANDARD.\n5. taskFocus must tell downstream agents what done means and what related work is out of scope.\n\nJunior was uncertain. Original task and escalation context follow."
+      },
+      "contextStrategy": {
+        "sources": [
+          { "topic": "ISSUE_OPENED", "priority": "required", "strategy": "latest", "amount": 1 },
+          {
+            "topic": "CONDUCTOR_ESCALATE",
+            "priority": "high",
+            "since": "last_agent_start",
+            "strategy": "latest",
+            "amount": 1
+          },
+          {
+            "topic": "CLUSTER_OPERATIONS_VALIDATION_FAILED",
+            "priority": "high",
+            "since": "cluster_start",
+            "strategy": "latest",
+            "amount": 3
+          }
+        ],
+        "format": "chronological",
+        "maxTokens": 100000
+      },
+      "maxRetries": 3,
+      "triggers": [
+        { "topic": "CONDUCTOR_ESCALATE", "action": "execute_task" },
+        {
+          "topic": "CLUSTER_OPERATIONS_VALIDATION_FAILED",
+          "action": "execute_task"
+        }
+      ],
+      "hooks": {
+        "onComplete": {
+          "action": "publish_message",
+          "transform": {
+            "engine": "javascript",
+            "script": "const { complexity, taskType, reasoning, taskFocus } = result;\n\nlet taskText = triggeringMessage.content?.data?.taskText || '';\nif (!taskText) {\n  taskText = triggeringMessage.content?.text || '';\n}\n\nconst config = helpers.getConfig(complexity, taskType);\nconst executionText = buildExecutionText(taskText, taskFocus);\n\nreturn {\n  topic: 'CLUSTER_OPERATIONS',\n  content: {\n    text: `Senior: [${complexity}:${taskType}] ${reasoning}`,\n    data: {\n      complexity,\n      taskType,\n      taskFocus,\n      operations: [\n        { action: 'load_config', config },\n        { action: 'publish', topic: 'ISSUE_OPENED', content: { text: executionText }, metadata: { _republished: true } }\n      ]\n    }\n  }\n};\n\nfunction buildExecutionText(originalTask, focus) {\n  return `${originalTask}\n\n## Conductor task focus\n${focus}\n\n## UnrealHog execution contract (mandatory)\n- Complete the focused requested outcome and its explicit acceptance criteria. Do not expand into a generic repository audit, broad refactor, all parity rows, or unrelated cleanup.\n- Read the root AGENTS.md and every applicable nested AGENTS.md before acting. Treat the named task or planning file as the scope boundary.\n- Preserve observable PostHog Unity SDK behavior while implementing idiomatic Unreal Engine 5.8 C++; never edit Docs/Reference/posthog-unity or CI/UnrealEngine.\n- Preserve opt-in collection, UDeveloperSettings configuration, UGameInstanceSubsystem orchestration, and test isolation unless the scoped task explicitly changes one of those behaviors.\n- Verify proportionally, then run Scripts/run-windows-tests.sh and record the real Unreal Automation result. Never claim a check that did not run.\n- Reviewers must evaluate the requested acceptance criteria, exclusions, relevant parity row, generated-file boundaries, and published PR metadata, not only general code quality.\n- For implementation or debug work, open a draft PR with base dev explicitly. Read and fully populate .github/pull_request_template.md, include the automated-agent notice, verify baseRefName is dev, and run gh pr view --json title,body | python3 Scripts/validate_pr_body.py --json -. Repair failures before reporting completion. Never use gh pr create --fill.\n- A PR into main is allowed only for a user-requested milestone promotion from this repository's dev branch.`;\n}"
+          }
+        }
+      }
+    }
+  ]
+}
