@@ -2,7 +2,7 @@
 
 ## Status and dependencies
 
-- **State:** Ready
+- **State:** Completed
 - **Blocked by:** None
 - **Blocks:** EP-019, EP-022, EP-029
 - **Parity row:** Isolated `/batch` HTTP delivery verification

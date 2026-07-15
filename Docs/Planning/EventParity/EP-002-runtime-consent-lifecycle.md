@@ -2,7 +2,7 @@
 
 ## Status and dependencies
 
-- **State:** Ready
+- **State:** Completed
 - **Blocked by:** None
 - **Blocks:** EP-004, EP-007, EP-009, EP-013–EP-017, EP-027, EP-029
 - **Parity row:** Opt-in, opt-out, and no pre-consent side effects
@@ -13,9 +13,11 @@ Keep the game-instance subsystem callable while ensuring identifiers, event payl
 
 ## Required changes
 
-- Let the subsystem instance exist even when analytics is disabled or configuration is unusable; initialization in that state must remain side-effect free.
+- Let the subsystem instance exist even when analytics is opted out or configuration is unusable; initialization in that state must remain side-effect free.
+- UPostHogDeveloperSettings need a property for allowing the developer to set the Default User Opt-In status, but the default value should be Opt-Out.
 - Add idiomatic Blueprint/C++ `SetAnalyticsOptIn(bool)` and a read-only consent query.
-- Seed runtime permission from the config-backed `bAnalyticsEnabled`, whose default remains `false`.
+- Developer Setting bAnalyticsEnabled is for the developer turning off analytics completely without completely disabling the plugin.
+- To record the user's opt-in status, save it as a State in the PostHogStorageProvider, and load it when the subsystem is initialized.
 - On opt-in, validate settings and lazily create runtime collaborators; on failure remain opted out and report the reason.
 - On opt-out, block new capture first, cancel in-flight delivery, clear queued events, release runtime collaborators, and leave non-event state compatible with later opt-in.
 
@@ -30,7 +32,6 @@ Keep the game-instance subsystem callable while ensuring identifiers, event payl
 
 ## Exclusions
 
-- Do not persist a per-user consent choice; project configuration seeds each game-instance runtime state.
 - Do not implement identity or sessions in this task.
 
 ## Unity references
