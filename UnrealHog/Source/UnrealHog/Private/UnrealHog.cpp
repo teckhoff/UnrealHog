@@ -1,5 +1,3 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
-
 #include "UnrealHog.h"
 
 #define LOCTEXT_NAMESPACE "FUnrealHogModule"
