@@ -95,6 +95,11 @@ UPostHogEventProperties* UPostHogRuntimeSubsystem::CreateEventProperties()
 	return NewObject<UPostHogEventProperties>(this);
 }
 
+UPostHogEventPropertyArray* UPostHogRuntimeSubsystem::CreateEventPropertyArray()
+{
+	return NewObject<UPostHogEventPropertyArray>(this);
+}
+
 void UPostHogRuntimeSubsystem::Flush()
 {
 	if (ConsentController)

@@ -9,6 +9,7 @@
 
 
 class UPostHogEventProperties;
+class UPostHogEventPropertyArray;
 class FPostHogConsentController;
 /**
  *
@@ -30,6 +31,9 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category="PostHog|Events")
 	UPostHogEventProperties* CreateEventProperties();
+
+	UFUNCTION(BlueprintCallable, Category="PostHog|Events")
+	UPostHogEventPropertyArray* CreateEventPropertyArray();
 
 	UFUNCTION(BlueprintCallable, Category="PostHog|Events")
 	void Flush();

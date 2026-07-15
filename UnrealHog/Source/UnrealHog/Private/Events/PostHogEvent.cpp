@@ -6,6 +6,7 @@
 #include "Engine/Engine.h"
 #include "Engine/GameViewportClient.h"
 #include "Dom/JsonObject.h"
+#include "Dom/JsonValue.h"
 #include "SDK/PostHogSdkInfo.h"
 #include "GeneralProjectSettings.h"
 #include "Utilities/PostHogUuidV7.h"
@@ -76,6 +77,11 @@ void FPostHogEvent::SetNumberProperty(const FString& Key, double NumberValue)
 void FPostHogEvent::SetObjectProperty(const FString& Key, FJsonObject& ObjectValue)
 {
 	Properties.SetObjectField(Key, MakeShared<FJsonObject>(ObjectValue));
+}
+
+void FPostHogEvent::SetJsonValueProperty(const FString& Key, const TSharedRef<FJsonValue>& Value)
+{
+	Properties.SetField(Key, Value);
 }
 
 void FPostHogEvent::SetProcessPersonProfile(bool bProcessPersonProfile)

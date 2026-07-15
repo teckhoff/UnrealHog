@@ -5,6 +5,8 @@
 #include "CoreMinimal.h"
 #include "Dom/JsonObject.h"
 
+class FJsonValue;
+
 /**
  * @brief Represents an event to be processed by PostHog analytics.
  *
@@ -40,6 +42,7 @@ public:
 	void SetBoolProperty(const FString& Key, bool bValue);
 	void SetNumberProperty(const FString& Key, double NumberValue);
 	void SetObjectProperty(const FString& Key, FJsonObject& ObjectValue);
+	void SetJsonValueProperty(const FString& Key, const TSharedRef<FJsonValue>& Value);
 	void SetProcessPersonProfile(bool bProcessPersonProfile);
 	
 	FString GetEventId() const { return EventUuid; };
