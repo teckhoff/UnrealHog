@@ -15,6 +15,7 @@
 #include "Serialization/JsonSerializer.h"
 #include "Session/PostHogSessionManager.h"
 #include "Storage/PostHogStorageProvider.h"
+#include "SuperProperties/PostHogSuperPropertiesManager.h"
 
 namespace
 {
@@ -253,10 +254,52 @@ EPostHogCaptureResult FPostHogConsentController::Alias(const FString& Alias)
 	return CaptureEvent(TEXT("$create_alias"), Props, /*bProcessPersonProfile=*/true);
 }
 
+bool FPostHogConsentController::RegisterSuperProperty(const FString& Key, const FPostHogEventProperty& Value)
+{
+	if (!bIsOptedIn || !SuperPropertiesManager.IsValid() || !StorageProvider.IsValid())
+	{
+#if !WITH_DEV_AUTOMATION_TESTS
+		UE_LOGFMT(LogPostHog, Warning, "PostHog Consent Controller has no analytics consent; dropping RegisterSuperProperty for {Key}.", Key);
+#endif
+		return false;
+	}
+
+	SuperPropertiesManager->Register(Key, Value, *StorageProvider);
+	return true;
+}
+
+void FPostHogConsentController::UnregisterSuperProperty(const FString& Key)
+{
+	if (!bIsOptedIn || !SuperPropertiesManager.IsValid() || !StorageProvider.IsValid())
+	{
+#if !WITH_DEV_AUTOMATION_TESTS
+		UE_LOGFMT(LogPostHog, Warning, "PostHog Consent Controller has no analytics consent; dropping UnregisterSuperProperty for {Key}.", Key);
+#endif
+		return;
+	}
+
+	SuperPropertiesManager->Unregister(Key, *StorageProvider);
+}
+
+void FPostHogConsentController::ClearSuperProperties()
+{
+	if (!bIsOptedIn || !SuperPropertiesManager.IsValid() || !StorageProvider.IsValid())
+	{
+#if !WITH_DEV_AUTOMATION_TESTS
+		UE_LOGFMT(LogPostHog, Warning, "PostHog Consent Controller has no analytics consent; dropping ClearSuperProperties.");
+#endif
+		return;
+	}
+
+	SuperPropertiesManager->Clear(*StorageProvider);
+}
+
 void FPostHogConsentController::ApplySuperProperties(FPostHogEvent& Event) const
 {
-	// EP-004 does not implement super-property storage; a later EP populates persisted
-	// super properties here, ahead of call/SDK/session/group precedence.
+	if (SuperPropertiesManager)
+	{
+		SuperPropertiesManager->ApplyTo(Event);
+	}
 }
 
 void FPostHogConsentController::ApplyGroups(FPostHogEvent& Event) const
@@ -324,10 +367,14 @@ bool FPostHogConsentController::EnableCollection(const UPostHogDeveloperSettings
 	IdentityManager->LoadOrCreate(*StorageProvider);
 	++IdentityManagerLoadCount;
 
+	SuperPropertiesManager = MakeUnique<FPostHogSuperPropertiesManager>();
+	SuperPropertiesManager->LoadOrCreate(*StorageProvider);
+
 	if (IdentityManager->GetAnonymousId().IsEmpty())
 	{
 		OutFailureReason = TEXT("failed to generate distinct identifier");
 		IdentityManager.Reset();
+		SuperPropertiesManager.Reset();
 		StorageProvider.Reset();
 		return false;
 	}
@@ -382,6 +429,7 @@ void FPostHogConsentController::DisableCollection()
 	Transport.Reset();
 	StorageProvider.Reset();
 	IdentityManager.Reset();
+	SuperPropertiesManager.Reset();
 	SessionManager->SetCollectionPermitted(false);
 	SessionManager->EndSession();
 }

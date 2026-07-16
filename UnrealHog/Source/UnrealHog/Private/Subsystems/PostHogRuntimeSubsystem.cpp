@@ -168,6 +168,117 @@ FString UPostHogRuntimeSubsystem::GetDistinctId() const
 	return ConsentController ? ConsentController->GetDistinctId() : FString();
 }
 
+void UPostHogRuntimeSubsystem::RegisterSuperPropertyString(const FString& Key, const FString& StringValue)
+{
+	if (!ConsentController)
+	{
+		return;
+	}
+
+	FPostHogEventProperty Property;
+	Property.Type = EPostHogPropertyType::String;
+	Property.StringValue = StringValue;
+
+	ConsentController->RegisterSuperProperty(Key, Property);
+}
+
+void UPostHogRuntimeSubsystem::RegisterSuperPropertyNumber(const FString& Key, double NumberValue)
+{
+	if (!ConsentController)
+	{
+		return;
+	}
+
+	FPostHogEventProperty Property;
+	Property.Type = EPostHogPropertyType::Number;
+	Property.NumberValue = NumberValue;
+
+	ConsentController->RegisterSuperProperty(Key, Property);
+}
+
+void UPostHogRuntimeSubsystem::RegisterSuperPropertyBoolean(const FString& Key, bool bBoolValue)
+{
+	if (!ConsentController)
+	{
+		return;
+	}
+
+	FPostHogEventProperty Property;
+	Property.Type = EPostHogPropertyType::Boolean;
+	Property.bBoolValue = bBoolValue;
+
+	ConsentController->RegisterSuperProperty(Key, Property);
+}
+
+void UPostHogRuntimeSubsystem::RegisterSuperPropertyNull(const FString& Key)
+{
+	if (!ConsentController)
+	{
+		return;
+	}
+
+	FPostHogEventProperty Property;
+	Property.Type = EPostHogPropertyType::Null;
+
+	ConsentController->RegisterSuperProperty(Key, Property);
+}
+
+void UPostHogRuntimeSubsystem::RegisterSuperPropertyObject(const FString& Key, UPostHogEventProperties* Value)
+{
+	if (!ConsentController)
+	{
+		return;
+	}
+
+	FPostHogEventProperty Property;
+	Property.Type = EPostHogPropertyType::Object;
+
+	if (Value)
+	{
+		Property.Children = Value->GetProperties();
+	}
+
+	ConsentController->RegisterSuperProperty(Key, Property);
+}
+
+void UPostHogRuntimeSubsystem::RegisterSuperPropertyArray(const FString& Key, UPostHogEventPropertyArray* Value)
+{
+	if (!ConsentController)
+	{
+		return;
+	}
+
+	FPostHogEventProperty Property;
+	Property.Type = EPostHogPropertyType::Array;
+
+	if (Value)
+	{
+		Property.Children = Value->GetElements();
+	}
+
+	ConsentController->RegisterSuperProperty(Key, Property);
+}
+
+void UPostHogRuntimeSubsystem::UnregisterSuperProperty(const FString& Key)
+{
+	if (!ConsentController)
+	{
+		return;
+	}
+
+	ConsentController->UnregisterSuperProperty(Key);
+}
+
+void UPostHogRuntimeSubsystem::ClearSuperProperties()
+{
+	if (!ConsentController)
+	{
+		return;
+	}
+
+	ConsentController->ClearSuperProperties();
+}
+
 void UPostHogRuntimeSubsystem::SetBeforeSend(FPostHogBeforeSendDelegate InBeforeSend)
 {
 	if (ConsentController)

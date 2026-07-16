@@ -2,50 +2,9 @@
 #include "Events/PostHogEventProperties.h"
 #include "Events/PostHogCapturePolicy.h"
 #include "Events/PostHogEvent.h"
+#include "Events/PostHogPropertyJson.h"
 #include "Dom/JsonValue.h"
 #include "Logging/PostHogLogger.h"
-
-namespace
-{
-	TSharedRef<FJsonValue> ConvertPropertyToJsonValue(const FPostHogEventProperty& Property)
-	{
-		switch (Property.Type)
-		{
-			case EPostHogPropertyType::String:
-				return MakeShared<FJsonValueString>(Property.StringValue);
-			case EPostHogPropertyType::Number:
-				return MakeShared<FJsonValueNumber>(Property.NumberValue);
-			case EPostHogPropertyType::Boolean:
-				return MakeShared<FJsonValueBoolean>(Property.bBoolValue);
-			case EPostHogPropertyType::Object:
-			{
-				const TSharedRef<FJsonObject> ObjectValue = MakeShared<FJsonObject>();
-				for (const FPostHogEventProperty& Child : Property.Children)
-				{
-					if (Child.Key.IsEmpty())
-					{
-						continue;
-					}
-					ObjectValue->SetField(Child.Key, ConvertPropertyToJsonValue(Child));
-				}
-				return MakeShared<FJsonValueObject>(ObjectValue);
-			}
-			case EPostHogPropertyType::Array:
-			{
-				TArray<TSharedPtr<FJsonValue>> ArrayValue;
-				ArrayValue.Reserve(Property.Children.Num());
-				for (const FPostHogEventProperty& Child : Property.Children)
-				{
-					ArrayValue.Add(ConvertPropertyToJsonValue(Child));
-				}
-				return MakeShared<FJsonValueArray>(ArrayValue);
-			}
-			case EPostHogPropertyType::Null:
-			default:
-				return MakeShared<FJsonValueNull>();
-		}
-	}
-}
 
 UPostHogEventProperties* UPostHogEventProperties::AddString(const FString& Key, const FString& StringValue)
 {
@@ -143,7 +102,7 @@ void UPostHogEventProperties::ApplyToEvent(FPostHogEvent& Event)
 			continue;
 		}
 
-		Event.SetJsonValueProperty(Property.Key, ConvertPropertyToJsonValue(Property));
+		Event.SetJsonValueProperty(Property.Key, PostHogPropertyJson::ToJsonValue(Property));
 	}
 }
 

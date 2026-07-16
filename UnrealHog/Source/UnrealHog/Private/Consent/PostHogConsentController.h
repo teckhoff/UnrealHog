@@ -11,9 +11,11 @@ class FPostHogEventQueue;
 class FPostHogApplicationLifecycleHandler;
 class FPostHogIdentityManager;
 class FPostHogSessionManager;
+class FPostHogSuperPropertiesManager;
 class UPostHogDeveloperSettings;
 class UPostHogEventProperties;
 struct FPostHogEvent;
+struct FPostHogEventProperty;
 
 // Outcome of FPostHogConsentController::CaptureEvent, observable by callers and tests.
 enum class EPostHogCaptureResult : uint8
@@ -85,6 +87,16 @@ public:
 	// Blank Alias is a safe no-op (no event).
 	EPostHogCaptureResult Alias(const FString& Alias);
 
+	// Registers Key=Value as a persisted super property applied to every future event ahead of
+	// call and SDK-owned properties. Returns false (safe no-op) when not opted in.
+	bool RegisterSuperProperty(const FString& Key, const FPostHogEventProperty& Value);
+
+	// Removes a previously registered super property. Safe no-op when not opted in.
+	void UnregisterSuperProperty(const FString& Key);
+
+	// Removes all registered super properties. Safe no-op when not opted in.
+	void ClearSuperProperties();
+
 	void Flush();
 
 	// Rotating in-memory session id, independent of the persistent distinct id. Never
@@ -116,9 +128,10 @@ private:
 	void PersistOptIn(bool bOptIn) const;
 	static bool TryLoadPersistedOptIn(IPostHogStorageProvider& StorageProvider, bool& OutOptedIn);
 
-	// Extension points for future EPs. No-ops today: EP-004 does not implement super-property,
-	// session, or group storage, but CaptureEvent's precedence order already reserves their slot.
 	void ApplySuperProperties(FPostHogEvent& Event) const;
+
+	// Extension point for a future EP. No-op today: EP-004 does not implement group storage, but
+	// CaptureEvent's precedence order already reserves its slot.
 	void ApplyGroups(FPostHogEvent& Event) const;
 
 	FStorageProviderFactory StorageProviderFactory;
@@ -133,6 +146,7 @@ private:
 	TUniquePtr<IPostHogBatchTransport> Transport;
 	TUniquePtr<FPostHogEventQueue> EventQueue;
 	TUniquePtr<FPostHogIdentityManager> IdentityManager;
+	TUniquePtr<FPostHogSuperPropertiesManager> SuperPropertiesManager;
 	TUniquePtr<FPostHogSessionManager> SessionManager;
 	TUniquePtr<FPostHogApplicationLifecycleHandler> LifecycleHandler;
 
