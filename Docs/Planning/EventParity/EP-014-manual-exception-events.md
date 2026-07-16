@@ -2,7 +2,7 @@
 
 ## Status and dependencies
 
-- **State:** Blocked
+- **State:** Ready
 - **Blocked by:** EP-003, EP-004, EP-007
 - **Blocks:** EP-015, EP-029
 - **Parity row:** Manual `$exception` event ingress
