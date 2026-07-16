@@ -171,4 +171,78 @@ bool FPostHogIdentityManagerConstructorSideEffectFreeTest::RunTest(const FString
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogIdentityManagerIdentifyFirstLinksAnonymousTest, "UnrealHog.Identity.IdentityManager.IdentifyFirstCallReturnsPriorAnonymousId", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogIdentityManagerIdentifyFirstLinksAnonymousTest::RunTest(const FString& Parameters)
+{
+	FPostHogInMemoryStorageProvider Storage;
+	FPostHogIdentityManager Manager;
+	Manager.LoadOrCreate(Storage);
+	const FString AnonymousId = Manager.GetAnonymousId();
+
+	const FString PreviousAnonId = Manager.Identify(TEXT("user-1"), Storage);
+
+	TestEqual(TEXT("First identify returns the prior anonymous id"), PreviousAnonId, AnonymousId);
+	TestTrue(TEXT("Manager is identified after first identify"), Manager.IsIdentified());
+	TestEqual(TEXT("Effective distinct id is the new distinct id"), Manager.GetEffectiveDistinctId(), FString(TEXT("user-1")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogIdentityManagerIdentifySecondCallDoesNotRelinkTest, "UnrealHog.Identity.IdentityManager.IdentifySecondCallReturnsEmptyNoRelink", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogIdentityManagerIdentifySecondCallDoesNotRelinkTest::RunTest(const FString& Parameters)
+{
+	FPostHogInMemoryStorageProvider Storage;
+	FPostHogIdentityManager Manager;
+	Manager.LoadOrCreate(Storage);
+
+	Manager.Identify(TEXT("user-1"), Storage);
+	const FString SecondPreviousAnonId = Manager.Identify(TEXT("user-2"), Storage);
+
+	TestTrue(TEXT("Second identify does not return an anonymous id to relink"), SecondPreviousAnonId.IsEmpty());
+	TestEqual(TEXT("Effective distinct id is the latest identified id"), Manager.GetEffectiveDistinctId(), FString(TEXT("user-2")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogIdentityManagerResetRegeneratesAnonymousIdTest, "UnrealHog.Identity.IdentityManager.ResetWithoutReuseRegeneratesAnonymousIdAndClearsState", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogIdentityManagerResetRegeneratesAnonymousIdTest::RunTest(const FString& Parameters)
+{
+	FPostHogInMemoryStorageProvider Storage;
+	int32 Counter = 0;
+	FPostHogIdentityManager Manager(MakeCountingUuidGenerator(Counter));
+	Manager.LoadOrCreate(Storage);
+	const FString OriginalAnonymousId = Manager.GetAnonymousId();
+
+	Manager.Identify(TEXT("user-1"), Storage);
+	Manager.Reset(Storage, /*bReuseAnonymousId=*/false);
+
+	TestNotEqual(TEXT("Anonymous id regenerated on reset"), Manager.GetAnonymousId(), OriginalAnonymousId);
+	TestFalse(TEXT("No longer identified after reset"), Manager.IsIdentified());
+	TestEqual(TEXT("Effective distinct id falls back to the new anonymous id"), Manager.GetEffectiveDistinctId(), Manager.GetAnonymousId());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogIdentityManagerResetReusesAnonymousIdTest, "UnrealHog.Identity.IdentityManager.ResetWithReuseKeepsAnonymousId", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogIdentityManagerResetReusesAnonymousIdTest::RunTest(const FString& Parameters)
+{
+	FPostHogInMemoryStorageProvider Storage;
+	int32 Counter = 0;
+	FPostHogIdentityManager Manager(MakeCountingUuidGenerator(Counter));
+	Manager.LoadOrCreate(Storage);
+	const FString OriginalAnonymousId = Manager.GetAnonymousId();
+
+	Manager.Identify(TEXT("user-1"), Storage);
+	Manager.Reset(Storage, /*bReuseAnonymousId=*/true);
+
+	TestEqual(TEXT("Anonymous id unchanged on reset with reuse"), Manager.GetAnonymousId(), OriginalAnonymousId);
+	TestFalse(TEXT("No longer identified after reset"), Manager.IsIdentified());
+
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

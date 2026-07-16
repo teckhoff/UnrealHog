@@ -43,6 +43,18 @@ public:
 	UFUNCTION(BlueprintPure, Category="PostHog|Consent")
 	bool IsAnalyticsOptedIn() const;
 
+	UFUNCTION(BlueprintCallable, Category="PostHog|Identity")
+	void Identify(const FString& DistinctId, UPostHogEventProperties* UserProperties = nullptr, UPostHogEventProperties* UserPropertiesSetOnce = nullptr);
+
+	UFUNCTION(BlueprintCallable, Category="PostHog|Identity")
+	void Reset();
+
+	UFUNCTION(BlueprintCallable, Category="PostHog|Identity")
+	void Alias(const FString& AliasId);
+
+	UFUNCTION(BlueprintPure, Category="PostHog|Identity")
+	FString GetDistinctId() const;
+
 	void SetBeforeSend(FPostHogBeforeSendDelegate InBeforeSend);
 	void ClearBeforeSend();
 

@@ -185,6 +185,74 @@ EPostHogCaptureResult FPostHogConsentController::CaptureEvent(const FString& Eve
 	return EPostHogCaptureResult::Success;
 }
 
+EPostHogCaptureResult FPostHogConsentController::Identify(const FString& DistinctId, UPostHogEventProperties* UserProperties, UPostHogEventProperties* UserPropertiesSetOnce)
+{
+	if (DistinctId.TrimStartAndEnd().IsEmpty())
+	{
+#if !WITH_DEV_AUTOMATION_TESTS
+		UE_LOGFMT(LogPostHog, Warning, "PostHog Consent Controller rejected Identify with an empty or whitespace-only distinct id.");
+#endif
+		return EPostHogCaptureResult::InvalidEventName;
+	}
+
+	if (!bIsOptedIn || !IdentityManager.IsValid() || !StorageProvider.IsValid())
+	{
+#if !WITH_DEV_AUTOMATION_TESTS
+		UE_LOGFMT(LogPostHog, Warning, "PostHog Consent Controller has no analytics consent; dropping Identify for {DistinctId}.", DistinctId);
+#endif
+		return EPostHogCaptureResult::NotOptedIn;
+	}
+
+	const FString PreviousAnonymousId = IdentityManager->Identify(DistinctId, *StorageProvider);
+
+	UPostHogEventProperties* Props = NewObject<UPostHogEventProperties>();
+	if (!PreviousAnonymousId.IsEmpty())
+	{
+		Props->AddString(TEXT("$anon_distinct_id"), PreviousAnonymousId);
+	}
+	if (UserProperties && UserProperties->GetProperties().Num() > 0)
+	{
+		Props->AddObject(TEXT("$set"), UserProperties);
+	}
+	if (UserPropertiesSetOnce && UserPropertiesSetOnce->GetProperties().Num() > 0)
+	{
+		Props->AddObject(TEXT("$set_once"), UserPropertiesSetOnce);
+	}
+
+	return CaptureEvent(TEXT("$identify"), Props, /*bProcessPersonProfile=*/true);
+}
+
+void FPostHogConsentController::Reset(const UPostHogDeveloperSettings& Settings)
+{
+	if (!bIsOptedIn || !IdentityManager.IsValid() || !StorageProvider.IsValid())
+	{
+		return;
+	}
+
+	IdentityManager->Reset(*StorageProvider, Settings.ShouldReuseAnonymousId());
+
+	if (SessionManager.IsValid())
+	{
+		SessionManager->StartNewSession();
+	}
+}
+
+EPostHogCaptureResult FPostHogConsentController::Alias(const FString& Alias)
+{
+	if (Alias.TrimStartAndEnd().IsEmpty())
+	{
+#if !WITH_DEV_AUTOMATION_TESTS
+		UE_LOGFMT(LogPostHog, Warning, "PostHog Consent Controller rejected Alias with an empty or whitespace-only alias.");
+#endif
+		return EPostHogCaptureResult::InvalidEventName;
+	}
+
+	UPostHogEventProperties* Props = NewObject<UPostHogEventProperties>();
+	Props->AddString(TEXT("alias"), Alias);
+
+	return CaptureEvent(TEXT("$create_alias"), Props, /*bProcessPersonProfile=*/true);
+}
+
 void FPostHogConsentController::ApplySuperProperties(FPostHogEvent& Event) const
 {
 	// EP-004 does not implement super-property storage; a later EP populates persisted

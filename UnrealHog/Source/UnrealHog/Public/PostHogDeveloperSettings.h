@@ -158,7 +158,10 @@ public:
 
 	UFUNCTION()
 	bool ShouldCaptureApplicationLifecycleEvents() const { return bCaptureApplicationLifecycleEvents; }
-	
+
+	UFUNCTION()
+	bool ShouldReuseAnonymousId() const { return bReuseAnonymousId; }
+
 #if WITH_EDITOR
 	virtual bool CanEditChange(const FProperty* InProperty) const override;
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;

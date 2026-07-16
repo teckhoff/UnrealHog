@@ -72,6 +72,19 @@ public:
 	// are stripped by UPostHogEventProperties::ApplyToEvent, never overriding SDK-owned values.
 	EPostHogCaptureResult CaptureEvent(const FString& EventName, UPostHogEventProperties* CallProperties, bool bProcessPersonProfile);
 
+	// Blank DistinctId is a safe no-op (no event, no state mutation). Persists the new
+	// identity first, then emits $identify via CaptureEvent so distinct_id reflects it;
+	// $anon_distinct_id is included only on first identification.
+	EPostHogCaptureResult Identify(const FString& DistinctId, UPostHogEventProperties* UserProperties, UPostHogEventProperties* UserPropertiesSetOnce);
+
+	// Returns to anonymous state: regenerates or reuses AnonymousId per
+	// Settings.ShouldReuseAnonymousId(), clears groups, and starts a new session. No event
+	// emitted. No-op when not opted in.
+	void Reset(const UPostHogDeveloperSettings& Settings);
+
+	// Blank Alias is a safe no-op (no event).
+	EPostHogCaptureResult Alias(const FString& Alias);
+
 	void Flush();
 
 	// Rotating in-memory session id, independent of the persistent distinct id. Never
@@ -91,6 +104,10 @@ public:
 	// successful opt-in transition), not the number of distinct anonymous ids generated: the
 	// persisted anonymous id is reused across a disable/enable cycle against the same storage.
 	int32 GetIdentityManagerLoadCount() const { return IdentityManagerLoadCount; }
+
+	// Forwards application foreground/background transitions to the session manager.
+	void NotifyApplicationForegrounded();
+	void NotifyApplicationBackgrounded();
 
 private:
 	bool EnableCollection(const UPostHogDeveloperSettings& Settings, FString& OutFailureReason);
