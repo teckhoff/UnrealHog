@@ -2,7 +2,7 @@
 
 ## Status and dependencies
 
-- **State:** Blocked
+- **State:** Ready
 - **Blocked by:** EP-018, EP-019
 - **Blocks:** EP-022, EP-029
 - **Parity row:** Stored-event load failure handling

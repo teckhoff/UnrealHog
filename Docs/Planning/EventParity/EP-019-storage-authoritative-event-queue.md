@@ -2,7 +2,7 @@
 
 ## Status and dependencies
 
-- **State:** Blocked
+- **State:** Completed
 - **Blocked by:** EP-001, EP-018
 - **Blocks:** EP-020–EP-022, EP-029
 - **Parity row:** Durable restart recovery and queue count

@@ -47,7 +47,7 @@ EP-017 is verified separately when the feature-flag subsystem exists.
 |[EP-003](EP-003-rich-event-property-values.md)|Null, object, and array property values|None|✅|
 |[EP-004](EP-004-capture-validation-and-reserved-properties.md)|Capture validation and SDK-owned property precedence|EP-002, EP-003|✅|
 |[EP-005](EP-005-sdk-event-enrichment.md)|Missing Unity-equivalent SDK properties|EP-003|✅|
-|[EP-006](EP-006-before-send-interceptor.md)|Modify or drop fully enriched events|EP-004|❌|
+|[EP-006](EP-006-before-send-interceptor.md)|Modify or drop fully enriched events|EP-004|✅|
 |[EP-007](EP-007-persistent-identity-manager.md)|Persistent anonymous and identified identity state|EP-002|❌|
 |[EP-008](EP-008-identify-reset-and-alias-apis.md)|Identity-producing public event APIs|EP-003, EP-004, EP-007|❌|
 |[EP-009](EP-009-session-manager.md)|Independent rotating `$session\_id`|EP-002|❌|
@@ -60,7 +60,7 @@ EP-017 is verified separately when the feature-flag subsystem exists.
 |[EP-016](EP-016-application-lifecycle-events.md)|Installed/updated/opened/backgrounded events|EP-003, EP-004, EP-009|❌|
 |[EP-017](EP-017-feature-flag-called-events.md)|Deduplicated `$feature\_flag\_called` events|EP-003, EP-004, EP-007, external feature-flag subsystem|❌|
 |[EP-018](EP-018-persisted-event-rehydration.md)|Lossless stored-event deserialization|None|✅|
-|[EP-019](EP-019-storage-authoritative-event-queue.md)|Restart recovery and storage-authoritative count|EP-001, EP-018|❌|
+|[EP-019](EP-019-storage-authoritative-event-queue.md)|Restart recovery and storage-authoritative count|EP-001, EP-018|✅|
 |[EP-020](EP-020-storage-authoritative-queue-capacity.md)|Correct oldest-event eviction across restarts|EP-019|❌|
 |[EP-021](EP-021-corrupt-persisted-event-handling.md)|Poison record removal without blocking|EP-018, EP-019|❌|
 |[EP-022](EP-022-drain-all-batches-per-flush.md)|One flush drains all available batches|EP-001, EP-019, EP-021|❌|

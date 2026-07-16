@@ -18,6 +18,7 @@ Stop using the game-instance session UUID as `distinct_id` and maintain a persis
 - Generate the anonymous UUIDv7 lazily only after EP-002 grants collection permission.
 - Expose private queries for effective distinct ID, anonymous ID, and identified state.
 - Recover safely from missing, malformed, or newer-version state without crashing capture.
+- Attach the currently generated session id to all events for that session under the `$session_id` key.
 
 ## Acceptance criteria
 
