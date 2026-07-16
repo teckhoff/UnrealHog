@@ -122,7 +122,8 @@ bool FPostHogConsentControllerDefaultOptOutTest::RunTest(const FString& Paramete
 	TestFalse(TEXT("Not opted in by default"), Controller.IsOptedIn());
 	TestTrue(TEXT("No session id created"), Controller.GetSessionId().IsEmpty());
 	TestEqual(TEXT("No transport created"), Controller.GetTransportCreationCount(), 0);
-	TestEqual(TEXT("No distinct id created"), Controller.GetDistinctIdCreationCount(), 0);
+	TestEqual(TEXT("Identity manager never loaded"), Controller.GetIdentityManagerLoadCount(), 0);
+	TestTrue(TEXT("No distinct id assigned"), Controller.GetDistinctId().IsEmpty());
 	TestFalse(TEXT("Capture is a no-op before consent"), Controller.Capture(MakeConsentTestEvent(TEXT("1"))));
 	TestEqual(TEXT("No events queued"), Controller.GetQueuedEventCount(), 0);
 	TestFalse(TEXT("No queue directory created before consent"), IFileManager::Get().DirectoryExists(*Fixture.GetQueueDirectory()));
@@ -146,12 +147,13 @@ bool FPostHogConsentControllerOptInIdempotentTest::RunTest(const FString& Parame
 
 	TestTrue(TEXT("First opt-in succeeds"), Controller.SetOptIn(true, *Settings));
 	TestEqual(TEXT("One transport created"), Controller.GetTransportCreationCount(), 1);
-	TestEqual(TEXT("One distinct id created"), Controller.GetDistinctIdCreationCount(), 1);
+	TestEqual(TEXT("Identity manager loaded once"), Controller.GetIdentityManagerLoadCount(), 1);
+	TestFalse(TEXT("Distinct id assigned"), Controller.GetDistinctId().IsEmpty());
 	TestFalse(TEXT("Session id assigned"), Controller.GetSessionId().IsEmpty());
 
 	TestTrue(TEXT("Repeat opt-in succeeds"), Controller.SetOptIn(true, *Settings));
 	TestEqual(TEXT("Repeat opt-in does not create another transport"), Controller.GetTransportCreationCount(), 1);
-	TestEqual(TEXT("Repeat opt-in does not create another distinct id"), Controller.GetDistinctIdCreationCount(), 1);
+	TestEqual(TEXT("Repeat opt-in does not reload identity manager"), Controller.GetIdentityManagerLoadCount(), 1);
 
 	TestTrue(TEXT("Capture succeeds once opted in"), Controller.Capture(MakeConsentTestEvent(TEXT("1"))));
 	TestEqual(TEXT("Event queued"), Controller.GetQueuedEventCount(), 1);
@@ -200,14 +202,16 @@ bool FPostHogConsentControllerReOptInFreshSessionTest::RunTest(const FString& Pa
 
 	Controller.Initialize(*Settings);
 	Controller.SetOptIn(true, *Settings);
-	TestEqual(TEXT("One distinct id created initially"), Controller.GetDistinctIdCreationCount(), 1);
+	TestEqual(TEXT("Identity manager loaded once initially"), Controller.GetIdentityManagerLoadCount(), 1);
 	const FString FirstSessionId = Controller.GetSessionId();
+	const FString FirstDistinctId = Controller.GetDistinctId();
 
 	Controller.SetOptIn(false, *Settings);
 	Controller.SetOptIn(true, *Settings);
 
-	TestEqual(TEXT("Second distinct id created on re-opt-in"), Controller.GetDistinctIdCreationCount(), 2);
+	TestEqual(TEXT("Identity manager reloaded on re-opt-in"), Controller.GetIdentityManagerLoadCount(), 2);
 	TestEqual(TEXT("Second transport created on re-opt-in"), Controller.GetTransportCreationCount(), 2);
+	TestEqual(TEXT("Distinct id is stable across a disable/enable cycle"), Controller.GetDistinctId(), FirstDistinctId);
 	TestNotEqual(TEXT("Fresh session id differs from the original"), Controller.GetSessionId(), FirstSessionId);
 
 	return true;
@@ -290,6 +294,43 @@ bool FPostHogConsentControllerPersistsAcrossReinitializeTest::RunTest(const FStr
 
 		TestFalse(TEXT("Persisted opt-out is honored"), ControllerC.IsOptedIn());
 		TestEqual(TEXT("No transport created when opted out"), ControllerC.GetTransportCreationCount(), 0);
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerDistinctIdPersistsAcrossRestartTest, "UnrealHog.Consent.ConsentController.DistinctIdPersistsAcrossRestart", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogConsentControllerDistinctIdPersistsAcrossRestartTest::RunTest(const FString& Parameters)
+{
+	FScopedConsentTestStorageDirectory Fixture;
+	UPostHogDeveloperSettings* Settings = MakeTransientSettings(true, true, false);
+
+	FString FirstDistinctId;
+
+	{
+		FPostHogFakeBatchTransport* LastTransportA = nullptr;
+		int32 UuidCounterA = 0;
+		FPostHogConsentController ControllerA(MakeStorageFactory(Fixture.GetRootPath()), MakeTransportFactory(LastTransportA), MakeUuidGenerator(UuidCounterA));
+
+		TestTrue(TEXT("No distinct id before Initialize"), ControllerA.GetDistinctId().IsEmpty());
+
+		ControllerA.Initialize(*Settings);
+		TestTrue(TEXT("No distinct id before opt-in"), ControllerA.GetDistinctId().IsEmpty());
+
+		ControllerA.SetOptIn(true, *Settings);
+		FirstDistinctId = ControllerA.GetDistinctId();
+		TestFalse(TEXT("Distinct id assigned once opted in"), FirstDistinctId.IsEmpty());
+	}
+
+	{
+		FPostHogFakeBatchTransport* LastTransportB = nullptr;
+		int32 UuidCounterB = 0;
+		FPostHogConsentController ControllerB(MakeStorageFactory(Fixture.GetRootPath()), MakeTransportFactory(LastTransportB), MakeUuidGenerator(UuidCounterB));
+
+		ControllerB.Initialize(*Settings);
+
+		TestEqual(TEXT("Second controller reuses the same distinct id across restart"), ControllerB.GetDistinctId(), FirstDistinctId);
 	}
 
 	return true;
