@@ -133,6 +133,41 @@ bool UPostHogRuntimeSubsystem::IsAnalyticsOptedIn() const
 	return ConsentController && ConsentController->IsOptedIn();
 }
 
+void UPostHogRuntimeSubsystem::Identify(const FString& DistinctId, UPostHogEventProperties* UserProperties, UPostHogEventProperties* UserPropertiesSetOnce)
+{
+	if (!ConsentController)
+	{
+		return;
+	}
+
+	ConsentController->Identify(DistinctId, UserProperties, UserPropertiesSetOnce);
+}
+
+void UPostHogRuntimeSubsystem::Reset()
+{
+	if (!ConsentController)
+	{
+		return;
+	}
+
+	ConsentController->Reset(*GetDefault<UPostHogDeveloperSettings>());
+}
+
+void UPostHogRuntimeSubsystem::Alias(const FString& AliasId)
+{
+	if (!ConsentController)
+	{
+		return;
+	}
+
+	ConsentController->Alias(AliasId);
+}
+
+FString UPostHogRuntimeSubsystem::GetDistinctId() const
+{
+	return ConsentController ? ConsentController->GetDistinctId() : FString();
+}
+
 void UPostHogRuntimeSubsystem::SetBeforeSend(FPostHogBeforeSendDelegate InBeforeSend)
 {
 	if (ConsentController)

@@ -32,6 +32,15 @@ public:
 	const FString& GetEffectiveDistinctId() const { return DistinctId.IsEmpty() ? AnonymousId : DistinctId; }
 	bool IsIdentified() const { return bIsIdentified; }
 
+	// Persists NewDistinctId. Returns the prior anonymous id only on first identification
+	// (bIsIdentified was false); returns empty on repeated identify (no relink). Caller
+	// (FPostHogConsentController) is responsible for rejecting blank NewDistinctId.
+	FString Identify(const FString& NewDistinctId, IPostHogStorageProvider& Storage);
+
+	// Clears distinct id, identified flag, and groups; regenerates AnonymousId via
+	// UuidGenerator unless bReuseAnonymousId is true. Always persists.
+	void Reset(IPostHogStorageProvider& Storage, bool bReuseAnonymousId);
+
 private:
 	void PersistState(IPostHogStorageProvider& Storage);
 

@@ -73,6 +73,32 @@ void FPostHogIdentityManager::LoadOrCreate(IPostHogStorageProvider& Storage)
 	PersistState(Storage);
 }
 
+FString FPostHogIdentityManager::Identify(const FString& NewDistinctId, IPostHogStorageProvider& Storage)
+{
+	const FString PreviousAnonymousId = bIsIdentified ? FString() : AnonymousId;
+
+	DistinctId = NewDistinctId;
+	bIsIdentified = true;
+
+	PersistState(Storage);
+
+	return PreviousAnonymousId;
+}
+
+void FPostHogIdentityManager::Reset(IPostHogStorageProvider& Storage, bool bReuseAnonymousId)
+{
+	DistinctId.Empty();
+	bIsIdentified = false;
+	Groups.Empty();
+
+	if (!bReuseAnonymousId)
+	{
+		AnonymousId = UuidGenerator ? UuidGenerator() : PostHogUuidV7::New();
+	}
+
+	PersistState(Storage);
+}
+
 void FPostHogIdentityManager::PersistState(IPostHogStorageProvider& Storage)
 {
 	const TSharedRef<FJsonObject> StateObject = MakeShared<FJsonObject>();
