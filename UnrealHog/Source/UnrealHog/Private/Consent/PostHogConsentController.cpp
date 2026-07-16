@@ -11,6 +11,7 @@
 #include "PostHogDeveloperSettings.h"
 #include "PostHogSettingsValidation.h"
 #include "Serialization/JsonSerializer.h"
+#include "Session/PostHogSessionManager.h"
 #include "Storage/PostHogStorageProvider.h"
 
 namespace
@@ -25,6 +26,7 @@ FPostHogConsentController::FPostHogConsentController(FStorageProviderFactory InS
 	TransportFactory(MoveTemp(InTransportFactory)),
 	UuidGenerator(MoveTemp(InUuidGenerator))
 {
+	SessionManager = MakeUnique<FPostHogSessionManager>();
 }
 
 FPostHogConsentController::~FPostHogConsentController()
@@ -131,7 +133,7 @@ EPostHogCaptureResult FPostHogConsentController::CaptureEvent(const FString& Eve
 		return EPostHogCaptureResult::NotOptedIn;
 	}
 
-	FPostHogEvent GeneratedEvent(EventName, SessionId);
+	FPostHogEvent GeneratedEvent(EventName, DistinctId);
 
 	ApplySuperProperties(GeneratedEvent);
 
@@ -142,9 +144,10 @@ EPostHogCaptureResult FPostHogConsentController::CaptureEvent(const FString& Eve
 
 	GeneratedEvent.ApplySdkProperties(bProcessPersonProfile);
 
-	if (!SessionId.IsEmpty())
+	const FString CurrentSessionId = SessionManager->GetSessionId();
+	if (!CurrentSessionId.IsEmpty())
 	{
-		GeneratedEvent.SetStringProperty(TEXT("$session_id"), SessionId);
+		GeneratedEvent.SetStringProperty(TEXT("$session_id"), CurrentSessionId);
 	}
 
 	ApplyGroups(GeneratedEvent);
@@ -166,6 +169,8 @@ EPostHogCaptureResult FPostHogConsentController::CaptureEvent(const FString& Eve
 		UE_LOGFMT(LogPostHog, Error, "PostHog Consent Controller failed to enqueue event {EventName}.", EventName);
 		return EPostHogCaptureResult::EnqueueFailed;
 	}
+
+	SessionManager->Touch();
 
 	return EPostHogCaptureResult::Success;
 }
@@ -195,6 +200,21 @@ int32 FPostHogConsentController::GetQueuedEventCount() const
 	return EventQueue.IsValid() ? EventQueue->Num() : 0;
 }
 
+FString FPostHogConsentController::GetSessionId()
+{
+	return SessionManager->GetSessionId();
+}
+
+void FPostHogConsentController::NotifyApplicationForegrounded()
+{
+	SessionManager->OnForeground();
+}
+
+void FPostHogConsentController::NotifyApplicationBackgrounded()
+{
+	SessionManager->OnBackground();
+}
+
 bool FPostHogConsentController::EnableCollection(const UPostHogDeveloperSettings& Settings, FString& OutFailureReason)
 {
 	if (!Settings.IsAnalyticsEnabled())
@@ -216,12 +236,12 @@ bool FPostHogConsentController::EnableCollection(const UPostHogDeveloperSettings
 		++StorageProviderCreationCount;
 	}
 
-	SessionId = UuidGenerator();
-	++SessionCreationCount;
+	DistinctId = UuidGenerator();
+	++DistinctIdCreationCount;
 
-	if (SessionId.IsEmpty())
+	if (DistinctId.IsEmpty())
 	{
-		OutFailureReason = TEXT("failed to generate session identifier");
+		OutFailureReason = TEXT("failed to generate distinct identifier");
 		StorageProvider.Reset();
 		return false;
 	}
@@ -234,6 +254,7 @@ bool FPostHogConsentController::EnableCollection(const UPostHogDeveloperSettings
 
 	bIsOptedIn = true;
 	PersistOptIn(true);
+	SessionManager->SetCollectionPermitted(true);
 
 	return true;
 }
@@ -252,7 +273,9 @@ void FPostHogConsentController::DisableCollection()
 	EventQueue.Reset();
 	Transport.Reset();
 	StorageProvider.Reset();
-	SessionId.Empty();
+	DistinctId.Empty();
+	SessionManager->SetCollectionPermitted(false);
+	SessionManager->EndSession();
 }
 
 void FPostHogConsentController::PersistOptIn(bool bOptIn) const

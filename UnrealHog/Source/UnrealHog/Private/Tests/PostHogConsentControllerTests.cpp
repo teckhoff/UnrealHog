@@ -122,7 +122,7 @@ bool FPostHogConsentControllerDefaultOptOutTest::RunTest(const FString& Paramete
 	TestFalse(TEXT("Not opted in by default"), Controller.IsOptedIn());
 	TestTrue(TEXT("No session id created"), Controller.GetSessionId().IsEmpty());
 	TestEqual(TEXT("No transport created"), Controller.GetTransportCreationCount(), 0);
-	TestEqual(TEXT("No session created"), Controller.GetSessionCreationCount(), 0);
+	TestEqual(TEXT("No distinct id created"), Controller.GetDistinctIdCreationCount(), 0);
 	TestFalse(TEXT("Capture is a no-op before consent"), Controller.Capture(MakeConsentTestEvent(TEXT("1"))));
 	TestEqual(TEXT("No events queued"), Controller.GetQueuedEventCount(), 0);
 	TestFalse(TEXT("No queue directory created before consent"), IFileManager::Get().DirectoryExists(*Fixture.GetQueueDirectory()));
@@ -146,12 +146,12 @@ bool FPostHogConsentControllerOptInIdempotentTest::RunTest(const FString& Parame
 
 	TestTrue(TEXT("First opt-in succeeds"), Controller.SetOptIn(true, *Settings));
 	TestEqual(TEXT("One transport created"), Controller.GetTransportCreationCount(), 1);
-	TestEqual(TEXT("One session created"), Controller.GetSessionCreationCount(), 1);
+	TestEqual(TEXT("One distinct id created"), Controller.GetDistinctIdCreationCount(), 1);
 	TestFalse(TEXT("Session id assigned"), Controller.GetSessionId().IsEmpty());
 
 	TestTrue(TEXT("Repeat opt-in succeeds"), Controller.SetOptIn(true, *Settings));
 	TestEqual(TEXT("Repeat opt-in does not create another transport"), Controller.GetTransportCreationCount(), 1);
-	TestEqual(TEXT("Repeat opt-in does not create another session"), Controller.GetSessionCreationCount(), 1);
+	TestEqual(TEXT("Repeat opt-in does not create another distinct id"), Controller.GetDistinctIdCreationCount(), 1);
 
 	TestTrue(TEXT("Capture succeeds once opted in"), Controller.Capture(MakeConsentTestEvent(TEXT("1"))));
 	TestEqual(TEXT("Event queued"), Controller.GetQueuedEventCount(), 1);
@@ -200,13 +200,13 @@ bool FPostHogConsentControllerReOptInFreshSessionTest::RunTest(const FString& Pa
 
 	Controller.Initialize(*Settings);
 	Controller.SetOptIn(true, *Settings);
-	TestEqual(TEXT("One session created initially"), Controller.GetSessionCreationCount(), 1);
+	TestEqual(TEXT("One distinct id created initially"), Controller.GetDistinctIdCreationCount(), 1);
 	const FString FirstSessionId = Controller.GetSessionId();
 
 	Controller.SetOptIn(false, *Settings);
 	Controller.SetOptIn(true, *Settings);
 
-	TestEqual(TEXT("Second session created on re-opt-in"), Controller.GetSessionCreationCount(), 2);
+	TestEqual(TEXT("Second distinct id created on re-opt-in"), Controller.GetDistinctIdCreationCount(), 2);
 	TestEqual(TEXT("Second transport created on re-opt-in"), Controller.GetTransportCreationCount(), 2);
 	TestNotEqual(TEXT("Fresh session id differs from the original"), Controller.GetSessionId(), FirstSessionId);
 
@@ -496,6 +496,7 @@ bool FPostHogConsentControllerBeforeSendMutateTest::RunTest(const FString& Param
 	Controller.SetOptIn(true, *Settings);
 
 	const FString ExpectedSessionId = Controller.GetSessionId();
+	const FString ExpectedDistinctId = Controller.GetDistinctId();
 
 	UPostHogEventProperties* Properties = NewObject<UPostHogEventProperties>();
 	Properties->AddString(TEXT("source"), TEXT("caller"));
@@ -551,7 +552,7 @@ bool FPostHogConsentControllerBeforeSendMutateTest::RunTest(const FString& Param
 	TestEqual(TEXT("Capture succeeds"), Result, EPostHogCaptureResult::Success);
 	TestTrue(TEXT("Before-send hook was invoked"), bHookCalled);
 	TestEqual(TEXT("Hook sees event name"), SeenEventName, TEXT("before-send-event"));
-	TestEqual(TEXT("Hook sees distinct id"), SeenDistinctId, ExpectedSessionId);
+	TestEqual(TEXT("Hook sees distinct id"), SeenDistinctId, ExpectedDistinctId);
 	TestFalse(TEXT("Hook sees event uuid"), SeenEventUuid.IsEmpty());
 	TestFalse(TEXT("Hook sees timestamp"), SeenTimestamp.IsEmpty());
 	TestTrue(TEXT("Hook sees final SDK library property"), bSawLibrary);
