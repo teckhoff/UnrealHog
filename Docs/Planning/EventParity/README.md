@@ -52,7 +52,7 @@ EP-017 is verified separately when the feature-flag subsystem exists.
 |[EP-005](EP-005-sdk-event-enrichment.md)|Missing Unity-equivalent SDK properties|EP-003|✅|
 |[EP-006](EP-006-before-send-interceptor.md)|Modify or drop fully enriched events|EP-004|✅|
 |[EP-007](EP-007-persistent-identity-manager.md)|Persistent anonymous and identified identity state|EP-002|✅|
-|[EP-008](EP-008-identify-reset-and-alias-apis.md)|Identity-producing public event APIs|EP-003, EP-004, EP-007|⏳|
+|[EP-008](EP-008-identify-reset-and-alias-apis.md)|Identity-producing public event APIs|EP-003, EP-004, EP-007|✅|
 |[EP-009](EP-009-session-manager.md)|Independent rotating `$session\_id`|EP-002|✅|
 |[EP-010](EP-010-person-profile-policy.md)|Configured `$process\_person\_profile` behavior|EP-004, EP-007|⏳|
 |[EP-011](EP-011-group-membership-and-events.md)|Persistent groups and `$groupidentify`|EP-003, EP-004, EP-007|⏳|

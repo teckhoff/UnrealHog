@@ -2,7 +2,7 @@
 
 ## Status and dependencies
 
-- **State:** Ready
+- **State:** Completed
 - **Blocked by:** EP-003, EP-004, EP-007
 - **Blocks:** EP-029
 - **Parity row:** `$identify`, `$create_alias`, and reset identity behavior
