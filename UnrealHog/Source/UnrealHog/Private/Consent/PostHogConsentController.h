@@ -7,6 +7,7 @@
 class IPostHogStorageProvider;
 class IPostHogBatchTransport;
 class FPostHogEventQueue;
+class FPostHogSessionManager;
 class UPostHogDeveloperSettings;
 class UPostHogEventProperties;
 struct FPostHogEvent;
@@ -67,13 +68,21 @@ public:
 
 	void Flush();
 
-	const FString& GetSessionId() const { return SessionId; }
+	// Rotating in-memory session id, independent of DistinctId. Never generated before
+	// collection is permitted.
+	FString GetSessionId();
+	const FString& GetDistinctId() const { return DistinctId; }
 	FPostHogEventQueue* GetEventQueue() const { return EventQueue.Get(); }
 	int32 GetQueuedEventCount() const;
 
 	int32 GetStorageProviderCreationCount() const { return StorageProviderCreationCount; }
 	int32 GetTransportCreationCount() const { return TransportCreationCount; }
-	int32 GetSessionCreationCount() const { return SessionCreationCount; }
+	int32 GetDistinctIdCreationCount() const { return DistinctIdCreationCount; }
+
+	// Forwarded from UPostHogRuntimeSubsystem's application lifecycle delegates so the
+	// session manager reacts to real foreground/background transitions.
+	void NotifyApplicationForegrounded();
+	void NotifyApplicationBackgrounded();
 
 private:
 	bool EnableCollection(const UPostHogDeveloperSettings& Settings, FString& OutFailureReason);
@@ -93,13 +102,14 @@ private:
 	FPostHogBeforeSendDelegate BeforeSend;
 
 	bool bIsOptedIn = false;
-	FString SessionId;
+	FString DistinctId;
 
 	TUniquePtr<IPostHogStorageProvider> StorageProvider;
 	TUniquePtr<IPostHogBatchTransport> Transport;
 	TUniquePtr<FPostHogEventQueue> EventQueue;
+	TUniquePtr<FPostHogSessionManager> SessionManager;
 
 	int32 StorageProviderCreationCount = 0;
 	int32 TransportCreationCount = 0;
-	int32 SessionCreationCount = 0;
+	int32 DistinctIdCreationCount = 0;
 };
