@@ -60,13 +60,15 @@ namespace
 	UPostHogDeveloperSettings* MakeTransientSettings(bool bValidApiKey,
 		bool bAnalyticsEnabled,
 		bool bDefaultUserOptIn,
-		bool bCaptureApplicationLifecycleEvents = false)
+		bool bCaptureApplicationLifecycleEvents = false,
+		EPostHogPersonProfiles PersonProfiles = EPostHogPersonProfiles::IdentifiedOnly)
 	{
 		UPostHogDeveloperSettings* Settings = NewObject<UPostHogDeveloperSettings>(GetTransientPackage());
 		UnrealHogTests::SetPropertyValue<FString>(Settings, TEXT("ApiKey"), bValidApiKey ? TEXT("phc_valid_key") : TEXT(""));
 		UnrealHogTests::SetPropertyValue<bool>(Settings, TEXT("bAnalyticsEnabled"), bAnalyticsEnabled);
 		UnrealHogTests::SetPropertyValue<bool>(Settings, TEXT("bDefaultUserOptIn"), bDefaultUserOptIn);
 		UnrealHogTests::SetPropertyValue<bool>(Settings, TEXT("bCaptureApplicationLifecycleEvents"), bCaptureApplicationLifecycleEvents);
+		UnrealHogTests::SetPropertyValue<EPostHogPersonProfiles>(Settings, TEXT("PersonProfiles"), PersonProfiles);
 		return Settings;
 	}
 
@@ -482,7 +484,7 @@ bool FPostHogConsentControllerCaptureEventRejectsInvalidNameTest::RunTest(const 
 	Controller.Initialize(*Settings);
 	Controller.SetOptIn(true, *Settings);
 
-	const EPostHogCaptureResult Result = Controller.CaptureEvent(TEXT("   "), nullptr, false);
+	const EPostHogCaptureResult Result = Controller.CaptureEvent(TEXT("   "), nullptr);
 
 	TestEqual(TEXT("Whitespace-only name is rejected"), Result, EPostHogCaptureResult::InvalidEventName);
 	TestEqual(TEXT("No event queued"), Controller.GetQueuedEventCount(), 0);
@@ -503,7 +505,7 @@ bool FPostHogConsentControllerCaptureEventRejectsWithoutConsentTest::RunTest(con
 
 	Controller.Initialize(*Settings);
 
-	const EPostHogCaptureResult Result = Controller.CaptureEvent(TEXT("ev"), nullptr, false);
+	const EPostHogCaptureResult Result = Controller.CaptureEvent(TEXT("ev"), nullptr);
 
 	TestEqual(TEXT("Capture without consent is rejected"), Result, EPostHogCaptureResult::NotOptedIn);
 	TestEqual(TEXT("No event queued"), Controller.GetQueuedEventCount(), 0);
@@ -525,7 +527,7 @@ bool FPostHogConsentControllerCaptureEventNullPropertiesRetainsSdkEnrichmentTest
 	Controller.Initialize(*Settings);
 	Controller.SetOptIn(true, *Settings);
 
-	const EPostHogCaptureResult Result = Controller.CaptureEvent(TEXT("ev"), nullptr, false);
+	const EPostHogCaptureResult Result = Controller.CaptureEvent(TEXT("ev"), nullptr);
 
 	TestEqual(TEXT("Capture with null properties succeeds"), Result, EPostHogCaptureResult::Success);
 	TestEqual(TEXT("One event queued"), Controller.GetQueuedEventCount(), 1);
@@ -574,7 +576,7 @@ bool FPostHogConsentControllerCaptureEventEnforcesReservedPropertyPrecedenceTest
 	Properties->AddString(TEXT("$session_id"), TEXT("attacker-session"));
 	Properties->AddString(TEXT("$groups"), TEXT("attacker-groups"));
 
-	const EPostHogCaptureResult Result = Controller.CaptureEvent(TEXT("ev"), Properties, false);
+	const EPostHogCaptureResult Result = Controller.CaptureEvent(TEXT("ev"), Properties);
 	TestEqual(TEXT("Capture succeeds"), Result, EPostHogCaptureResult::Success);
 
 	Controller.Flush();
@@ -630,7 +632,7 @@ bool FPostHogConsentControllerCaptureEventDuplicateCallerKeyLastWriteWinsTest::R
 	Properties->AddString(TEXT("dup"), TEXT("first"));
 	Properties->AddString(TEXT("dup"), TEXT("second"));
 
-	const EPostHogCaptureResult Result = Controller.CaptureEvent(TEXT("ev"), Properties, false);
+	const EPostHogCaptureResult Result = Controller.CaptureEvent(TEXT("ev"), Properties);
 	TestEqual(TEXT("Capture succeeds"), Result, EPostHogCaptureResult::Success);
 
 	Controller.Flush();
@@ -720,7 +722,7 @@ bool FPostHogConsentControllerBeforeSendMutateTest::RunTest(const FString& Param
 	});
 	Controller.SetBeforeSend(MoveTemp(BeforeSend));
 
-	const EPostHogCaptureResult Result = Controller.CaptureEvent(TEXT("before-send-event"), Properties, false);
+	const EPostHogCaptureResult Result = Controller.CaptureEvent(TEXT("before-send-event"), Properties);
 
 	TestEqual(TEXT("Capture succeeds"), Result, EPostHogCaptureResult::Success);
 	TestTrue(TEXT("Before-send hook was invoked"), bHookCalled);
@@ -805,7 +807,7 @@ bool FPostHogConsentControllerBeforeSendDropTest::RunTest(const FString& Paramet
 	});
 	Controller.SetBeforeSend(MoveTemp(BeforeSend));
 
-	const EPostHogCaptureResult Result = Controller.CaptureEvent(TEXT("drop-me"), nullptr, false);
+	const EPostHogCaptureResult Result = Controller.CaptureEvent(TEXT("drop-me"), nullptr);
 
 	TestEqual(TEXT("Capture reports before-send drop"), Result, EPostHogCaptureResult::DroppedByBeforeSend);
 	TestTrue(TEXT("Before-send hook was invoked"), bHookCalled);
@@ -845,7 +847,7 @@ bool FPostHogConsentControllerBeforeSendFailureTest::RunTest(const FString& Para
 
 	AddExpectedError(TEXT("PostHog before-send callback reported failure for event fail-me; dropping event before persistence."), EAutomationExpectedErrorFlags::Contains, 1);
 
-	const EPostHogCaptureResult Result = Controller.CaptureEvent(TEXT("fail-me"), nullptr, false);
+	const EPostHogCaptureResult Result = Controller.CaptureEvent(TEXT("fail-me"), nullptr);
 
 	TestEqual(TEXT("Capture reports before-send failure"), Result, EPostHogCaptureResult::BeforeSendFailed);
 	TestTrue(TEXT("Before-send hook was invoked"), bHookCalled);

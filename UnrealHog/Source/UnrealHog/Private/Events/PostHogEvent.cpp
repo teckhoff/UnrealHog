@@ -136,7 +136,10 @@ void FPostHogEvent::ApplySdkProperties(bool bProcessPersonProfile, const FPostHo
 		Properties.SetNumberField(TEXT("$screen_height"), Context.ScreenHeight.GetValue());
 	}
 
-	Properties.SetBoolField(TEXT("$process_person_profile"), bProcessPersonProfile);
+	if (!bProcessPersonProfile)
+	{
+		Properties.SetBoolField(TEXT("$process_person_profile"), false);
+	}
 }
 
 void FPostHogEvent::SetStringProperty(const FString& Key, const FString& StringValue)

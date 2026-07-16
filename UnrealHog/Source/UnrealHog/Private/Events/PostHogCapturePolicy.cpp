@@ -1,8 +1,24 @@
 #include "Events/PostHogCapturePolicy.h"
 
+#include "PostHogDeveloperSettings.h"
+
 bool PostHogCapturePolicy::IsValidEventName(const FString& EventName)
 {
 	return !EventName.TrimStartAndEnd().IsEmpty();
+}
+
+bool PostHogCapturePolicy::ShouldProcessPersonProfile(EPostHogPersonProfiles Policy, bool bIsIdentified)
+{
+	switch (Policy)
+	{
+	case EPostHogPersonProfiles::Never:
+		return false;
+	case EPostHogPersonProfiles::IdentifiedOnly:
+		return bIsIdentified;
+	case EPostHogPersonProfiles::Always:
+	default:
+		return true;
+	}
 }
 
 const TSet<FString>& PostHogCapturePolicy::GetReservedPropertyKeys()

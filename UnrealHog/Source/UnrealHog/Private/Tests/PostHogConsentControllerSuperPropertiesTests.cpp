@@ -120,7 +120,7 @@ bool FPostHogConsentControllerRegisterSuperPropertyRequiresConsentTest::RunTest(
 	TestFalse(TEXT("Register before opt-in is rejected"), bResult);
 
 	Controller.SetOptIn(true, *Settings);
-	Controller.CaptureEvent(TEXT("post-optin-event"), nullptr, false);
+	Controller.CaptureEvent(TEXT("post-optin-event"), nullptr);
 	Controller.Flush();
 	if (!TestNotNull(TEXT("Transport created"), LastTransport))
 	{
@@ -161,7 +161,7 @@ bool FPostHogConsentControllerCaptureEventIncludesSuperPropertyTest::RunTest(con
 	Value.StringValue = TEXT("bar");
 	TestTrue(TEXT("Register succeeds after opt-in"), Controller.RegisterSuperProperty(TEXT("foo"), Value));
 
-	Controller.CaptureEvent(TEXT("my-event"), nullptr, false);
+	Controller.CaptureEvent(TEXT("my-event"), nullptr);
 	Controller.Flush();
 	if (!TestNotNull(TEXT("Transport created"), LastTransport))
 	{
@@ -212,7 +212,7 @@ bool FPostHogConsentControllerCallPropertyOverridesSuperPropertyTest::RunTest(co
 
 	const FString SessionIdBeforeCapture = Controller.GetSessionId();
 
-	Controller.CaptureEvent(TEXT("my-event"), CallProperties, false);
+	Controller.CaptureEvent(TEXT("my-event"), CallProperties);
 	Controller.Flush();
 	if (!TestNotNull(TEXT("Transport created"), LastTransport))
 	{
@@ -262,7 +262,7 @@ bool FPostHogConsentControllerCallPropertyNeverOverridesSdkOwnedTest::RunTest(co
 	UPostHogEventProperties* CallProperties = NewObject<UPostHogEventProperties>();
 	CallProperties->AddString(TEXT("$session_id"), TEXT("attacker-supplied-session-id"));
 
-	Controller.CaptureEvent(TEXT("my-event"), CallProperties, false);
+	Controller.CaptureEvent(TEXT("my-event"), CallProperties);
 	Controller.Flush();
 	if (!TestNotNull(TEXT("Transport created"), LastTransport))
 	{
@@ -311,7 +311,7 @@ bool FPostHogConsentControllerSuperPropertiesSurviveOptOutOptInCycleTest::RunTes
 	Controller.SetOptIn(false, *Settings);
 	Controller.SetOptIn(true, *Settings);
 
-	Controller.CaptureEvent(TEXT("post-restart-event"), nullptr, false);
+	Controller.CaptureEvent(TEXT("post-restart-event"), nullptr);
 	Controller.Flush();
 	if (!TestNotNull(TEXT("Transport created"), LastTransport))
 	{
@@ -359,7 +359,7 @@ bool FPostHogConsentControllerUnregisterSuperPropertyStopsFutureEventsTest::RunT
 
 	Controller.UnregisterSuperProperty(TEXT("foo"));
 
-	Controller.CaptureEvent(TEXT("after-unregister-event"), nullptr, false);
+	Controller.CaptureEvent(TEXT("after-unregister-event"), nullptr);
 	Controller.Flush();
 	if (!TestNotNull(TEXT("Transport created"), LastTransport))
 	{

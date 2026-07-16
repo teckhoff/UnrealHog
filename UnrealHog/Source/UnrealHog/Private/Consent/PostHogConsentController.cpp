@@ -126,7 +126,7 @@ void FPostHogConsentController::ClearBeforeSend()
 	BeforeSend.Unbind();
 }
 
-EPostHogCaptureResult FPostHogConsentController::CaptureEvent(const FString& EventName, UPostHogEventProperties* CallProperties, bool bProcessPersonProfile)
+EPostHogCaptureResult FPostHogConsentController::CaptureEvent(const FString& EventName, UPostHogEventProperties* CallProperties)
 {
 	if (!PostHogCapturePolicy::IsValidEventName(EventName))
 	{
@@ -153,6 +153,7 @@ EPostHogCaptureResult FPostHogConsentController::CaptureEvent(const FString& Eve
 		CallProperties->ApplyToEvent(GeneratedEvent);
 	}
 
+	const bool bProcessPersonProfile = PostHogCapturePolicy::ShouldProcessPersonProfile(PersonProfilesPolicy, IdentityManager->IsIdentified());
 	GeneratedEvent.ApplySdkProperties(bProcessPersonProfile);
 
 	const FString CurrentSessionId = SessionManager->GetSessionId();
@@ -220,7 +221,7 @@ EPostHogCaptureResult FPostHogConsentController::Identify(const FString& Distinc
 		Props->AddObject(TEXT("$set_once"), UserPropertiesSetOnce);
 	}
 
-	return CaptureEvent(TEXT("$identify"), Props, /*bProcessPersonProfile=*/true);
+	return CaptureEvent(TEXT("$identify"), Props);
 }
 
 void FPostHogConsentController::Reset(const UPostHogDeveloperSettings& Settings)
@@ -251,7 +252,7 @@ EPostHogCaptureResult FPostHogConsentController::Alias(const FString& Alias)
 	UPostHogEventProperties* Props = NewObject<UPostHogEventProperties>();
 	Props->AddString(TEXT("alias"), Alias);
 
-	return CaptureEvent(TEXT("$create_alias"), Props, /*bProcessPersonProfile=*/true);
+	return CaptureEvent(TEXT("$create_alias"), Props);
 }
 
 bool FPostHogConsentController::RegisterSuperProperty(const FString& Key, const FPostHogEventProperty& Value)
@@ -357,6 +358,8 @@ bool FPostHogConsentController::EnableCollection(const UPostHogDeveloperSettings
 		return false;
 	}
 
+	PersonProfilesPolicy = ValidationResult.PersonProfiles;
+
 	if (!StorageProvider.IsValid())
 	{
 		StorageProvider = StorageProviderFactory();
@@ -392,7 +395,7 @@ bool FPostHogConsentController::EnableCollection(const UPostHogDeveloperSettings
 	LifecycleHandler = MakeUnique<FPostHogApplicationLifecycleHandler>(
 		[this](const FString& EventName, UPostHogEventProperties* Properties)
 		{
-			CaptureEvent(EventName, Properties, /*bProcessPersonProfile=*/false);
+			CaptureEvent(EventName, Properties);
 		},
 		[this]()
 		{

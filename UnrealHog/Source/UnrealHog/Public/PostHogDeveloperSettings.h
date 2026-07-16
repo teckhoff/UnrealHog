@@ -162,6 +162,9 @@ public:
 	UFUNCTION()
 	bool ShouldReuseAnonymousId() const { return bReuseAnonymousId; }
 
+	UFUNCTION()
+	EPostHogPersonProfiles GetPersonProfiles() const { return PersonProfiles; }
+
 #if WITH_EDITOR
 	virtual bool CanEditChange(const FProperty* InProperty) const override;
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;

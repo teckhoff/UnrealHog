@@ -67,9 +67,7 @@ void UPostHogRuntimeSubsystem::CaptureEvent(const FString& EventName, UPostHogEv
 		return;
 	}
 
-	// TODO: Check opt-in/opt-out status to determine whether to ProcessProfile.
-	// Currently, default to anonymous events.
-	const EPostHogCaptureResult Result = ConsentController->CaptureEvent(EventName, Properties, /*bProcessPersonProfile=*/false);
+	const EPostHogCaptureResult Result = ConsentController->CaptureEvent(EventName, Properties);
 
 	switch (Result)
 	{

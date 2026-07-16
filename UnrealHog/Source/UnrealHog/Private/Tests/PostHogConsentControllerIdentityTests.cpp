@@ -397,7 +397,7 @@ bool FPostHogConsentControllerResetWithoutReuseChangesDistinctIdTest::RunTest(co
 	TestNotEqual(TEXT("Distinct id changes after reset without reuse"), DistinctIdAfterReset, FString(TEXT("user-1")));
 	TestFalse(TEXT("New distinct id is non-empty"), DistinctIdAfterReset.IsEmpty());
 
-	Controller.CaptureEvent(TEXT("post-reset-event"), nullptr, false);
+	Controller.CaptureEvent(TEXT("post-reset-event"), nullptr);
 	Controller.Flush();
 	if (!TestNotNull(TEXT("Transport created"), LastTransport))
 	{
