@@ -55,6 +55,30 @@ public:
 	UFUNCTION(BlueprintPure, Category="PostHog|Identity")
 	FString GetDistinctId() const;
 
+	UFUNCTION(BlueprintCallable, Category="PostHog|SuperProperties")
+	void RegisterSuperPropertyString(const FString& Key, const FString& StringValue);
+
+	UFUNCTION(BlueprintCallable, Category="PostHog|SuperProperties")
+	void RegisterSuperPropertyNumber(const FString& Key, double NumberValue);
+
+	UFUNCTION(BlueprintCallable, Category="PostHog|SuperProperties")
+	void RegisterSuperPropertyBoolean(const FString& Key, bool bBoolValue);
+
+	UFUNCTION(BlueprintCallable, Category="PostHog|SuperProperties")
+	void RegisterSuperPropertyNull(const FString& Key);
+
+	UFUNCTION(BlueprintCallable, Category="PostHog|SuperProperties")
+	void RegisterSuperPropertyObject(const FString& Key, UPostHogEventProperties* Value);
+
+	UFUNCTION(BlueprintCallable, Category="PostHog|SuperProperties")
+	void RegisterSuperPropertyArray(const FString& Key, UPostHogEventPropertyArray* Value);
+
+	UFUNCTION(BlueprintCallable, Category="PostHog|SuperProperties")
+	void UnregisterSuperProperty(const FString& Key);
+
+	UFUNCTION(BlueprintCallable, Category="PostHog|SuperProperties")
+	void ClearSuperProperties();
+
 	void SetBeforeSend(FPostHogBeforeSendDelegate InBeforeSend);
 	void ClearBeforeSend();
 
