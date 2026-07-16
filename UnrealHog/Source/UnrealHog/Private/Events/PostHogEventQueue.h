@@ -33,7 +33,6 @@ private:
 	int32 MaxBatchSize;
 	int32 FlushEventCount;
 
-	TArray<FPostHogEvent> EventsQueue;
 	TSet<FString> InFlightEventIds;
 	TSharedPtr<IPostHogBatchRequestHandle> ActiveRequestHandle;
 	bool bIsFlushing = false;
