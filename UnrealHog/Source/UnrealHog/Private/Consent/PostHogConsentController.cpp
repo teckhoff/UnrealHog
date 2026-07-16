@@ -103,6 +103,16 @@ bool FPostHogConsentController::Capture(const FPostHogEvent& Event)
 	return EventQueue->Enqueue(Event);
 }
 
+void FPostHogConsentController::SetBeforeSend(FPostHogBeforeSendDelegate InBeforeSend)
+{
+	BeforeSend = MoveTemp(InBeforeSend);
+}
+
+void FPostHogConsentController::ClearBeforeSend()
+{
+	BeforeSend.Unbind();
+}
+
 EPostHogCaptureResult FPostHogConsentController::CaptureEvent(const FString& EventName, UPostHogEventProperties* CallProperties, bool bProcessPersonProfile)
 {
 	if (!PostHogCapturePolicy::IsValidEventName(EventName))
@@ -138,6 +148,18 @@ EPostHogCaptureResult FPostHogConsentController::CaptureEvent(const FString& Eve
 	}
 
 	ApplyGroups(GeneratedEvent);
+
+	const EPostHogBeforeSendResult BeforeSendResult = GeneratedEvent.RunBeforeSend(BeforeSend);
+	if (BeforeSendResult == EPostHogBeforeSendResult::Drop)
+	{
+		return EPostHogCaptureResult::DroppedByBeforeSend;
+	}
+
+	if (BeforeSendResult == EPostHogBeforeSendResult::Failure)
+	{
+		UE_LOGFMT(LogPostHog, Error, "PostHog before-send callback reported failure for event {EventName}; dropping event before persistence.", EventName);
+		return EPostHogCaptureResult::BeforeSendFailed;
+	}
 
 	if (!Capture(GeneratedEvent))
 	{

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Events/PostHogBeforeSend.h"
 #include "Templates/Function.h"
 
 class IPostHogStorageProvider;
@@ -16,6 +17,8 @@ enum class EPostHogCaptureResult : uint8
 	Success,
 	InvalidEventName,
 	NotOptedIn,
+	DroppedByBeforeSend,
+	BeforeSendFailed,
 	EnqueueFailed
 };
 
@@ -51,6 +54,9 @@ public:
 
 	bool IsOptedIn() const { return bIsOptedIn; }
 
+	void SetBeforeSend(FPostHogBeforeSendDelegate InBeforeSend);
+	void ClearBeforeSend();
+
 	bool Capture(const FPostHogEvent& Event);
 
 	// Single producer path for composing a capture: validates the event name, then layers
@@ -84,6 +90,7 @@ private:
 	FStorageProviderFactory StorageProviderFactory;
 	FTransportFactory TransportFactory;
 	FUuidGenerator UuidGenerator;
+	FPostHogBeforeSendDelegate BeforeSend;
 
 	bool bIsOptedIn = false;
 	FString SessionId;

@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Dom/JsonObject.h"
+#include "Events/PostHogBeforeSend.h"
 #include "Events/PostHogEventContext.h"
 #include "Misc/Optional.h"
 
@@ -55,6 +56,8 @@ public:
 	void ApplySdkProperties(bool bProcessPersonProfile, const FPostHogEventContext& Context);
 
 	FString GetEventId() const { return EventUuid; };
+
+	EPostHogBeforeSendResult RunBeforeSend(const FPostHogBeforeSendDelegate& BeforeSend);
 
 	TSharedRef<FJsonObject> ToJsonObject() const;
 
