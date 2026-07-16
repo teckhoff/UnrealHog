@@ -2,11 +2,13 @@
 
 #include "CoreMinimal.h"
 #include "Events/PostHogBeforeSend.h"
+#include "Lifecycle/PostHogApplicationLifecycleHandler.h"
 #include "Templates/Function.h"
 
 class IPostHogStorageProvider;
 class IPostHogBatchTransport;
 class FPostHogEventQueue;
+class FPostHogApplicationLifecycleHandler;
 class FPostHogSessionManager;
 class UPostHogDeveloperSettings;
 class UPostHogEventProperties;
@@ -37,9 +39,12 @@ public:
 	using FStorageProviderFactory = TFunction<TUniquePtr<IPostHogStorageProvider>()>;
 	using FTransportFactory = TFunction<TUniquePtr<IPostHogBatchTransport>(const FString& ResolvedHost)>;
 	using FUuidGenerator = TFunction<FString()>;
+	using FLifecycleMetadataProvider = FPostHogApplicationLifecycleHandler::FMetadataProvider;
 
 	FPostHogConsentController(FStorageProviderFactory InStorageProviderFactory,
-		FTransportFactory InTransportFactory, FUuidGenerator InUuidGenerator);
+		FTransportFactory InTransportFactory,
+		FUuidGenerator InUuidGenerator,
+		FLifecycleMetadataProvider InLifecycleMetadataProvider = nullptr);
 	~FPostHogConsentController();
 
 	// Loads persisted opt-in state (falling back to the settings default) and, if opted in,
@@ -79,11 +84,6 @@ public:
 	int32 GetTransportCreationCount() const { return TransportCreationCount; }
 	int32 GetDistinctIdCreationCount() const { return DistinctIdCreationCount; }
 
-	// Forwarded from UPostHogRuntimeSubsystem's application lifecycle delegates so the
-	// session manager reacts to real foreground/background transitions.
-	void NotifyApplicationForegrounded();
-	void NotifyApplicationBackgrounded();
-
 private:
 	bool EnableCollection(const UPostHogDeveloperSettings& Settings, FString& OutFailureReason);
 	void DisableCollection();
@@ -99,6 +99,7 @@ private:
 	FStorageProviderFactory StorageProviderFactory;
 	FTransportFactory TransportFactory;
 	FUuidGenerator UuidGenerator;
+	FLifecycleMetadataProvider LifecycleMetadataProvider;
 	FPostHogBeforeSendDelegate BeforeSend;
 
 	bool bIsOptedIn = false;
@@ -108,6 +109,7 @@ private:
 	TUniquePtr<IPostHogBatchTransport> Transport;
 	TUniquePtr<FPostHogEventQueue> EventQueue;
 	TUniquePtr<FPostHogSessionManager> SessionManager;
+	TUniquePtr<FPostHogApplicationLifecycleHandler> LifecycleHandler;
 
 	int32 StorageProviderCreationCount = 0;
 	int32 TransportCreationCount = 0;

@@ -48,16 +48,25 @@ namespace
 			return FPaths::Combine(RootPath, FPostHogSdkInfo::GetLibraryName(), TEXT("State"));
 		}
 
+		FString GetLifecycleStateFile() const
+		{
+			return FPaths::Combine(GetStateDirectory(), TEXT("lifecycle.json"));
+		}
+
 	private:
 		FString RootPath;
 	};
 
-	UPostHogDeveloperSettings* MakeTransientSettings(bool bValidApiKey, bool bAnalyticsEnabled, bool bDefaultUserOptIn)
+	UPostHogDeveloperSettings* MakeTransientSettings(bool bValidApiKey,
+		bool bAnalyticsEnabled,
+		bool bDefaultUserOptIn,
+		bool bCaptureApplicationLifecycleEvents = false)
 	{
 		UPostHogDeveloperSettings* Settings = NewObject<UPostHogDeveloperSettings>(GetTransientPackage());
 		UnrealHogTests::SetPropertyValue<FString>(Settings, TEXT("ApiKey"), bValidApiKey ? TEXT("phc_valid_key") : TEXT(""));
 		UnrealHogTests::SetPropertyValue<bool>(Settings, TEXT("bAnalyticsEnabled"), bAnalyticsEnabled);
 		UnrealHogTests::SetPropertyValue<bool>(Settings, TEXT("bDefaultUserOptIn"), bDefaultUserOptIn);
+		UnrealHogTests::SetPropertyValue<bool>(Settings, TEXT("bCaptureApplicationLifecycleEvents"), bCaptureApplicationLifecycleEvents);
 		return Settings;
 	}
 
@@ -104,6 +113,48 @@ namespace
 		OutEventObject = (*BatchArray)[0]->AsObject();
 		return OutEventObject.IsValid();
 	}
+
+	bool TryGetPayloadEventNames(const FPostHogBatchPayload& Payload, TArray<FString>& OutEventNames)
+	{
+		const TSharedRef<FJsonObject> PayloadJson = Payload.ToJsonObject();
+
+		const TArray<TSharedPtr<FJsonValue>>* BatchArray = nullptr;
+		if (!PayloadJson->TryGetArrayField(TEXT("batch"), BatchArray))
+		{
+			return false;
+		}
+
+		OutEventNames.Reset(BatchArray->Num());
+		for (const TSharedPtr<FJsonValue>& EventValue : *BatchArray)
+		{
+			const TSharedPtr<FJsonObject> EventObject = EventValue->AsObject();
+			if (!EventObject.IsValid())
+			{
+				return false;
+			}
+
+			FString EventName;
+			if (!EventObject->TryGetStringField(TEXT("event"), EventName))
+			{
+				return false;
+			}
+
+			OutEventNames.Add(EventName);
+		}
+
+		return true;
+	}
+
+	FPostHogConsentController::FLifecycleMetadataProvider MakeConsentLifecycleMetadataProvider()
+	{
+		return []()
+		{
+			FPostHogApplicationMetadata Metadata;
+			Metadata.Version = TEXT("1.0.0");
+			Metadata.Build = TEXT("build-1");
+			return Metadata;
+		};
+	}
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerDefaultOptOutTest, "UnrealHog.Consent.ConsentController.DefaultOptOutInitializeIsSideEffectFree", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
@@ -127,6 +178,87 @@ bool FPostHogConsentControllerDefaultOptOutTest::RunTest(const FString& Paramete
 	TestEqual(TEXT("No events queued"), Controller.GetQueuedEventCount(), 0);
 	TestFalse(TEXT("No queue directory created before consent"), IFileManager::Get().DirectoryExists(*Fixture.GetQueueDirectory()));
 	TestFalse(TEXT("No state directory created before consent"), IFileManager::Get().DirectoryExists(*Fixture.GetStateDirectory()));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerLifecycleGatingTest, "UnrealHog.Consent.ConsentController.LifecycleEventsHonorConsentAndSetting", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogConsentControllerLifecycleGatingTest::RunTest(const FString& Parameters)
+{
+	{
+		FScopedConsentTestStorageDirectory Fixture;
+		FPostHogFakeBatchTransport* LastTransport = nullptr;
+		int32 UuidCounter = 0;
+
+		FPostHogConsentController Controller(
+			MakeStorageFactory(Fixture.GetRootPath()),
+			MakeTransportFactory(LastTransport),
+			MakeUuidGenerator(UuidCounter),
+			MakeConsentLifecycleMetadataProvider());
+		UPostHogDeveloperSettings* Settings = MakeTransientSettings(true, true, false, true);
+
+		Controller.Initialize(*Settings);
+
+		TestFalse(TEXT("Default opt-out remains opted out"), Controller.IsOptedIn());
+		TestEqual(TEXT("Default opt-out queues no lifecycle events"), Controller.GetQueuedEventCount(), 0);
+		TestFalse(TEXT("Default opt-out creates no lifecycle state"), IFileManager::Get().FileExists(*Fixture.GetLifecycleStateFile()));
+	}
+
+	{
+		FScopedConsentTestStorageDirectory Fixture;
+		FPostHogFakeBatchTransport* LastTransport = nullptr;
+		int32 UuidCounter = 0;
+
+		FPostHogConsentController Controller(
+			MakeStorageFactory(Fixture.GetRootPath()),
+			MakeTransportFactory(LastTransport),
+			MakeUuidGenerator(UuidCounter),
+			MakeConsentLifecycleMetadataProvider());
+		UPostHogDeveloperSettings* Settings = MakeTransientSettings(true, true, false, false);
+
+		Controller.Initialize(*Settings);
+		TestTrue(TEXT("Lifecycle-disabled opt-in succeeds"), Controller.SetOptIn(true, *Settings));
+
+		TestEqual(TEXT("Lifecycle-disabled opt-in queues no lifecycle events"), Controller.GetQueuedEventCount(), 0);
+		TestFalse(TEXT("Lifecycle-disabled opt-in does not create lifecycle state"), IFileManager::Get().FileExists(*Fixture.GetLifecycleStateFile()));
+	}
+
+	{
+		FScopedConsentTestStorageDirectory Fixture;
+		FPostHogFakeBatchTransport* LastTransport = nullptr;
+		int32 UuidCounter = 0;
+
+		FPostHogConsentController Controller(
+			MakeStorageFactory(Fixture.GetRootPath()),
+			MakeTransportFactory(LastTransport),
+			MakeUuidGenerator(UuidCounter),
+			MakeConsentLifecycleMetadataProvider());
+		UPostHogDeveloperSettings* Settings = MakeTransientSettings(true, true, false, true);
+
+		Controller.Initialize(*Settings);
+		TestTrue(TEXT("Lifecycle-enabled opt-in succeeds"), Controller.SetOptIn(true, *Settings));
+
+		TestEqual(TEXT("Lifecycle-enabled opt-in queues Installed and Opened"), Controller.GetQueuedEventCount(), 2);
+		TestTrue(TEXT("Lifecycle-enabled opt-in writes lifecycle state"), IFileManager::Get().FileExists(*Fixture.GetLifecycleStateFile()));
+
+		Controller.Flush();
+		if (!TestNotNull(TEXT("Transport created"), LastTransport))
+		{
+			return false;
+		}
+
+		TArray<FString> EventNames;
+		TestTrue(TEXT("Lifecycle payload event names parsed"), TryGetPayloadEventNames(LastTransport->GetLastPayload(), EventNames));
+		TestEqual(TEXT("Lifecycle payload has two events"), EventNames.Num(), 2);
+		if (EventNames.Num() == 2)
+		{
+			TestEqual(TEXT("Installed is first"), EventNames[0], TEXT("Application Installed"));
+			TestEqual(TEXT("Opened is second"), EventNames[1], TEXT("Application Opened"));
+		}
+
+		LastTransport->CompleteLast(true, 200, TEXT(""));
+	}
 
 	return true;
 }

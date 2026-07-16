@@ -51,12 +51,7 @@ private:
 	void StartFlushTimer();
 	void StopFlushTimer();
 
-	void HandleApplicationForegrounded();
-	void HandleApplicationBackgrounded();
-
 	FTimerHandle FlushTimerHandle;
-	FDelegateHandle ApplicationForegroundedHandle;
-	FDelegateHandle ApplicationBackgroundedHandle;
 
 	TUniquePtr<FPostHogConsentController> ConsentController;
 };
