@@ -15,6 +15,55 @@ FPostHogEvent::FPostHogEvent(const FString& InEventName, const FString& InDistin
 {
 }
 
+FPostHogEvent::FPostHogEvent(const FString& InEventUuid, const FString& InEventName, const FString& InDistinctId, const FString& InTimestamp, const TSharedRef<FJsonObject>& InProperties)
+	: EventUuid(InEventUuid)
+	, EventName(InEventName)
+	, DistinctId(InDistinctId)
+	, Timestamp(InTimestamp)
+	, Properties(*InProperties)
+{
+}
+
+TOptional<FPostHogEvent> FPostHogEvent::TryParseFromJson(const TSharedRef<FJsonObject>& JsonObject, FString& OutErrorMessage)
+{
+	FString ParsedUuid;
+	if (!JsonObject->TryGetStringField(TEXT("uuid"), ParsedUuid))
+	{
+		OutErrorMessage = TEXT("Persisted event is missing a correctly typed \"uuid\" string field.");
+		return TOptional<FPostHogEvent>();
+	}
+
+	FString ParsedEventName;
+	if (!JsonObject->TryGetStringField(TEXT("event"), ParsedEventName))
+	{
+		OutErrorMessage = TEXT("Persisted event is missing a correctly typed \"event\" string field.");
+		return TOptional<FPostHogEvent>();
+	}
+
+	FString ParsedDistinctId;
+	if (!JsonObject->TryGetStringField(TEXT("distinct_id"), ParsedDistinctId))
+	{
+		OutErrorMessage = TEXT("Persisted event is missing a correctly typed \"distinct_id\" string field.");
+		return TOptional<FPostHogEvent>();
+	}
+
+	FString ParsedTimestamp;
+	if (!JsonObject->TryGetStringField(TEXT("timestamp"), ParsedTimestamp))
+	{
+		OutErrorMessage = TEXT("Persisted event is missing a correctly typed \"timestamp\" string field.");
+		return TOptional<FPostHogEvent>();
+	}
+
+	const TSharedPtr<FJsonObject>* ParsedProperties = nullptr;
+	if (!JsonObject->TryGetObjectField(TEXT("properties"), ParsedProperties) || !ParsedProperties->IsValid())
+	{
+		OutErrorMessage = TEXT("Persisted event is missing a correctly typed \"properties\" object field.");
+		return TOptional<FPostHogEvent>();
+	}
+
+	return FPostHogEvent(ParsedUuid, ParsedEventName, ParsedDistinctId, ParsedTimestamp, (*ParsedProperties).ToSharedRef());
+}
+
 void FPostHogEvent::ApplySdkProperties(bool bProcessPersonProfile)
 {
 	ApplySdkProperties(bProcessPersonProfile, FPostHogEventContextProvider::Capture());

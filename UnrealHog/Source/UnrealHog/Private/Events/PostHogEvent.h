@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Dom/JsonObject.h"
 #include "Events/PostHogEventContext.h"
+#include "Misc/Optional.h"
 
 class FJsonValue;
 
@@ -54,6 +55,17 @@ public:
 	void ApplySdkProperties(bool bProcessPersonProfile, const FPostHogEventContext& Context);
 
 	FString GetEventId() const { return EventUuid; };
-	
+
 	TSharedRef<FJsonObject> ToJsonObject() const;
+
+	// Rehydrates a persisted event verbatim from stored JSON. Requires correctly typed uuid, event,
+	// distinct_id, timestamp, and properties fields; returns unset with OutErrorMessage populated on
+	// the first missing/mistyped field rather than constructing a partial event. Never enriches,
+	// generates identifiers, or invokes before-send.
+	static TOptional<FPostHogEvent> TryParseFromJson(const TSharedRef<FJsonObject>& JsonObject, FString& OutErrorMessage);
+
+private:
+	// This ctor exists only for rehydrating persisted records verbatim; it must never be reached
+	// from CaptureEvent/enrichment paths.
+	FPostHogEvent(const FString& InEventUuid, const FString& InEventName, const FString& InDistinctId, const FString& InTimestamp, const TSharedRef<FJsonObject>& InProperties);
 };
