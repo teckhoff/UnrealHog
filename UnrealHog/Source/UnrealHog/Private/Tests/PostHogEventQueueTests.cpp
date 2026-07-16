@@ -42,6 +42,159 @@ namespace
 		return FPostHogEvent(FString::Printf(TEXT("test-event-%s"), *Suffix), TEXT("distinct-id"));
 	}
 
+	FString MakePersistedEventJson(const FString& EventId)
+	{
+		return FString::Printf(TEXT("{\"uuid\":\"%s\",\"event\":\"seeded-event\",\"distinct_id\":\"distinct-id\",\"timestamp\":\"2026-07-16T00:00:00.000Z\",\"properties\":{}}"), *EventId);
+	}
+
+	const FString SeedEventId1 = TEXT("00000000-0000-7000-8000-000000000001");
+	const FString SeedEventId2 = TEXT("00000000-0000-7000-8000-000000000002");
+	const FString SeedEventId3 = TEXT("00000000-0000-7000-8000-000000000003");
+
+	class FControllableQueueStorageProvider final : public IPostHogStorageProvider
+	{
+	public:
+		int32 DeleteAttempts = 0;
+		int32 SaveAttempts = 0;
+		FString LastDeletedEventId;
+		FString LastSavedEventId;
+
+		void SeedEvent(const FString& EventId)
+		{
+			SeedEvent(EventId, MakePersistedEventJson(EventId));
+		}
+
+		void SeedEvent(const FString& EventId, const FString& EventJson)
+		{
+			Events.Add(EventId, EventJson);
+			EventIdIndex.AddUnique(EventId);
+			EventIdIndex.Sort();
+		}
+
+		void SetFailNextDelete(bool bFail)
+		{
+			bFailNextDelete = bFail;
+		}
+
+		void SetFailNextSave(bool bFail)
+		{
+			bFailNextSave = bFail;
+		}
+
+		virtual bool SaveEvent(const FString& EventId, const FString& EventJson) override
+		{
+			++SaveAttempts;
+			LastSavedEventId = EventId;
+
+			if (bFailNextSave)
+			{
+				bFailNextSave = false;
+				return false;
+			}
+
+			SeedEvent(EventId, EventJson);
+			return true;
+		}
+		using IPostHogStorageProvider::SaveEvent;
+
+		virtual bool LoadEvent(const FString& EventId, FString& EventJson) override
+		{
+			const FString* Found = Events.Find(EventId);
+			if (!Found)
+			{
+				EventJson.Empty();
+				return false;
+			}
+
+			EventJson = *Found;
+			return true;
+		}
+
+		virtual bool DeleteEvent(const FString& EventId) override
+		{
+			++DeleteAttempts;
+			LastDeletedEventId = EventId;
+
+			if (bFailNextDelete)
+			{
+				bFailNextDelete = false;
+				return false;
+			}
+
+			if (Events.Remove(EventId) == 0)
+			{
+				return false;
+			}
+
+			EventIdIndex.Remove(EventId);
+			return true;
+		}
+
+		virtual bool ClearEvents() override
+		{
+			Events.Empty();
+			EventIdIndex.Empty();
+			return true;
+		}
+
+		virtual TArray<FString> GetEventIds() override
+		{
+			return EventIdIndex;
+		}
+
+		virtual int32 GetEventCount() override
+		{
+			return EventIdIndex.Num();
+		}
+
+		virtual bool SaveState(const FString& StateKey, const FString& StateJson) override
+		{
+			State.Add(StateKey, StateJson);
+			return true;
+		}
+		using IPostHogStorageProvider::SaveState;
+
+		virtual bool LoadState(const FString& StateKey, FString& StateJson) override
+		{
+			const FString* Found = State.Find(StateKey);
+			if (!Found)
+			{
+				StateJson.Empty();
+				return false;
+			}
+
+			StateJson = *Found;
+			return true;
+		}
+
+		virtual bool DeleteState(const FString& StateKey) override
+		{
+			return State.Remove(StateKey) > 0;
+		}
+
+	private:
+		TMap<FString, FString> Events;
+		TMap<FString, FString> State;
+		TArray<FString> EventIdIndex;
+		bool bFailNextDelete = false;
+		bool bFailNextSave = false;
+	};
+
+	void CheckEventIds(FAutomationTestBase& Test, FControllableQueueStorageProvider& Storage, const TArray<FString>& ExpectedIds, const FString& Context)
+	{
+		TArray<FString> SortedExpectedIds = ExpectedIds;
+		SortedExpectedIds.Sort();
+
+		const TArray<FString> ActualIds = Storage.GetEventIds();
+		Test.TestEqual(*FString::Printf(TEXT("%s: event count"), *Context), ActualIds.Num(), SortedExpectedIds.Num());
+
+		const int32 CompareCount = FMath::Min(ActualIds.Num(), SortedExpectedIds.Num());
+		for (int32 Index = 0; Index < CompareCount; ++Index)
+		{
+			Test.TestEqual(*FString::Printf(TEXT("%s: id %d"), *Context, Index), ActualIds[Index], SortedExpectedIds[Index]);
+		}
+	}
+
 	// Asserts the uuid, event, distinct_id, timestamp, and every flat string property in Actual
 	// match Expected, so restart/mix tests can prove fields survived a persist/rehydrate round trip.
 	void CheckEventJsonFieldsMatch(FAutomationTestBase& Test, const TSharedPtr<FJsonObject>& Actual, const TSharedRef<FJsonObject>& Expected, const FString& Context)
@@ -284,7 +437,7 @@ bool FPostHogEventQueueSimulatedRestartTest::RunTest(const FString& Parameters)
 			Event.SetStringProperty(TEXT("marker"), FString::Printf(TEXT("marker-%s"), Suffix));
 
 			ExpectedEventJson.Add(Event.ToJsonObject());
-			TestTrue(TEXT("Enqueue succeeds"), Queue.Enqueue(Event));
+			TestEqual(TEXT("Enqueue succeeds"), Queue.Enqueue(Event), EPostHogEventQueueEnqueueResult::Enqueued);
 		}
 
 		TestEqual(TEXT("No flush was triggered before the simulated restart"), Transport.GetSentCount(), 0);
@@ -396,7 +549,7 @@ bool FPostHogEventQueueCurrentAndPriorRunMixTest::RunTest(const FString& Paramet
 	FPostHogEventQueue Queue(Storage, Transport, TEXT("test-api-key"), 100, 100, 100);
 
 	const FPostHogEvent CurrentRunEvent = MakeTestEvent(TEXT("current"));
-	TestTrue(TEXT("Enqueue succeeds for the current-run event"), Queue.Enqueue(CurrentRunEvent));
+	TestEqual(TEXT("Enqueue succeeds for the current-run event"), Queue.Enqueue(CurrentRunEvent), EPostHogEventQueueEnqueueResult::Enqueued);
 
 	TestEqual(TEXT("Queue counts both the prior-run and current-run records"), Queue.Num(), 2);
 
@@ -420,6 +573,173 @@ bool FPostHogEventQueueCurrentAndPriorRunMixTest::RunTest(const FString& Paramet
 			TestEqual(*FString::Printf(TEXT("Batch entry %d matches deterministic storage ID order"), Index), ActualUuid, ExpectedOrder[Index]);
 		}
 	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueCapacityOneEvictsOldestBeforeSaveTest, "UnrealHog.Events.EventQueue.CapacityOneEvictsOldestBeforeSave", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogEventQueueCapacityOneEvictsOldestBeforeSaveTest::RunTest(const FString& Parameters)
+{
+	FControllableQueueStorageProvider Storage;
+	FPostHogFakeBatchTransport Transport;
+	Storage.SeedEvent(SeedEventId1);
+
+	FPostHogEventQueue Queue(Storage, Transport, TEXT("test-api-key"), 1, 100, 100);
+
+	const FPostHogEvent IncomingEvent = MakeTestEvent(TEXT("incoming"));
+	const FString IncomingEventId = IncomingEvent.GetEventId();
+	const EPostHogEventQueueEnqueueResult Result = Queue.Enqueue(IncomingEvent);
+
+	TestEqual(TEXT("Enqueue succeeds after evicting oldest"), Result, EPostHogEventQueueEnqueueResult::Enqueued);
+	TestEqual(TEXT("One delete attempted"), Storage.DeleteAttempts, 1);
+	TestEqual(TEXT("Oldest prior record deleted"), Storage.LastDeletedEventId, SeedEventId1);
+	TestEqual(TEXT("Incoming record saved once"), Storage.SaveAttempts, 1);
+	TestEqual(TEXT("Incoming event was saved"), Storage.LastSavedEventId, IncomingEventId);
+	TestEqual(TEXT("Queue remains capped at one record"), Queue.Num(), 1);
+	CheckEventIds(*this, Storage, { IncomingEventId }, TEXT("Capacity one final storage"));
+	TestEqual(TEXT("No flush triggered by capacity eviction"), Transport.GetSentCount(), 0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueRestartedStorageCountsTowardCapacityTest, "UnrealHog.Events.EventQueue.RestartedStorageCountsTowardCapacity", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogEventQueueRestartedStorageCountsTowardCapacityTest::RunTest(const FString& Parameters)
+{
+	FControllableQueueStorageProvider Storage;
+	FPostHogFakeBatchTransport Transport;
+	Storage.SeedEvent(SeedEventId1);
+	Storage.SeedEvent(SeedEventId2);
+
+	FPostHogEventQueue Queue(Storage, Transport, TEXT("test-api-key"), 2, 100, 100);
+
+	const FPostHogEvent IncomingEvent = MakeTestEvent(TEXT("incoming"));
+	const FString IncomingEventId = IncomingEvent.GetEventId();
+	const EPostHogEventQueueEnqueueResult Result = Queue.Enqueue(IncomingEvent);
+
+	TestEqual(TEXT("Restarted storage capacity enqueue succeeds"), Result, EPostHogEventQueueEnqueueResult::Enqueued);
+	TestEqual(TEXT("Preexisting count caused one eviction"), Storage.DeleteAttempts, 1);
+	TestEqual(TEXT("Oldest preexisting id evicted"), Storage.LastDeletedEventId, SeedEventId1);
+	TestEqual(TEXT("Incoming record saved once"), Storage.SaveAttempts, 1);
+	TestEqual(TEXT("Queue remains at configured capacity"), Queue.Num(), 2);
+	CheckEventIds(*this, Storage, { SeedEventId2, IncomingEventId }, TEXT("Restarted capacity final storage"));
+	TestEqual(TEXT("No flush triggered by restarted capacity eviction"), Transport.GetSentCount(), 0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueMultipleInFlightSkippedDuringEvictionTest, "UnrealHog.Events.EventQueue.MultipleInFlightIdsAreSkippedDuringEviction", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogEventQueueMultipleInFlightSkippedDuringEvictionTest::RunTest(const FString& Parameters)
+{
+	FControllableQueueStorageProvider Storage;
+	FPostHogFakeBatchTransport Transport;
+	Storage.SeedEvent(SeedEventId1);
+	Storage.SeedEvent(SeedEventId2);
+	Storage.SeedEvent(SeedEventId3);
+
+	FPostHogEventQueue Queue(Storage, Transport, TEXT("test-api-key"), 3, 2, 100);
+	Queue.Flush();
+
+	TestEqual(TEXT("Initial flush sent the two oldest records"), Transport.GetSentCount(), 1);
+	TestEqual(TEXT("Initial batch uses MaxBatchSize"), Transport.GetLastPayload().Num(), 2);
+
+	const FPostHogEvent IncomingEvent = MakeTestEvent(TEXT("incoming"));
+	const FString IncomingEventId = IncomingEvent.GetEventId();
+	const EPostHogEventQueueEnqueueResult Result = Queue.Enqueue(IncomingEvent);
+
+	TestEqual(TEXT("Enqueue succeeds by evicting first non-in-flight id"), Result, EPostHogEventQueueEnqueueResult::Enqueued);
+	TestEqual(TEXT("One delete attempted"), Storage.DeleteAttempts, 1);
+	TestEqual(TEXT("Newest eligible record deleted after skipping in-flight ids"), Storage.LastDeletedEventId, SeedEventId3);
+	TestEqual(TEXT("Incoming record saved once"), Storage.SaveAttempts, 1);
+	TestEqual(TEXT("Queue remains at configured capacity"), Queue.Num(), 3);
+	CheckEventIds(*this, Storage, { SeedEventId1, SeedEventId2, IncomingEventId }, TEXT("In-flight skip final storage"));
+	TestEqual(TEXT("No additional flush while request is in flight"), Transport.GetSentCount(), 1);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueAllInFlightAtCapacityRejectsNewEventTest, "UnrealHog.Events.EventQueue.AllInFlightAtCapacityRejectsNewEvent", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogEventQueueAllInFlightAtCapacityRejectsNewEventTest::RunTest(const FString& Parameters)
+{
+	FControllableQueueStorageProvider Storage;
+	FPostHogFakeBatchTransport Transport;
+	Storage.SeedEvent(SeedEventId1);
+	Storage.SeedEvent(SeedEventId2);
+
+	FPostHogEventQueue Queue(Storage, Transport, TEXT("test-api-key"), 2, 2, 100);
+	Queue.Flush();
+
+	const FPostHogEvent IncomingEvent = MakeTestEvent(TEXT("incoming"));
+	const EPostHogEventQueueEnqueueResult Result = Queue.Enqueue(IncomingEvent);
+
+	TestEqual(TEXT("All in-flight records reject new enqueue"), Result, EPostHogEventQueueEnqueueResult::RejectedCapacityNoEvictableEvent);
+	TestEqual(TEXT("No delete attempted when all ids are in flight"), Storage.DeleteAttempts, 0);
+	TestEqual(TEXT("Incoming record was not saved"), Storage.SaveAttempts, 0);
+	TestEqual(TEXT("Persisted count unchanged"), Queue.Num(), 2);
+	CheckEventIds(*this, Storage, { SeedEventId1, SeedEventId2 }, TEXT("All in-flight final storage"));
+	TestEqual(TEXT("Only initial in-flight send exists"), Transport.GetSentCount(), 1);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueDeleteFailureRejectsAndPreservesOldRecordTest, "UnrealHog.Events.EventQueue.DeleteFailureRejectsAndPreservesOldRecord", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogEventQueueDeleteFailureRejectsAndPreservesOldRecordTest::RunTest(const FString& Parameters)
+{
+	FControllableQueueStorageProvider Storage;
+	FPostHogFakeBatchTransport Transport;
+	Storage.SeedEvent(SeedEventId1);
+	Storage.SetFailNextDelete(true);
+
+	FPostHogEventQueue Queue(Storage, Transport, TEXT("test-api-key"), 1, 100, 100);
+
+	const FPostHogEvent IncomingEvent = MakeTestEvent(TEXT("incoming"));
+	const EPostHogEventQueueEnqueueResult Result = Queue.Enqueue(IncomingEvent);
+
+	TestEqual(TEXT("Delete failure rejects new enqueue"), Result, EPostHogEventQueueEnqueueResult::RejectedCapacityDeleteFailed);
+	TestEqual(TEXT("One delete attempted"), Storage.DeleteAttempts, 1);
+	TestEqual(TEXT("Oldest id was the failed delete target"), Storage.LastDeletedEventId, SeedEventId1);
+	TestEqual(TEXT("Save not attempted after delete failure"), Storage.SaveAttempts, 0);
+	TestEqual(TEXT("Persisted count unchanged"), Queue.Num(), 1);
+	CheckEventIds(*this, Storage, { SeedEventId1 }, TEXT("Delete failure final storage"));
+	TestEqual(TEXT("No flush triggered after delete failure"), Transport.GetSentCount(), 0);
+
+	FString PreservedJson;
+	TestTrue(TEXT("Failed delete leaves old record loadable"), Storage.LoadEvent(SeedEventId1, PreservedJson));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueSaveFailureRejectedAndConsistentCountTest, "UnrealHog.Events.EventQueue.SaveFailureReturnsRejectedSaveFailedAndLeavesConsistentCount", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogEventQueueSaveFailureRejectedAndConsistentCountTest::RunTest(const FString& Parameters)
+{
+	FControllableQueueStorageProvider Storage;
+	FPostHogFakeBatchTransport Transport;
+	Storage.SeedEvent(SeedEventId1);
+	Storage.SetFailNextSave(true);
+
+	FPostHogEventQueue Queue(Storage, Transport, TEXT("test-api-key"), 1, 100, 100);
+
+	const FPostHogEvent IncomingEvent = MakeTestEvent(TEXT("incoming"));
+	const FString IncomingEventId = IncomingEvent.GetEventId();
+	const EPostHogEventQueueEnqueueResult Result = Queue.Enqueue(IncomingEvent);
+
+	TestEqual(TEXT("Save failure returns rejected save result"), Result, EPostHogEventQueueEnqueueResult::RejectedSaveFailed);
+	TestEqual(TEXT("Capacity eviction happened before save attempt"), Storage.DeleteAttempts, 1);
+	TestEqual(TEXT("Old record was evicted before save failed"), Storage.LastDeletedEventId, SeedEventId1);
+	TestEqual(TEXT("Save attempted once"), Storage.SaveAttempts, 1);
+	TestEqual(TEXT("Incoming event was the failed save target"), Storage.LastSavedEventId, IncomingEventId);
+	TestEqual(TEXT("Provider-visible count matches stored records after save failure"), Queue.Num(), 0);
+	CheckEventIds(*this, Storage, {}, TEXT("Save failure final storage"));
+	TestEqual(TEXT("No flush triggered after save failure"), Transport.GetSentCount(), 0);
+
+	FString MissingJson;
+	TestFalse(TEXT("Incoming failed save is not loadable"), Storage.LoadEvent(IncomingEventId, MissingJson));
+	TestFalse(TEXT("Old record already evicted before failed save"), Storage.LoadEvent(SeedEventId1, MissingJson));
 
 	return true;
 }

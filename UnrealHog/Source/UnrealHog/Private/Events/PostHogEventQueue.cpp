@@ -5,6 +5,7 @@
 #include "Events/PostHogBatchPayload.h"
 #include "Events/PostHogEvent.h"
 #include "Logging/PostHogLogger.h"
+#include "Logging/StructuredLog.h"
 #include "Serialization/JsonSerializer.h"
 #include "Storage/PostHogStorageProvider.h"
 
@@ -24,26 +25,20 @@ FPostHogEventQueue::~FPostHogEventQueue()
 	CancelInFlightRequest();
 }
 
-bool FPostHogEventQueue::Enqueue(const FPostHogEvent& Event)
+EPostHogEventQueueEnqueueResult FPostHogEventQueue::Enqueue(const FPostHogEvent& Event)
 {
-	if (StorageProvider.GetEventCount() >= MaxQueueSize)
+	const FString IncomingEventId = Event.GetEventId();
+	const EPostHogEventQueueEnqueueResult CapacityResult = EnsureCapacityForSave(IncomingEventId);
+	if (CapacityResult != EPostHogEventQueueEnqueueResult::Enqueued)
 	{
-		const TArray<FString> EventIds = StorageProvider.GetEventIds();
-		const int32 EventIndexToDrop = bIsFlushing ? InFlightEventIds.Num() : 0;
-		if (!EventIds.IsValidIndex(EventIndexToDrop))
-		{
-			return false;
-		}
-
-		if (!StorageProvider.DeleteEvent(EventIds[EventIndexToDrop]))
-		{
-			return false;
-		}
+		return CapacityResult;
 	}
 
-	if (!StorageProvider.SaveEvent(Event.GetEventId(), Event.ToJsonObject()))
+	if (!StorageProvider.SaveEvent(IncomingEventId, Event.ToJsonObject()))
 	{
-		return false;
+		UE_LOGFMT(LogPostHog, Warning, "PostHog event queue rejected incoming event because SaveEvent failed. IncomingEventId={0}, MaxQueueSize={1}, CurrentCount={2}.",
+			IncomingEventId, MaxQueueSize, StorageProvider.GetEventCount());
+		return EPostHogEventQueueEnqueueResult::RejectedSaveFailed;
 	}
 
 	if (StorageProvider.GetEventCount() >= FlushEventCount)
@@ -51,7 +46,59 @@ bool FPostHogEventQueue::Enqueue(const FPostHogEvent& Event)
 		Flush();
 	}
 
-	return true;
+	return EPostHogEventQueueEnqueueResult::Enqueued;
+}
+
+EPostHogEventQueueEnqueueResult FPostHogEventQueue::EnsureCapacityForSave(const FString& IncomingEventId)
+{
+	while (StorageProvider.GetEventCount() >= MaxQueueSize)
+	{
+		const int32 CurrentCount = StorageProvider.GetEventCount();
+
+		FString EventIdToDrop;
+		if (!TryGetOldestEvictableEventId(EventIdToDrop))
+		{
+			UE_LOGFMT(LogPostHog, Warning, "PostHog event queue rejected incoming event because every persisted record is in flight. IncomingEventId={0}, MaxQueueSize={1}, CurrentCount={2}.",
+				IncomingEventId, MaxQueueSize, CurrentCount);
+			return EPostHogEventQueueEnqueueResult::RejectedCapacityNoEvictableEvent;
+		}
+
+		if (!StorageProvider.DeleteEvent(EventIdToDrop))
+		{
+			UE_LOGFMT(LogPostHog, Warning, "PostHog event queue rejected incoming event because capacity eviction failed. IncomingEventId={0}, DroppedEventId={1}, MaxQueueSize={2}, CurrentCount={3}.",
+				IncomingEventId, EventIdToDrop, MaxQueueSize, CurrentCount);
+			return EPostHogEventQueueEnqueueResult::RejectedCapacityDeleteFailed;
+		}
+
+		const int32 CountAfterDelete = StorageProvider.GetEventCount();
+		if (CountAfterDelete >= CurrentCount)
+		{
+			UE_LOGFMT(LogPostHog, Warning, "PostHog event queue rejected incoming event because capacity eviction did not reduce persisted count. IncomingEventId={0}, DroppedEventId={1}, MaxQueueSize={2}, CurrentCount={3}.",
+				IncomingEventId, EventIdToDrop, MaxQueueSize, CountAfterDelete);
+			return EPostHogEventQueueEnqueueResult::RejectedCapacityDeleteFailed;
+		}
+
+		UE_LOGFMT(LogPostHog, Log, "PostHog event queue dropped oldest persisted event before enqueue. IncomingEventId={0}, DroppedEventId={1}, MaxQueueSize={2}, CurrentCount={3}.",
+			IncomingEventId, EventIdToDrop, MaxQueueSize, CurrentCount);
+	}
+
+	return EPostHogEventQueueEnqueueResult::Enqueued;
+}
+
+bool FPostHogEventQueue::TryGetOldestEvictableEventId(FString& OutEventId)
+{
+	const TArray<FString> EventIds = StorageProvider.GetEventIds();
+	for (const FString& EventId : EventIds)
+	{
+		if (!InFlightEventIds.Contains(EventId))
+		{
+			OutEventId = EventId;
+			return true;
+		}
+	}
+
+	OutEventId.Empty();
+	return false;
 }
 
 void FPostHogEventQueue::Flush()

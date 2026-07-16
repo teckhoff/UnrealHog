@@ -35,3 +35,22 @@ Apply the queue limit across current and prior runs without deleting an in-fligh
 ## Unity references
 
 - `Docs/Reference/posthog-unity/com.posthog.unity/Runtime/Core/EventQueue.cs` (`Enqueue`)
+
+## Implementation notes
+
+- `FPostHogEventQueue::Enqueue` checks `IPostHogStorageProvider::GetEventCount()` before every save.
+- Capacity is storage-authoritative: records persisted by prior runs count immediately after queue construction.
+- Eviction scans `GetEventIds()` in deterministic oldest-first UUIDv7/lexical order and deletes the first id that is not in `InFlightEventIds`.
+- If storage remains at or above `MaxQueueSize` after a successful delete call, the enqueue is rejected as a capacity delete failure.
+- `Enqueue` returns an internal `EPostHogEventQueueEnqueueResult`; public capture APIs continue returning their existing public result types.
+
+## Failure-state notes
+
+- When every persisted id is in flight, the incoming event is rejected, no save is attempted, and storage/index state is unchanged.
+- When eviction delete fails, the incoming event is rejected, no save is attempted, and the file storage provider keeps the old id visible in its index because the durable record may still exist.
+- When save fails after a successful capacity eviction, the evicted old record remains dropped and the incoming record is not indexed; provider-visible count matches the durable records still present.
+- `ClearEvents` now removes ids from the file storage index only after each file delete succeeds; a partial clear returns `false` and leaves failed deletes observable through `GetEventIds()`.
+
+## Rollback note
+
+Revert the touched queue, consent, storage, test, and planning files. No config/schema migration is introduced, and existing UUID-keyed queued JSON files remain readable.
