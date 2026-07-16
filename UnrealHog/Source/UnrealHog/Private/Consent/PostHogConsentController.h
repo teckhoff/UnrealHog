@@ -2,11 +2,13 @@
 
 #include "CoreMinimal.h"
 #include "Events/PostHogBeforeSend.h"
+#include "Lifecycle/PostHogApplicationLifecycleHandler.h"
 #include "Templates/Function.h"
 
 class IPostHogStorageProvider;
 class IPostHogBatchTransport;
 class FPostHogEventQueue;
+class FPostHogApplicationLifecycleHandler;
 class FPostHogIdentityManager;
 class FPostHogSessionManager;
 class UPostHogDeveloperSettings;
@@ -38,9 +40,12 @@ public:
 	using FStorageProviderFactory = TFunction<TUniquePtr<IPostHogStorageProvider>()>;
 	using FTransportFactory = TFunction<TUniquePtr<IPostHogBatchTransport>(const FString& ResolvedHost)>;
 	using FUuidGenerator = TFunction<FString()>;
+	using FLifecycleMetadataProvider = FPostHogApplicationLifecycleHandler::FMetadataProvider;
 
 	FPostHogConsentController(FStorageProviderFactory InStorageProviderFactory,
-		FTransportFactory InTransportFactory, FUuidGenerator InUuidGenerator);
+		FTransportFactory InTransportFactory,
+		FUuidGenerator InUuidGenerator,
+		FLifecycleMetadataProvider InLifecycleMetadataProvider = nullptr);
 	~FPostHogConsentController();
 
 	// Loads persisted opt-in state (falling back to the settings default) and, if opted in,
@@ -87,11 +92,6 @@ public:
 	// persisted anonymous id is reused across a disable/enable cycle against the same storage.
 	int32 GetIdentityManagerLoadCount() const { return IdentityManagerLoadCount; }
 
-	// Forwarded from UPostHogRuntimeSubsystem's application lifecycle delegates so the
-	// session manager reacts to real foreground/background transitions.
-	void NotifyApplicationForegrounded();
-	void NotifyApplicationBackgrounded();
-
 private:
 	bool EnableCollection(const UPostHogDeveloperSettings& Settings, FString& OutFailureReason);
 	void DisableCollection();
@@ -107,6 +107,7 @@ private:
 	FStorageProviderFactory StorageProviderFactory;
 	FTransportFactory TransportFactory;
 	FUuidGenerator UuidGenerator;
+	FLifecycleMetadataProvider LifecycleMetadataProvider;
 	FPostHogBeforeSendDelegate BeforeSend;
 
 	bool bIsOptedIn = false;
@@ -116,6 +117,7 @@ private:
 	TUniquePtr<FPostHogEventQueue> EventQueue;
 	TUniquePtr<FPostHogIdentityManager> IdentityManager;
 	TUniquePtr<FPostHogSessionManager> SessionManager;
+	TUniquePtr<FPostHogApplicationLifecycleHandler> LifecycleHandler;
 
 	int32 StorageProviderCreationCount = 0;
 	int32 TransportCreationCount = 0;

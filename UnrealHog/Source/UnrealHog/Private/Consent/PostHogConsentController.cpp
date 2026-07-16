@@ -6,6 +6,7 @@
 #include "Events/PostHogEventProperties.h"
 #include "Events/PostHogEventQueue.h"
 #include "Http/PostHogBatchTransport.h"
+#include "Lifecycle/PostHogApplicationLifecycleHandler.h"
 #include "Identity/PostHogIdentityManager.h"
 #include "Logging/PostHogLogger.h"
 #include "Logging/StructuredLog.h"
@@ -22,10 +23,13 @@ namespace
 }
 
 FPostHogConsentController::FPostHogConsentController(FStorageProviderFactory InStorageProviderFactory,
-	FTransportFactory InTransportFactory, FUuidGenerator InUuidGenerator) :
+	FTransportFactory InTransportFactory,
+	FUuidGenerator InUuidGenerator,
+	FLifecycleMetadataProvider InLifecycleMetadataProvider) :
 	StorageProviderFactory(MoveTemp(InStorageProviderFactory)),
 	TransportFactory(MoveTemp(InTransportFactory)),
-	UuidGenerator(MoveTemp(InUuidGenerator))
+	UuidGenerator(MoveTemp(InUuidGenerator)),
+	LifecycleMetadataProvider(MoveTemp(InLifecycleMetadataProvider))
 {
 	SessionManager = MakeUnique<FPostHogSessionManager>();
 }
@@ -63,6 +67,11 @@ void FPostHogConsentController::Initialize(const UPostHogDeveloperSettings& Sett
 
 void FPostHogConsentController::Shutdown()
 {
+	if (LifecycleHandler)
+	{
+		LifecycleHandler->Stop();
+	}
+
 	if (EventQueue)
 	{
 		EventQueue->CancelInFlightRequest();
@@ -265,11 +274,33 @@ bool FPostHogConsentController::EnableCollection(const UPostHogDeveloperSettings
 	PersistOptIn(true);
 	SessionManager->SetCollectionPermitted(true);
 
+	LifecycleHandler = MakeUnique<FPostHogApplicationLifecycleHandler>(
+		[this](const FString& EventName, UPostHogEventProperties* Properties)
+		{
+			CaptureEvent(EventName, Properties, /*bProcessPersonProfile=*/false);
+		},
+		[this]()
+		{
+			SessionManager->OnForeground();
+		},
+		[this]()
+		{
+			SessionManager->OnBackground();
+		},
+		LifecycleMetadataProvider);
+	LifecycleHandler->Start(Settings, *StorageProvider);
+
 	return true;
 }
 
 void FPostHogConsentController::DisableCollection()
 {
+	if (LifecycleHandler)
+	{
+		LifecycleHandler->Stop();
+		LifecycleHandler.Reset();
+	}
+
 	bIsOptedIn = false;
 
 	if (EventQueue)

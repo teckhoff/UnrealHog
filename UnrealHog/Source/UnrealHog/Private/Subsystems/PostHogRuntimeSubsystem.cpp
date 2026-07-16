@@ -6,7 +6,6 @@
 #include "Http/PostHogHttpClient.h"
 #include "Logging/PostHogLogger.h"
 #include "Logging/StructuredLog.h"
-#include "Misc/CoreDelegates.h"
 #include "SDK/PostHogSdkInfo.h"
 #include "Storage/PostHogStorageProvider.h"
 #include "Events/PostHogEventProperties.h"
@@ -32,9 +31,6 @@ void UPostHogRuntimeSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 	ConsentController->Initialize(*GetDefault<UPostHogDeveloperSettings>());
 
-	ApplicationForegroundedHandle = FCoreDelegates::ApplicationHasEnteredForegroundDelegate.AddUObject(this, &UPostHogRuntimeSubsystem::HandleApplicationForegrounded);
-	ApplicationBackgroundedHandle = FCoreDelegates::ApplicationWillEnterBackgroundDelegate.AddUObject(this, &UPostHogRuntimeSubsystem::HandleApplicationBackgrounded);
-
 	if (ConsentController->IsOptedIn())
 	{
 		const FString LibraryName = FPostHogSdkInfo::GetLibraryName();
@@ -54,9 +50,6 @@ void UPostHogRuntimeSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 void UPostHogRuntimeSubsystem::Deinitialize()
 {
 	StopFlushTimer();
-
-	FCoreDelegates::ApplicationHasEnteredForegroundDelegate.Remove(ApplicationForegroundedHandle);
-	FCoreDelegates::ApplicationWillEnterBackgroundDelegate.Remove(ApplicationBackgroundedHandle);
 
 	if (ConsentController)
 	{
@@ -195,21 +188,5 @@ void UPostHogRuntimeSubsystem::StopFlushTimer()
 	if (UWorld* World = GetWorld())
 	{
 		World->GetTimerManager().ClearTimer(FlushTimerHandle);
-	}
-}
-
-void UPostHogRuntimeSubsystem::HandleApplicationForegrounded()
-{
-	if (ConsentController)
-	{
-		ConsentController->NotifyApplicationForegrounded();
-	}
-}
-
-void UPostHogRuntimeSubsystem::HandleApplicationBackgrounded()
-{
-	if (ConsentController)
-	{
-		ConsentController->NotifyApplicationBackgrounded();
 	}
 }
