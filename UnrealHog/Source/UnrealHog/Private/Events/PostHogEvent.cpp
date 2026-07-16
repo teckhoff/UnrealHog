@@ -6,6 +6,18 @@
 #include "SDK/PostHogSdkInfo.h"
 #include "Utilities/PostHogUuidV7.h"
 
+FPostHogBeforeSendEvent::FPostHogBeforeSendEvent(const FString& InEventName,
+	const FString& InDistinctId,
+	const FString& InEventUuid,
+	const FString& InTimestamp,
+	FJsonObject& InProperties)
+	: EventName(InEventName)
+	, DistinctId(InDistinctId)
+	, EventUuid(InEventUuid)
+	, Timestamp(InTimestamp)
+	, Properties(InProperties)
+{
+}
 
 FPostHogEvent::FPostHogEvent(const FString& InEventName, const FString& InDistinctId)
 	: EventUuid(PostHogUuidV7::New())
@@ -150,6 +162,17 @@ void FPostHogEvent::SetObjectProperty(const FString& Key, FJsonObject& ObjectVal
 void FPostHogEvent::SetJsonValueProperty(const FString& Key, const TSharedRef<FJsonValue>& Value)
 {
 	Properties.SetField(Key, Value);
+}
+
+EPostHogBeforeSendResult FPostHogEvent::RunBeforeSend(const FPostHogBeforeSendDelegate& BeforeSend)
+{
+	if (!BeforeSend.IsBound())
+	{
+		return EPostHogBeforeSendResult::Continue;
+	}
+
+	FPostHogBeforeSendEvent EventView(EventName, DistinctId, EventUuid, Timestamp, Properties);
+	return BeforeSend.Execute(EventView);
 }
 
 TSharedRef<FJsonObject> FPostHogEvent::ToJsonObject() const

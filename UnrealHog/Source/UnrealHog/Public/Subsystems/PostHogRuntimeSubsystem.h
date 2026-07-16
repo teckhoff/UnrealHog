@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Events/PostHogBeforeSend.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "TimerManager.h"
 #include "PostHogRuntimeSubsystem.generated.h"
@@ -41,6 +42,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category="PostHog|Consent")
 	bool IsAnalyticsOptedIn() const;
+
+	void SetBeforeSend(FPostHogBeforeSendDelegate InBeforeSend);
+	void ClearBeforeSend();
 
 private:
 	void FlushQueuedEvents();

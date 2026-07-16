@@ -79,6 +79,9 @@ void UPostHogRuntimeSubsystem::CaptureEvent(const FString& EventName, UPostHogEv
 	case EPostHogCaptureResult::NotOptedIn:
 		UE_LOGFMT(LogPostHog, Warning, "PostHog Runtime Subsystem has no analytics consent; dropping event {EventName}.", EventName);
 		break;
+	case EPostHogCaptureResult::DroppedByBeforeSend:
+	case EPostHogCaptureResult::BeforeSendFailed:
+		break;
 	case EPostHogCaptureResult::EnqueueFailed:
 		UE_LOGFMT(LogPostHog, Error, "PostHog Runtime Subsystem failed to enqueue event {EventName}.", EventName);
 		break;
@@ -128,6 +131,22 @@ void UPostHogRuntimeSubsystem::SetAnalyticsOptIn(bool bOptIn)
 bool UPostHogRuntimeSubsystem::IsAnalyticsOptedIn() const
 {
 	return ConsentController && ConsentController->IsOptedIn();
+}
+
+void UPostHogRuntimeSubsystem::SetBeforeSend(FPostHogBeforeSendDelegate InBeforeSend)
+{
+	if (ConsentController)
+	{
+		ConsentController->SetBeforeSend(MoveTemp(InBeforeSend));
+	}
+}
+
+void UPostHogRuntimeSubsystem::ClearBeforeSend()
+{
+	if (ConsentController)
+	{
+		ConsentController->ClearBeforeSend();
+	}
 }
 
 void UPostHogRuntimeSubsystem::FlushQueuedEvents()
