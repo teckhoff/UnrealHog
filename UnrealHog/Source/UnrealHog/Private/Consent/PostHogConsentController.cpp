@@ -7,6 +7,7 @@
 #include "Events/PostHogEventQueue.h"
 #include "Http/PostHogBatchTransport.h"
 #include "Lifecycle/PostHogApplicationLifecycleHandler.h"
+#include "Identity/PostHogIdentityManager.h"
 #include "Logging/PostHogLogger.h"
 #include "Logging/StructuredLog.h"
 #include "PostHogDeveloperSettings.h"
@@ -142,7 +143,7 @@ EPostHogCaptureResult FPostHogConsentController::CaptureEvent(const FString& Eve
 		return EPostHogCaptureResult::NotOptedIn;
 	}
 
-	FPostHogEvent GeneratedEvent(EventName, DistinctId);
+	FPostHogEvent GeneratedEvent(EventName, IdentityManager->GetEffectiveDistinctId());
 
 	ApplySuperProperties(GeneratedEvent);
 
@@ -214,6 +215,22 @@ FString FPostHogConsentController::GetSessionId()
 	return SessionManager->GetSessionId();
 }
 
+const FString& FPostHogConsentController::GetDistinctId() const
+{
+	static const FString EmptyDistinctId;
+	return IdentityManager.IsValid() ? IdentityManager->GetEffectiveDistinctId() : EmptyDistinctId;
+}
+
+void FPostHogConsentController::NotifyApplicationForegrounded()
+{
+	SessionManager->OnForeground();
+}
+
+void FPostHogConsentController::NotifyApplicationBackgrounded()
+{
+	SessionManager->OnBackground();
+}
+
 bool FPostHogConsentController::EnableCollection(const UPostHogDeveloperSettings& Settings, FString& OutFailureReason)
 {
 	if (!Settings.IsAnalyticsEnabled())
@@ -235,12 +252,14 @@ bool FPostHogConsentController::EnableCollection(const UPostHogDeveloperSettings
 		++StorageProviderCreationCount;
 	}
 
-	DistinctId = UuidGenerator();
-	++DistinctIdCreationCount;
+	IdentityManager = MakeUnique<FPostHogIdentityManager>(UuidGenerator);
+	IdentityManager->LoadOrCreate(*StorageProvider);
+	++IdentityManagerLoadCount;
 
-	if (DistinctId.IsEmpty())
+	if (IdentityManager->GetAnonymousId().IsEmpty())
 	{
 		OutFailureReason = TEXT("failed to generate distinct identifier");
+		IdentityManager.Reset();
 		StorageProvider.Reset();
 		return false;
 	}
@@ -294,7 +313,7 @@ void FPostHogConsentController::DisableCollection()
 	EventQueue.Reset();
 	Transport.Reset();
 	StorageProvider.Reset();
-	DistinctId.Empty();
+	IdentityManager.Reset();
 	SessionManager->SetCollectionPermitted(false);
 	SessionManager->EndSession();
 }

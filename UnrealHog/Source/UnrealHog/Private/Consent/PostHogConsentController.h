@@ -9,6 +9,7 @@ class IPostHogStorageProvider;
 class IPostHogBatchTransport;
 class FPostHogEventQueue;
 class FPostHogApplicationLifecycleHandler;
+class FPostHogIdentityManager;
 class FPostHogSessionManager;
 class UPostHogDeveloperSettings;
 class UPostHogEventProperties;
@@ -73,16 +74,23 @@ public:
 
 	void Flush();
 
-	// Rotating in-memory session id, independent of DistinctId. Never generated before
-	// collection is permitted.
+	// Rotating in-memory session id, independent of the persistent distinct id. Never
+	// generated before collection is permitted.
 	FString GetSessionId();
-	const FString& GetDistinctId() const { return DistinctId; }
+
+	// Effective distinct id (identified id if known, else the persistent anonymous id).
+	// Empty when collection is not permitted.
+	const FString& GetDistinctId() const;
 	FPostHogEventQueue* GetEventQueue() const { return EventQueue.Get(); }
 	int32 GetQueuedEventCount() const;
 
 	int32 GetStorageProviderCreationCount() const { return StorageProviderCreationCount; }
 	int32 GetTransportCreationCount() const { return TransportCreationCount; }
-	int32 GetDistinctIdCreationCount() const { return DistinctIdCreationCount; }
+
+	// Number of times EnableCollection has loaded or created the identity manager (once per
+	// successful opt-in transition), not the number of distinct anonymous ids generated: the
+	// persisted anonymous id is reused across a disable/enable cycle against the same storage.
+	int32 GetIdentityManagerLoadCount() const { return IdentityManagerLoadCount; }
 
 private:
 	bool EnableCollection(const UPostHogDeveloperSettings& Settings, FString& OutFailureReason);
@@ -103,15 +111,15 @@ private:
 	FPostHogBeforeSendDelegate BeforeSend;
 
 	bool bIsOptedIn = false;
-	FString DistinctId;
 
 	TUniquePtr<IPostHogStorageProvider> StorageProvider;
 	TUniquePtr<IPostHogBatchTransport> Transport;
 	TUniquePtr<FPostHogEventQueue> EventQueue;
+	TUniquePtr<FPostHogIdentityManager> IdentityManager;
 	TUniquePtr<FPostHogSessionManager> SessionManager;
 	TUniquePtr<FPostHogApplicationLifecycleHandler> LifecycleHandler;
 
 	int32 StorageProviderCreationCount = 0;
 	int32 TransportCreationCount = 0;
-	int32 DistinctIdCreationCount = 0;
+	int32 IdentityManagerLoadCount = 0;
 };
