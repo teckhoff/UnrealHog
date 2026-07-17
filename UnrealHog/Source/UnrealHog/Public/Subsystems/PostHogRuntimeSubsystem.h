@@ -11,6 +11,7 @@
 class UPostHogEventProperties;
 class UPostHogEventPropertyArray;
 class FPostHogConsentController;
+class FPostHogExceptionCapture;
 /**
  *
  */
@@ -99,8 +100,10 @@ private:
 	void FlushQueuedEvents();
 	void StartFlushTimer();
 	void StopFlushTimer();
+	void UpdateExceptionCaptureRegistration();
 
 	FTimerHandle FlushTimerHandle;
 
 	TUniquePtr<FPostHogConsentController> ConsentController;
+	TUniquePtr<FPostHogExceptionCapture> ExceptionCapture;
 };

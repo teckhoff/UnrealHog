@@ -160,6 +160,15 @@ public:
 	bool ShouldCaptureApplicationLifecycleEvents() const { return bCaptureApplicationLifecycleEvents; }
 
 	UFUNCTION()
+	bool ShouldCaptureExceptions() const { return bCaptureExceptions; }
+
+	UFUNCTION()
+	bool ShouldCaptureExceptionsInEditor() const { return bCaptureExceptionsInEditor; }
+
+	UFUNCTION()
+	int32 GetExceptionDebounceIntervalMs() const { return ExceptionDebounceIntervalMs; }
+
+	UFUNCTION()
 	bool ShouldReuseAnonymousId() const { return bReuseAnonymousId; }
 
 	UFUNCTION()

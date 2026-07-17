@@ -59,7 +59,7 @@ EP-017 is verified separately when the feature-flag subsystem exists.
 |[EP-012](EP-012-persistent-super-properties.md)|Register/unregister and precedence|EP-003, EP-004|✅|
 |[EP-013](EP-013-screen-event-api.md)|`$screen` public producer|EP-003, EP-004|✅|
 |[EP-014](EP-014-manual-exception-events.md)|Manual `$exception` capture|EP-003, EP-004, EP-007|✅|
-|[EP-015](EP-015-automatic-exception-capture.md)|Configured automatic exception ingress|EP-014|⏳|
+|[EP-015](EP-015-automatic-exception-capture.md)|Configured automatic exception ingress|EP-014|✅|
 |[EP-016](EP-016-application-lifecycle-events.md)|Installed/updated/opened/backgrounded events|EP-003, EP-004, EP-009|✅|
 |[EP-017](EP-017-feature-flag-called-events.md)|Deduplicated `$feature\_flag\_called` events|EP-003, EP-004, EP-007, external feature-flag subsystem|❌|
 |[EP-018](EP-018-persisted-event-rehydration.md)|Lossless stored-event deserialization|None|✅|
