@@ -2,7 +2,7 @@
 
 ## Status and dependencies
 
-- **State:** Ready
+- **State:** Completed
 - **Blocked by:** EP-001, EP-019, EP-021
 - **Blocks:** EP-023, EP-026, EP-027, EP-028, EP-029
 - **Parity row:** Unity `FlushCoroutine` multi-batch behavior

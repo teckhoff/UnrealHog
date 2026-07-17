@@ -56,6 +56,8 @@ namespace
 	const FString SeedEventId1 = TEXT("00000000-0000-7000-8000-000000000001");
 	const FString SeedEventId2 = TEXT("00000000-0000-7000-8000-000000000002");
 	const FString SeedEventId3 = TEXT("00000000-0000-7000-8000-000000000003");
+	const FString SeedEventId4 = TEXT("00000000-0000-7000-8000-000000000004");
+	const FString SeedEventId5 = TEXT("00000000-0000-7000-8000-000000000005");
 	const FString CorruptFirstEventId = TEXT("00000000-0000-3000-8000-000000000001");
 	const FString LegacyUuidV4EventId = TEXT("00000000-0000-4000-8000-000000000002");
 
@@ -212,6 +214,47 @@ namespace
 		}
 	}
 
+	TArray<FString> ExtractPayloadUuids(const FPostHogBatchPayload& Payload)
+	{
+		TArray<FString> Uuids;
+		const TSharedRef<FJsonObject> PayloadJson = Payload.ToJsonObject();
+		const TArray<TSharedPtr<FJsonValue>>* BatchArray = nullptr;
+		if (!PayloadJson->TryGetArrayField(TEXT("batch"), BatchArray) || BatchArray == nullptr)
+		{
+			return Uuids;
+		}
+
+		Uuids.Reserve(BatchArray->Num());
+		for (const TSharedPtr<FJsonValue>& BatchValue : *BatchArray)
+		{
+			FString Uuid;
+			TSharedPtr<FJsonObject> EventObject;
+			if (BatchValue.IsValid())
+			{
+				EventObject = BatchValue->AsObject();
+			}
+			if (EventObject.IsValid())
+			{
+				EventObject->TryGetStringField(TEXT("uuid"), Uuid);
+			}
+			Uuids.Add(Uuid);
+		}
+
+		return Uuids;
+	}
+
+	void CheckPayloadUuids(FAutomationTestBase& Test, const FPostHogBatchPayload& Payload, const TArray<FString>& ExpectedUuids, const FString& Context)
+	{
+		const TArray<FString> ActualUuids = ExtractPayloadUuids(Payload);
+		Test.TestEqual(*FString::Printf(TEXT("%s: uuid count"), *Context), ActualUuids.Num(), ExpectedUuids.Num());
+
+		const int32 CompareCount = FMath::Min(ActualUuids.Num(), ExpectedUuids.Num());
+		for (int32 Index = 0; Index < CompareCount; ++Index)
+		{
+			Test.TestEqual(*FString::Printf(TEXT("%s: uuid %d"), *Context, Index), ActualUuids[Index], ExpectedUuids[Index]);
+		}
+	}
+
 	// Asserts the uuid, event, distinct_id, timestamp, and every flat string property in Actual
 	// match Expected, so restart/mix tests can prove fields survived a persist/rehydrate round trip.
 	void CheckEventJsonFieldsMatch(FAutomationTestBase& Test, const TSharedPtr<FJsonObject>& Actual, const TSharedRef<FJsonObject>& Expected, const FString& Context)
@@ -256,6 +299,314 @@ namespace
 			}
 		}
 	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueEmptyFlushCompletesWithoutRequestTest, "UnrealHog.Events.EventQueue.EmptyFlushCompletesWithoutRequest", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogEventQueueEmptyFlushCompletesWithoutRequestTest::RunTest(const FString& Parameters)
+{
+	FControllableQueueStorageProvider Storage;
+	FPostHogFakeBatchTransport Transport;
+	TOptional<EPostHogEventQueueFlushResult> Result;
+
+	FPostHogEventQueue Queue(Storage, Transport, TEXT("test-api-key"), 100, 2, 100);
+	Queue.Flush([&Result](EPostHogEventQueueFlushResult InResult)
+	{
+		Result = InResult;
+	});
+
+	TestEqual(TEXT("No request created for empty flush"), Transport.GetTotalSendCount(), 0);
+	TestTrue(TEXT("Empty flush completed synchronously"), Result.IsSet());
+	if (Result.IsSet())
+	{
+		TestEqual(TEXT("Empty flush result"), Result.GetValue(), EPostHogEventQueueFlushResult::Empty);
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueExactBoundarySingleBatchCompletesTest, "UnrealHog.Events.EventQueue.ExactBoundarySingleBatchCompletes", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogEventQueueExactBoundarySingleBatchCompletesTest::RunTest(const FString& Parameters)
+{
+	FControllableQueueStorageProvider Storage;
+	FPostHogFakeBatchTransport Transport;
+	TOptional<EPostHogEventQueueFlushResult> Result;
+
+	Storage.SeedEvent(SeedEventId1);
+	Storage.SeedEvent(SeedEventId2);
+
+	FPostHogEventQueue Queue(Storage, Transport, TEXT("test-api-key"), 100, 2, 100);
+	Queue.Flush([&Result](EPostHogEventQueueFlushResult InResult)
+	{
+		Result = InResult;
+	});
+
+	TestEqual(TEXT("Exactly one pending request"), Transport.GetPendingCount(), 1);
+	TestEqual(TEXT("Exactly one request sent"), Transport.GetTotalSendCount(), 1);
+	CheckPayloadUuids(*this, Transport.GetPayloadAt(0), { SeedEventId1, SeedEventId2 }, TEXT("Exact boundary batch"));
+	TestEqual(TEXT("No delete before request success"), Storage.DeleteAttempts, 0);
+	TestFalse(TEXT("Flush callback waits for request completion"), Result.IsSet());
+
+	Transport.CompleteLast(true, 200, TEXT(""));
+
+	TestEqual(TEXT("No pending request after exact-boundary drain"), Transport.GetPendingCount(), 0);
+	TestEqual(TEXT("No extra request after exact-boundary drain"), Transport.GetTotalSendCount(), 1);
+	TestEqual(TEXT("Successful send deletes both records"), Storage.DeleteAttempts, 2);
+	TestEqual(TEXT("Queue drained"), Queue.Num(), 0);
+	TestTrue(TEXT("Flush completed"), Result.IsSet());
+	if (Result.IsSet())
+	{
+		TestEqual(TEXT("Flush result"), Result.GetValue(), EPostHogEventQueueFlushResult::Drained);
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueFlushDrainsMultipleBatchesInOrderTest, "UnrealHog.Events.EventQueue.FlushDrainsMultipleBatchesInOrder", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogEventQueueFlushDrainsMultipleBatchesInOrderTest::RunTest(const FString& Parameters)
+{
+	FControllableQueueStorageProvider Storage;
+	FPostHogFakeBatchTransport Transport;
+	TOptional<EPostHogEventQueueFlushResult> Result;
+
+	Storage.SeedEvent(SeedEventId1);
+	Storage.SeedEvent(SeedEventId2);
+	Storage.SeedEvent(SeedEventId3);
+	Storage.SeedEvent(SeedEventId4);
+	Storage.SeedEvent(SeedEventId5);
+
+	FPostHogEventQueue Queue(Storage, Transport, TEXT("test-api-key"), 100, 2, 100);
+	Queue.Flush([&Result](EPostHogEventQueueFlushResult InResult)
+	{
+		Result = InResult;
+	});
+
+	TestEqual(TEXT("Only first batch pending"), Transport.GetPendingCount(), 1);
+	TestEqual(TEXT("First batch sent"), Transport.GetTotalSendCount(), 1);
+	CheckPayloadUuids(*this, Transport.GetPayloadAt(0), { SeedEventId1, SeedEventId2 }, TEXT("First batch"));
+	TestEqual(TEXT("No delete before first success"), Storage.DeleteAttempts, 0);
+
+	Transport.CompleteLast(true, 200, TEXT(""));
+	TestEqual(TEXT("Only second batch pending"), Transport.GetPendingCount(), 1);
+	TestEqual(TEXT("Second batch sent after first success"), Transport.GetTotalSendCount(), 2);
+	CheckPayloadUuids(*this, Transport.GetPayloadAt(1), { SeedEventId3, SeedEventId4 }, TEXT("Second batch"));
+	TestEqual(TEXT("First batch deleted after success"), Storage.DeleteAttempts, 2);
+	TestFalse(TEXT("Flush still active after first success"), Result.IsSet());
+
+	Transport.CompleteLast(true, 200, TEXT(""));
+	TestEqual(TEXT("Only third batch pending"), Transport.GetPendingCount(), 1);
+	TestEqual(TEXT("Third batch sent after second success"), Transport.GetTotalSendCount(), 3);
+	CheckPayloadUuids(*this, Transport.GetPayloadAt(2), { SeedEventId5 }, TEXT("Third batch"));
+	TestEqual(TEXT("Second batch deleted after success"), Storage.DeleteAttempts, 4);
+
+	Transport.CompleteLast(true, 200, TEXT(""));
+	TestEqual(TEXT("No pending requests after drain"), Transport.GetPendingCount(), 0);
+	TestEqual(TEXT("No duplicate requests"), Transport.GetTotalSendCount(), 3);
+	TestEqual(TEXT("All records deleted after success"), Storage.DeleteAttempts, 5);
+	TestEqual(TEXT("Queue empty after drain"), Queue.Num(), 0);
+	CheckEventIds(*this, Storage, {}, TEXT("Multi-batch final storage"));
+	TestTrue(TEXT("Flush completed"), Result.IsSet());
+	if (Result.IsSet())
+	{
+		TestEqual(TEXT("Flush result"), Result.GetValue(), EPostHogEventQueueFlushResult::Drained);
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueAlreadyFlushingCoalescesCompletionWithoutSecondSendTest, "UnrealHog.Events.EventQueue.AlreadyFlushingCoalescesCompletionWithoutSecondSend", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogEventQueueAlreadyFlushingCoalescesCompletionWithoutSecondSendTest::RunTest(const FString& Parameters)
+{
+	FControllableQueueStorageProvider Storage;
+	FPostHogFakeBatchTransport Transport;
+	TOptional<EPostHogEventQueueFlushResult> FirstResult;
+	TOptional<EPostHogEventQueueFlushResult> SecondResult;
+
+	Storage.SeedEvent(SeedEventId1);
+	Storage.SeedEvent(SeedEventId2);
+	Storage.SeedEvent(SeedEventId3);
+
+	FPostHogEventQueue Queue(Storage, Transport, TEXT("test-api-key"), 100, 2, 100);
+	Queue.Flush([&FirstResult](EPostHogEventQueueFlushResult InResult)
+	{
+		FirstResult = InResult;
+	});
+	Queue.Flush([&SecondResult](EPostHogEventQueueFlushResult InResult)
+	{
+		SecondResult = InResult;
+	});
+
+	TestEqual(TEXT("Concurrent flush creates no second pending request"), Transport.GetPendingCount(), 1);
+	TestEqual(TEXT("Concurrent flush creates no extra send"), Transport.GetTotalSendCount(), 1);
+	TestFalse(TEXT("First callback pending while request active"), FirstResult.IsSet());
+	TestFalse(TEXT("Second callback pending while request active"), SecondResult.IsSet());
+
+	Transport.CompleteLast(true, 200, TEXT(""));
+	TestEqual(TEXT("Second batch scheduled after first success"), Transport.GetPendingCount(), 1);
+	TestEqual(TEXT("Second batch is the only additional send"), Transport.GetTotalSendCount(), 2);
+
+	Transport.CompleteLast(true, 200, TEXT(""));
+	TestEqual(TEXT("Flush fully drained"), Queue.Num(), 0);
+	TestEqual(TEXT("No pending requests after coalesced drain"), Transport.GetPendingCount(), 0);
+	TestTrue(TEXT("First callback completed"), FirstResult.IsSet());
+	TestTrue(TEXT("Second callback completed"), SecondResult.IsSet());
+	if (FirstResult.IsSet())
+	{
+		TestEqual(TEXT("First callback result"), FirstResult.GetValue(), EPostHogEventQueueFlushResult::Drained);
+	}
+	if (SecondResult.IsSet())
+	{
+		TestEqual(TEXT("Second callback result"), SecondResult.GetValue(), EPostHogEventQueueFlushResult::Drained);
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueFailureStopsBeforeLaterBatchAndPreservesRecordsTest, "UnrealHog.Events.EventQueue.FailureStopsBeforeLaterBatchAndPreservesRecords", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogEventQueueFailureStopsBeforeLaterBatchAndPreservesRecordsTest::RunTest(const FString& Parameters)
+{
+	FControllableQueueStorageProvider Storage;
+	FPostHogFakeBatchTransport Transport;
+	TOptional<EPostHogEventQueueFlushResult> Result;
+
+	Storage.SeedEvent(SeedEventId1);
+	Storage.SeedEvent(SeedEventId2);
+	Storage.SeedEvent(SeedEventId3);
+
+	FPostHogEventQueue Queue(Storage, Transport, TEXT("test-api-key"), 100, 2, 100);
+	Queue.Flush([&Result](EPostHogEventQueueFlushResult InResult)
+	{
+		Result = InResult;
+	});
+
+	CheckPayloadUuids(*this, Transport.GetPayloadAt(0), { SeedEventId1, SeedEventId2 }, TEXT("Failed first batch"));
+	Transport.CompleteLast(false, 500, TEXT(""));
+
+	TestEqual(TEXT("Failed request sends no later batch"), Transport.GetTotalSendCount(), 1);
+	TestEqual(TEXT("No pending request after failure"), Transport.GetPendingCount(), 0);
+	TestEqual(TEXT("Failed request deletes no records"), Storage.DeleteAttempts, 0);
+	CheckEventIds(*this, Storage, { SeedEventId1, SeedEventId2, SeedEventId3 }, TEXT("Failure final storage"));
+	TestTrue(TEXT("Failure result completed"), Result.IsSet());
+	if (Result.IsSet())
+	{
+		TestEqual(TEXT("Failure result"), Result.GetValue(), EPostHogEventQueueFlushResult::Failed);
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueEnqueueDuringFlushDrainedByActiveOperationTest, "UnrealHog.Events.EventQueue.EnqueueDuringFlushDrainedByActiveOperation", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogEventQueueEnqueueDuringFlushDrainedByActiveOperationTest::RunTest(const FString& Parameters)
+{
+	FControllableQueueStorageProvider Storage;
+	FPostHogFakeBatchTransport Transport;
+	TOptional<EPostHogEventQueueFlushResult> Result;
+
+	Storage.SeedEvent(SeedEventId1);
+	Storage.SeedEvent(SeedEventId2);
+
+	FPostHogEventQueue Queue(Storage, Transport, TEXT("test-api-key"), 100, 2, 100);
+	Queue.Flush([&Result](EPostHogEventQueueFlushResult InResult)
+	{
+		Result = InResult;
+	});
+
+	const FPostHogEvent EnqueuedEvent = MakeTestEvent(TEXT("during-flush"));
+	const FString EnqueuedEventId = EnqueuedEvent.GetEventId();
+	TestEqual(TEXT("Enqueue during active flush succeeds"), Queue.Enqueue(EnqueuedEvent), EPostHogEventQueueEnqueueResult::Enqueued);
+	TestEqual(TEXT("Enqueue during active flush does not overlap request"), Transport.GetPendingCount(), 1);
+	TestEqual(TEXT("Enqueue during active flush creates no extra send yet"), Transport.GetTotalSendCount(), 1);
+
+	Transport.CompleteLast(true, 200, TEXT(""));
+	TestEqual(TEXT("Active flush picks up enqueued event"), Transport.GetPendingCount(), 1);
+	TestEqual(TEXT("Enqueued event sent as next batch"), Transport.GetTotalSendCount(), 2);
+	CheckPayloadUuids(*this, Transport.GetPayloadAt(1), { EnqueuedEventId }, TEXT("Enqueued during flush batch"));
+
+	Transport.CompleteLast(true, 200, TEXT(""));
+	TestEqual(TEXT("Queue drained including enqueued event"), Queue.Num(), 0);
+	TestEqual(TEXT("No overlapping requests after enqueue drain"), Transport.GetPendingCount(), 0);
+	TestTrue(TEXT("Flush completed"), Result.IsSet());
+	if (Result.IsSet())
+	{
+		TestEqual(TEXT("Flush result"), Result.GetValue(), EPostHogEventQueueFlushResult::Drained);
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueCancellationCompletesFlushAndPreventsNextBatchTest, "UnrealHog.Events.EventQueue.CancellationCompletesFlushAndPreventsNextBatch", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogEventQueueCancellationCompletesFlushAndPreventsNextBatchTest::RunTest(const FString& Parameters)
+{
+	FControllableQueueStorageProvider Storage;
+	FPostHogFakeBatchTransport Transport;
+	TOptional<EPostHogEventQueueFlushResult> Result;
+
+	Storage.SeedEvent(SeedEventId1);
+	Storage.SeedEvent(SeedEventId2);
+	Storage.SeedEvent(SeedEventId3);
+
+	FPostHogEventQueue Queue(Storage, Transport, TEXT("test-api-key"), 100, 2, 100);
+	Queue.Flush([&Result](EPostHogEventQueueFlushResult InResult)
+	{
+		Result = InResult;
+	});
+
+	Queue.CancelInFlightRequest();
+	TestTrue(TEXT("Request cancelled"), Transport.IsLastRequestCancelled());
+	TestTrue(TEXT("Cancellation completes flush"), Result.IsSet());
+	if (Result.IsSet())
+	{
+		TestEqual(TEXT("Cancellation result"), Result.GetValue(), EPostHogEventQueueFlushResult::Cancelled);
+	}
+
+	Transport.CompleteLast(true, 200, TEXT(""));
+	TestEqual(TEXT("Late completion after cancellation sends no next batch"), Transport.GetTotalSendCount(), 1);
+	TestEqual(TEXT("No pending request after cancelled late completion"), Transport.GetPendingCount(), 0);
+	TestEqual(TEXT("Cancellation deletes no records"), Storage.DeleteAttempts, 0);
+	CheckEventIds(*this, Storage, { SeedEventId1, SeedEventId2, SeedEventId3 }, TEXT("Cancellation final storage"));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueDeleteFailureStopsDrainAndPreservesFailedAndLaterRecordsTest, "UnrealHog.Events.EventQueue.DeleteFailureStopsDrainAndPreservesFailedAndLaterRecords", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogEventQueueDeleteFailureStopsDrainAndPreservesFailedAndLaterRecordsTest::RunTest(const FString& Parameters)
+{
+	FControllableQueueStorageProvider Storage;
+	FPostHogFakeBatchTransport Transport;
+	TOptional<EPostHogEventQueueFlushResult> Result;
+
+	Storage.SeedEvent(SeedEventId1);
+	Storage.SeedEvent(SeedEventId2);
+	Storage.SeedEvent(SeedEventId3);
+	Storage.SetFailNextDelete(true);
+
+	FPostHogEventQueue Queue(Storage, Transport, TEXT("test-api-key"), 100, 2, 100);
+	Queue.Flush([&Result](EPostHogEventQueueFlushResult InResult)
+	{
+		Result = InResult;
+	});
+
+	Transport.CompleteLast(true, 200, TEXT(""));
+
+	TestEqual(TEXT("Delete failure sends no later batch"), Transport.GetTotalSendCount(), 1);
+	TestEqual(TEXT("No pending request after delete failure"), Transport.GetPendingCount(), 0);
+	TestEqual(TEXT("Delete failure attempted once"), Storage.DeleteAttempts, 1);
+	TestEqual(TEXT("Failed delete targeted first sent id"), Storage.LastDeletedEventId, SeedEventId1);
+	CheckEventIds(*this, Storage, { SeedEventId1, SeedEventId2, SeedEventId3 }, TEXT("Delete failure final storage"));
+	TestTrue(TEXT("Delete failure completes flush"), Result.IsSet());
+	if (Result.IsSet())
+	{
+		TestEqual(TEXT("Delete failure result"), Result.GetValue(), EPostHogEventQueueFlushResult::ProgressBlocked);
+	}
+
+	return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueCorruptFirstRecordDeletedAndLaterRecordsFillBatchTest, "UnrealHog.Events.EventQueue.CorruptFirstRecordDeletedAndLaterRecordsFillBatch", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)

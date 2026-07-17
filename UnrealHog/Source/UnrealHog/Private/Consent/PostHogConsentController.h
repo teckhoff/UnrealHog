@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Events/PostHogBeforeSend.h"
+#include "Events/PostHogEventQueue.h"
 #include "Events/PostHogExceptionInput.h"
 #include "Lifecycle/PostHogApplicationLifecycleHandler.h"
 #include "PostHogDeveloperSettings.h"
@@ -9,7 +10,6 @@
 
 class IPostHogStorageProvider;
 class IPostHogBatchTransport;
-class FPostHogEventQueue;
 class FPostHogApplicationLifecycleHandler;
 class FPostHogIdentityManager;
 class FPostHogSessionManager;
@@ -125,7 +125,7 @@ public:
 	// Removes all registered super properties. Safe no-op when not opted in.
 	void ClearSuperProperties();
 
-	void Flush();
+	void Flush(FPostHogEventQueueFlushComplete OnComplete = {});
 
 	// Rotating in-memory session id, independent of the persistent distinct id. Never
 	// generated before collection is permitted.
