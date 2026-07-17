@@ -245,4 +245,131 @@ bool FPostHogIdentityManagerResetReusesAnonymousIdTest::RunTest(const FString& P
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogIdentityManagerSetGroupBlankNoOpTest, "UnrealHog.Identity.IdentityManager.SetGroupBlankTypeOrKeyIsNoOp", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogIdentityManagerSetGroupBlankNoOpTest::RunTest(const FString& Parameters)
+{
+	FPostHogInMemoryStorageProvider Storage;
+	FPostHogIdentityManager Manager;
+	Manager.LoadOrCreate(Storage);
+
+	FString StateJsonBefore;
+	Storage.LoadState(TEXT("identity"), StateJsonBefore);
+
+	TestFalse(TEXT("Blank group type rejected"), Manager.SetGroup(TEXT("  "), TEXT("acme"), Storage));
+	TestFalse(TEXT("Blank group key rejected"), Manager.SetGroup(TEXT("company"), TEXT(""), Storage));
+
+	TestEqual(TEXT("No group membership recorded"), Manager.GetGroups().Num(), 0);
+
+	FString StateJsonAfter;
+	Storage.LoadState(TEXT("identity"), StateJsonAfter);
+	TestEqual(TEXT("No additional persistence occurred"), StateJsonAfter, StateJsonBefore);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogIdentityManagerSetGroupPersistsAcrossRestartTest, "UnrealHog.Identity.IdentityManager.SetGroupPersistsAcrossRestart", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogIdentityManagerSetGroupPersistsAcrossRestartTest::RunTest(const FString& Parameters)
+{
+	FPostHogInMemoryStorageProvider Storage;
+	FPostHogIdentityManager FirstManager;
+	FirstManager.LoadOrCreate(Storage);
+
+	TestTrue(TEXT("SetGroup succeeds"), FirstManager.SetGroup(TEXT("company"), TEXT("acme"), Storage));
+
+	FPostHogIdentityManager SecondManager;
+	SecondManager.LoadOrCreate(Storage);
+
+	const TMap<FString, FString> Groups = SecondManager.GetGroups();
+	TestEqual(TEXT("Reloaded manager has one group"), Groups.Num(), 1);
+	const FString* CompanyKey = Groups.Find(TEXT("company"));
+	if (TestNotNull(TEXT("Reloaded manager has company group"), CompanyKey))
+	{
+		TestEqual(TEXT("Reloaded company group key is correct"), *CompanyKey, FString(TEXT("acme")));
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogIdentityManagerSetGroupRetainsOtherTypesTest, "UnrealHog.Identity.IdentityManager.SetGroupRetainsOtherGroupTypes", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogIdentityManagerSetGroupRetainsOtherTypesTest::RunTest(const FString& Parameters)
+{
+	FPostHogInMemoryStorageProvider Storage;
+	FPostHogIdentityManager Manager;
+	Manager.LoadOrCreate(Storage);
+
+	Manager.SetGroup(TEXT("company"), TEXT("acme"), Storage);
+	Manager.SetGroup(TEXT("team"), TEXT("eng"), Storage);
+
+	TMap<FString, FString> Groups = Manager.GetGroups();
+	TestEqual(TEXT("Both group types retained"), Groups.Num(), 2);
+	TestEqual(TEXT("Company group unaffected by team update"), Groups.FindRef(TEXT("company")), FString(TEXT("acme")));
+	TestEqual(TEXT("Team group set correctly"), Groups.FindRef(TEXT("team")), FString(TEXT("eng")));
+
+	Manager.SetGroup(TEXT("company"), TEXT("other-corp"), Storage);
+	Groups = Manager.GetGroups();
+	TestEqual(TEXT("Still two group types after replacement"), Groups.Num(), 2);
+	TestEqual(TEXT("Company group replaced in place"), Groups.FindRef(TEXT("company")), FString(TEXT("other-corp")));
+	TestEqual(TEXT("Team group untouched by company replacement"), Groups.FindRef(TEXT("team")), FString(TEXT("eng")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogIdentityManagerClearGroupsTest, "UnrealHog.Identity.IdentityManager.ClearGroupsEmptiesAndPersists", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogIdentityManagerClearGroupsTest::RunTest(const FString& Parameters)
+{
+	FPostHogInMemoryStorageProvider Storage;
+	FPostHogIdentityManager Manager;
+	Manager.LoadOrCreate(Storage);
+	Manager.SetGroup(TEXT("company"), TEXT("acme"), Storage);
+
+	Manager.ClearGroups(Storage);
+
+	TestEqual(TEXT("Groups empty after ClearGroups"), Manager.GetGroups().Num(), 0);
+
+	FPostHogIdentityManager ReloadedManager;
+	ReloadedManager.LoadOrCreate(Storage);
+	TestEqual(TEXT("Cleared groups persisted across restart"), ReloadedManager.GetGroups().Num(), 0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogIdentityManagerResetClearsGroupsTest, "UnrealHog.Identity.IdentityManager.ResetClearsGroups", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogIdentityManagerResetClearsGroupsTest::RunTest(const FString& Parameters)
+{
+	FPostHogInMemoryStorageProvider Storage;
+	FPostHogIdentityManager Manager;
+	Manager.LoadOrCreate(Storage);
+	Manager.SetGroup(TEXT("company"), TEXT("acme"), Storage);
+
+	Manager.Reset(Storage, /*bReuseAnonymousId=*/false);
+
+	TestEqual(TEXT("Groups empty after Reset"), Manager.GetGroups().Num(), 0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogIdentityManagerGetGroupsIsDeepCopyTest, "UnrealHog.Identity.IdentityManager.GetGroupsReturnsDeepCopy", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogIdentityManagerGetGroupsIsDeepCopyTest::RunTest(const FString& Parameters)
+{
+	FPostHogInMemoryStorageProvider Storage;
+	FPostHogIdentityManager Manager;
+	Manager.LoadOrCreate(Storage);
+	Manager.SetGroup(TEXT("company"), TEXT("acme"), Storage);
+
+	TMap<FString, FString> Groups = Manager.GetGroups();
+	Groups.Add(TEXT("team"), TEXT("eng"));
+	Groups.Remove(TEXT("company"));
+
+	TestEqual(TEXT("Manager state unaffected by mutating returned map"), Manager.GetGroups().Num(), 1);
+	TestEqual(TEXT("Manager still has original company group"), Manager.GetGroups().FindRef(TEXT("company")), FString(TEXT("acme")));
+
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

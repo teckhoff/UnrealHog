@@ -99,6 +99,28 @@ void FPostHogIdentityManager::Reset(IPostHogStorageProvider& Storage, bool bReus
 	PersistState(Storage);
 }
 
+bool FPostHogIdentityManager::SetGroup(const FString& GroupType, const FString& GroupKey, IPostHogStorageProvider& Storage)
+{
+	const FString TrimmedType = GroupType.TrimStartAndEnd();
+	const FString TrimmedKey = GroupKey.TrimStartAndEnd();
+
+	if (TrimmedType.IsEmpty() || TrimmedKey.IsEmpty())
+	{
+		return false;
+	}
+
+	Groups.Add(TrimmedType, TrimmedKey);
+	PersistState(Storage);
+
+	return true;
+}
+
+void FPostHogIdentityManager::ClearGroups(IPostHogStorageProvider& Storage)
+{
+	Groups.Empty();
+	PersistState(Storage);
+}
+
 void FPostHogIdentityManager::PersistState(IPostHogStorageProvider& Storage)
 {
 	const TSharedRef<FJsonObject> StateObject = MakeShared<FJsonObject>();

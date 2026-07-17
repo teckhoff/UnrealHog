@@ -255,6 +255,50 @@ EPostHogCaptureResult FPostHogConsentController::Alias(const FString& Alias)
 	return CaptureEvent(TEXT("$create_alias"), Props);
 }
 
+EPostHogCaptureResult FPostHogConsentController::Group(const FString& GroupType, const FString& GroupKey, UPostHogEventProperties* GroupProperties)
+{
+	const FString TrimmedType = GroupType.TrimStartAndEnd();
+	const FString TrimmedKey = GroupKey.TrimStartAndEnd();
+
+	if (TrimmedType.IsEmpty() || TrimmedKey.IsEmpty())
+	{
+#if !WITH_DEV_AUTOMATION_TESTS
+		UE_LOGFMT(LogPostHog, Warning, "PostHog Consent Controller rejected Group with an empty or whitespace-only group type or key.");
+#endif
+		return EPostHogCaptureResult::InvalidEventName;
+	}
+
+	if (!bIsOptedIn || !IdentityManager.IsValid() || !StorageProvider.IsValid())
+	{
+#if !WITH_DEV_AUTOMATION_TESTS
+		UE_LOGFMT(LogPostHog, Warning, "PostHog Consent Controller has no analytics consent; dropping Group for {GroupType}.", TrimmedType);
+#endif
+		return EPostHogCaptureResult::NotOptedIn;
+	}
+
+	IdentityManager->SetGroup(TrimmedType, TrimmedKey, *StorageProvider);
+
+	UPostHogEventProperties* Props = NewObject<UPostHogEventProperties>();
+	Props->AddString(TEXT("$group_type"), TrimmedType);
+	Props->AddString(TEXT("$group_key"), TrimmedKey);
+	if (GroupProperties && GroupProperties->GetProperties().Num() > 0)
+	{
+		Props->AddObject(TEXT("$group_set"), GroupProperties);
+	}
+
+	return CaptureEvent(TEXT("$groupidentify"), Props);
+}
+
+void FPostHogConsentController::ResetGroups()
+{
+	if (!bIsOptedIn || !IdentityManager.IsValid() || !StorageProvider.IsValid())
+	{
+		return;
+	}
+
+	IdentityManager->ClearGroups(*StorageProvider);
+}
+
 bool FPostHogConsentController::RegisterSuperProperty(const FString& Key, const FPostHogEventProperty& Value)
 {
 	if (!bIsOptedIn || !SuperPropertiesManager.IsValid() || !StorageProvider.IsValid())
@@ -305,8 +349,23 @@ void FPostHogConsentController::ApplySuperProperties(FPostHogEvent& Event) const
 
 void FPostHogConsentController::ApplyGroups(FPostHogEvent& Event) const
 {
-	// EP-004 does not implement group storage; a later EP populates persisted group
-	// associations here, after SDK/session precedence is applied.
+	if (!IdentityManager.IsValid())
+	{
+		return;
+	}
+
+	const TMap<FString, FString> CurrentGroups = IdentityManager->GetGroups();
+	if (CurrentGroups.Num() == 0)
+	{
+		return;
+	}
+
+	FJsonObject GroupsObject;
+	for (const auto& GroupPair : CurrentGroups)
+	{
+		GroupsObject.SetStringField(GroupPair.Key, GroupPair.Value);
+	}
+	Event.SetObjectProperty(TEXT("$groups"), GroupsObject);
 }
 
 void FPostHogConsentController::Flush()

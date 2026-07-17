@@ -55,6 +55,12 @@ public:
 	UFUNCTION(BlueprintPure, Category="PostHog|Identity")
 	FString GetDistinctId() const;
 
+	UFUNCTION(BlueprintCallable, Category="PostHog|Groups")
+	void Group(const FString& GroupType, const FString& GroupKey, UPostHogEventProperties* GroupProperties = nullptr);
+
+	UFUNCTION(BlueprintCallable, Category="PostHog|Groups")
+	void ResetGroups();
+
 	UFUNCTION(BlueprintCallable, Category="PostHog|SuperProperties")
 	void RegisterSuperPropertyString(const FString& Key, const FString& StringValue);
 

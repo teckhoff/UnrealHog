@@ -91,6 +91,16 @@ public:
 	// Blank Alias is a safe no-op (no event).
 	EPostHogCaptureResult Alias(const FString& Alias);
 
+	// Blank (or whitespace-only) GroupType/GroupKey is a safe no-op: no state mutation, no
+	// event. Otherwise persists membership via IdentityManager first (so this same event's
+	// $groups reflects it via ApplyGroups), then emits $groupidentify with $group_type,
+	// $group_key, and $group_set (only when GroupProperties is non-null and non-empty).
+	// GroupProperties is deep-copied into the captured event via UPostHogEventProperties::AddObject.
+	EPostHogCaptureResult Group(const FString& GroupType, const FString& GroupKey, UPostHogEventProperties* GroupProperties);
+
+	// Clears all persisted group membership. No event emitted. Safe no-op when not opted in.
+	void ResetGroups();
+
 	// Registers Key=Value as a persisted super property applied to every future event ahead of
 	// call and SDK-owned properties. Returns false (safe no-op) when not opted in.
 	bool RegisterSuperProperty(const FString& Key, const FPostHogEventProperty& Value);
@@ -134,8 +144,9 @@ private:
 
 	void ApplySuperProperties(FPostHogEvent& Event) const;
 
-	// Extension point for a future EP. No-op today: EP-004 does not implement group storage, but
-	// CaptureEvent's precedence order already reserves its slot.
+	// Sets $groups to the current persisted group membership, run last in CaptureEvent's
+	// precedence order so it reflects any Group() call made earlier in the same call chain.
+	// Writes nothing when there is no membership, matching Unity's "only add when non-empty".
 	void ApplyGroups(FPostHogEvent& Event) const;
 
 	FStorageProviderFactory StorageProviderFactory;

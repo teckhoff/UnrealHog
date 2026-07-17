@@ -166,6 +166,26 @@ FString UPostHogRuntimeSubsystem::GetDistinctId() const
 	return ConsentController ? ConsentController->GetDistinctId() : FString();
 }
 
+void UPostHogRuntimeSubsystem::Group(const FString& GroupType, const FString& GroupKey, UPostHogEventProperties* GroupProperties)
+{
+	if (!ConsentController)
+	{
+		return;
+	}
+
+	ConsentController->Group(GroupType, GroupKey, GroupProperties);
+}
+
+void UPostHogRuntimeSubsystem::ResetGroups()
+{
+	if (!ConsentController)
+	{
+		return;
+	}
+
+	ConsentController->ResetGroups();
+}
+
 void UPostHogRuntimeSubsystem::RegisterSuperPropertyString(const FString& Key, const FString& StringValue)
 {
 	if (!ConsentController)
