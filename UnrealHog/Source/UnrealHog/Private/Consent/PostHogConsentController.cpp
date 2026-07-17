@@ -113,7 +113,7 @@ bool FPostHogConsentController::Capture(const FPostHogEvent& Event)
 		return false;
 	}
 
-	return EventQueue->Enqueue(Event);
+	return EventQueue->Enqueue(Event) == EPostHogEventQueueEnqueueResult::Enqueued;
 }
 
 void FPostHogConsentController::SetBeforeSend(FPostHogBeforeSendDelegate InBeforeSend)

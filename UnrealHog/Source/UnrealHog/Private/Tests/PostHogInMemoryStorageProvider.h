@@ -48,6 +48,7 @@ public:
 	{
 		TArray<FString> Ids;
 		Events.GetKeys(Ids);
+		Ids.Sort();
 		return Ids;
 	}
 

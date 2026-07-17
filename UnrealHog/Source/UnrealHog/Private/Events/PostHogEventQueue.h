@@ -5,6 +5,32 @@
 #include "Http/PostHogBatchTransport.h"
 
 class IPostHogStorageProvider;
+
+enum class EPostHogEventQueueEnqueueResult : uint8
+{
+	Enqueued,
+	RejectedCapacityNoEvictableEvent,
+	RejectedCapacityDeleteFailed,
+	RejectedSaveFailed
+};
+
+inline const TCHAR* LexToString(EPostHogEventQueueEnqueueResult Result)
+{
+	switch (Result)
+	{
+	case EPostHogEventQueueEnqueueResult::Enqueued:
+		return TEXT("Enqueued");
+	case EPostHogEventQueueEnqueueResult::RejectedCapacityNoEvictableEvent:
+		return TEXT("RejectedCapacityNoEvictableEvent");
+	case EPostHogEventQueueEnqueueResult::RejectedCapacityDeleteFailed:
+		return TEXT("RejectedCapacityDeleteFailed");
+	case EPostHogEventQueueEnqueueResult::RejectedSaveFailed:
+		return TEXT("RejectedSaveFailed");
+	default:
+		return TEXT("Unknown");
+	}
+}
+
 /**
  *
  */
@@ -16,7 +42,7 @@ public:
 		int32 InMaxQueueSize, int32 InMaxBatchSize, int32 InFlushEventCount);
 	~FPostHogEventQueue();
 
-	bool Enqueue(const FPostHogEvent& Event);
+	EPostHogEventQueueEnqueueResult Enqueue(const FPostHogEvent& Event);
 	void Flush();
 	void CancelInFlightRequest();
 
@@ -37,4 +63,6 @@ private:
 	TSharedPtr<IPostHogBatchRequestHandle> ActiveRequestHandle;
 	bool bIsFlushing = false;
 
+	EPostHogEventQueueEnqueueResult EnsureCapacityForSave(const FString& IncomingEventId);
+	bool TryGetOldestEvictableEventId(FString& OutEventId);
 };

@@ -117,12 +117,18 @@ bool FPostHogFileStorageProvider::DeleteEvent(const FString& EventId)
 
 	WritePipe.WaitUntilEmpty();
 
+	const bool bDeleted = DeleteFileIfExists(GetEventFilePath(EventId));
+	if (!bDeleted)
+	{
+		return false;
+	}
+
 	{
 		FScopeLock Lock(&IndexLock);
 		EventIdIndex.Remove(EventId);
 	}
 
-	return DeleteFileIfExists(GetEventFilePath(EventId));
+	return true;
 }
 
 bool FPostHogFileStorageProvider::ClearEvents()
@@ -132,15 +138,23 @@ bool FPostHogFileStorageProvider::ClearEvents()
 	TArray<FString> EventIdsToDelete;
 	{
 		FScopeLock Lock(&IndexLock);
-		EventIdsToDelete = MoveTemp(EventIdIndex);
-		EventIdIndex.Reset();
+		EventIdsToDelete = EventIdIndex;
 	}
 
 	bool bAllDeleted = true;
 
 	for (const FString& EventId : EventIdsToDelete)
 	{
-		bAllDeleted &= DeleteFileIfExists(GetEventFilePath(EventId));
+		const bool bDeleted = DeleteFileIfExists(GetEventFilePath(EventId));
+		if (bDeleted)
+		{
+			FScopeLock Lock(&IndexLock);
+			EventIdIndex.Remove(EventId);
+		}
+		else
+		{
+			bAllDeleted = false;
+		}
 	}
 
 	return bAllDeleted;
