@@ -89,6 +89,16 @@ void UPostHogRuntimeSubsystem::CaptureEvent(const FString& EventName, UPostHogEv
 	}
 }
 
+void UPostHogRuntimeSubsystem::CaptureException(const FPostHogExceptionInput& Exception, UPostHogEventProperties* Properties)
+{
+	if (!ConsentController)
+	{
+		return;
+	}
+
+	ConsentController->CaptureException(Exception, Properties);
+}
+
 UPostHogEventProperties* UPostHogRuntimeSubsystem::CreateEventProperties()
 {
 	return NewObject<UPostHogEventProperties>(this);
