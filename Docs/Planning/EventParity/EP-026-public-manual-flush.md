@@ -26,6 +26,7 @@ Allow Blueprint and C++ callers to request a complete asynchronous queue drain s
 - Blueprint metadata and logging match related subsystem APIs.
 - Windows Automation covers acceptance/result behavior with fake transport.
 - Run `Scripts/ci-paths.sh` first if the required `CI` symlinks are missing from the worktree, then run `Scripts/run-windows-tests.sh`; the Unreal Automation tests must pass and their output must be recorded as a Zeroshot validation gate.
+- When this task is completed, update its **State** to `Completed` and replace its status icon in `Docs/Planning/EventParity/README.md` with `✅`.
 
 ## Exclusions
 

@@ -27,6 +27,7 @@ Connect supported Unreal exception/error signals to EP-014 without duplicate sub
 - Handler removal is proven before subsystem destruction.
 - Windows build and Automation run against Unreal delegates or a private adapter seam, never by crashing the test process.
 - Run `Scripts/ci-paths.sh` first if the required `CI` symlinks are missing from the worktree, then run `Scripts/run-windows-tests.sh`; the Unreal Automation tests must pass and their output must be recorded as a Zeroshot validation gate.
+- When this task is completed, update its **State** to `Completed` and replace its status icon in `Docs/Planning/EventParity/README.md` with `✅`.
 
 ## Exclusions
 

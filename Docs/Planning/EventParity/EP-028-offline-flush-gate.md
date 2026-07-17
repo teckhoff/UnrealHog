@@ -27,6 +27,7 @@ Avoid starting HTTP delivery when Unreal can authoritatively report that the pla
 - The reachability adapter has no public SDK surface and tests use a fake provider.
 - The Windows-side Unreal Automation gate verifies any platform delegate/module integration in addition to the WSL static checks.
 - Run `Scripts/ci-paths.sh` first if the required `CI` symlinks are missing from the worktree, then run `Scripts/run-windows-tests.sh`; the Unreal Automation tests must pass and their output must be recorded as a Zeroshot validation gate.
+- When this task is completed, update its **State** to `Completed` and replace its status icon in `Docs/Planning/EventParity/README.md` with `✅`.
 
 ## Exclusions
 

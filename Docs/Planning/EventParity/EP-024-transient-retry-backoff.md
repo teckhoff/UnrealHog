@@ -27,6 +27,7 @@ Pause repeated transient delivery attempts using Unity's deterministic linear ba
 - Permanent failures do not enter retry backoff.
 - No test uses wall-clock sleeping.
 - Run `Scripts/ci-paths.sh` first if the required `CI` symlinks are missing from the worktree, then run `Scripts/run-windows-tests.sh`; the Unreal Automation tests must pass and their output must be recorded as a Zeroshot validation gate.
+- When this task is completed, update its **State** to `Completed` and replace its status icon in `Docs/Planning/EventParity/README.md` with `✅`.
 
 ## Exclusions
 

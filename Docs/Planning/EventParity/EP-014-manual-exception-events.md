@@ -26,6 +26,7 @@ Convert an explicitly supplied Unreal error/stack representation into the PostHo
 - Consent, profile, session, before-send, persistence, and retry behavior are inherited rather than reimplemented.
 - Windows Automation uses fixtures and no deliberate process crash.
 - Run `Scripts/ci-paths.sh` first if the required `CI` symlinks are missing from the worktree, then run `Scripts/run-windows-tests.sh`; the Unreal Automation tests must pass and their output must be recorded as a Zeroshot validation gate.
+- When this task is completed, update its **State** to `Completed` and replace its status icon in `Docs/Planning/EventParity/README.md` with `✅`.
 
 ## Exclusions
 
