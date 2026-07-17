@@ -14,6 +14,7 @@
 #include "SDK/PostHogSdkInfo.h"
 #include "Storage/PostHogFileStorageProvider.h"
 #include "Tests/PostHogFakeBatchTransport.h"
+#include "Tests/PostHogFakeClock.h"
 
 namespace
 {
@@ -884,8 +885,9 @@ bool FPostHogEventQueueFailureRetainsQueueTest::RunTest(const FString& Parameter
 	FScopedQueueTestStorageDirectory Fixture;
 	FPostHogFileStorageProvider Storage(Fixture.GetRootPath());
 	FPostHogFakeBatchTransport Transport;
+	FPostHogFakeClock Clock;
 
-	FPostHogEventQueue Queue(Storage, Transport, TEXT("test-api-key"), 100, 100, 2);
+	FPostHogEventQueue Queue(Storage, Transport, TEXT("test-api-key"), 100, 100, 2, &Clock);
 
 	Queue.Enqueue(MakeTestEvent(TEXT("1")));
 	Queue.Enqueue(MakeTestEvent(TEXT("2")));
@@ -896,9 +898,16 @@ bool FPostHogEventQueueFailureRetainsQueueTest::RunTest(const FString& Parameter
 	TestEqual(TEXT("Failed flush leaves events queued"), Queue.Num(), 2);
 	TestEqual(TEXT("Storage retains the un-acknowledged events"), Storage.GetEventCount(), 2);
 
+	// A retryable failure enters backoff; an immediate retry must not create a new HTTP request.
+	EPostHogEventQueueFlushResult ImmediateRetryResult = EPostHogEventQueueFlushResult::Empty;
+	Queue.Flush([&ImmediateRetryResult](EPostHogEventQueueFlushResult Result) { ImmediateRetryResult = Result; });
+	TestEqual(TEXT("Immediate retry during backoff is paused"), static_cast<uint8>(ImmediateRetryResult), static_cast<uint8>(EPostHogEventQueueFlushResult::Paused));
+	TestEqual(TEXT("Paused retry does not issue a new send"), Transport.GetSentCount(), 0);
+
 	// bIsFlushing must have reset so a later Flush() can retry rather than silently no-op.
+	Clock.Advance(FTimespan::FromSeconds(5));
 	Queue.Flush();
-	TestEqual(TEXT("Retry after failure issues a new send"), Transport.GetSentCount(), 1);
+	TestEqual(TEXT("Retry after backoff elapses issues a new send"), Transport.GetSentCount(), 1);
 
 	return true;
 }
@@ -910,8 +919,9 @@ bool FPostHogEventQueueSynchronousFailureCompletesOnceTest::RunTest(const FStrin
 	FScopedQueueTestStorageDirectory Fixture;
 	FPostHogFileStorageProvider Storage(Fixture.GetRootPath());
 	FPostHogFakeBatchTransport Transport;
+	FPostHogFakeClock Clock;
 
-	FPostHogEventQueue Queue(Storage, Transport, TEXT("test-api-key"), 100, 100, 2);
+	FPostHogEventQueue Queue(Storage, Transport, TEXT("test-api-key"), 100, 100, 2, &Clock);
 
 	Transport.SetSynchronousFailure(true);
 
@@ -921,10 +931,18 @@ bool FPostHogEventQueueSynchronousFailureCompletesOnceTest::RunTest(const FStrin
 	TestEqual(TEXT("Synchronous failure does not register a pending send"), Transport.GetSentCount(), 0);
 	TestEqual(TEXT("Events remain queued after a synchronous send-start failure"), Queue.Num(), 2);
 
-	// A stuck bIsFlushing would make this Flush() a silent no-op; it must actually retry.
+	// StatusCode 0 is retryable, so the synchronous failure also enters backoff; an immediate
+	// retry must not create a new HTTP request even once the transport is healthy again.
 	Transport.SetSynchronousFailure(false);
+	EPostHogEventQueueFlushResult ImmediateRetryResult = EPostHogEventQueueFlushResult::Empty;
+	Queue.Flush([&ImmediateRetryResult](EPostHogEventQueueFlushResult Result) { ImmediateRetryResult = Result; });
+	TestEqual(TEXT("Immediate retry during backoff is paused"), static_cast<uint8>(ImmediateRetryResult), static_cast<uint8>(EPostHogEventQueueFlushResult::Paused));
+	TestEqual(TEXT("Paused retry does not issue a new send"), Transport.GetSentCount(), 0);
+
+	// A stuck bIsFlushing would make this Flush() a silent no-op; it must actually retry.
+	Clock.Advance(FTimespan::FromSeconds(5));
 	Queue.Flush();
-	TestEqual(TEXT("Queue is flushable again after a synchronous failure"), Transport.GetSentCount(), 1);
+	TestEqual(TEXT("Queue is flushable again after backoff elapses"), Transport.GetSentCount(), 1);
 
 	return true;
 }

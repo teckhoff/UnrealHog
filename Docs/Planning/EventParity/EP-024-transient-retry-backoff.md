@@ -2,7 +2,7 @@
 
 ## Status and dependencies
 
-- **State:** Ready
+- **State:** Completed
 - **Blocked by:** EP-023
 - **Blocks:** EP-028, EP-029
 - **Parity row:** Queue retry pause after transient failure

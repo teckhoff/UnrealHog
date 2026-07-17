@@ -5,6 +5,7 @@
 #include "Http/PostHogBatchTransport.h"
 
 class IPostHogStorageProvider;
+class IPostHogClock;
 
 enum class EPostHogEventQueueEnqueueResult : uint8
 {
@@ -20,7 +21,8 @@ enum class EPostHogEventQueueFlushResult : uint8
 	Drained,
 	Failed,
 	Cancelled,
-	ProgressBlocked
+	ProgressBlocked,
+	Paused
 };
 
 inline const TCHAR* LexToString(EPostHogEventQueueEnqueueResult Result)
@@ -54,6 +56,8 @@ inline const TCHAR* LexToString(EPostHogEventQueueFlushResult Result)
 		return TEXT("Cancelled");
 	case EPostHogEventQueueFlushResult::ProgressBlocked:
 		return TEXT("ProgressBlocked");
+	case EPostHogEventQueueFlushResult::Paused:
+		return TEXT("Paused");
 	default:
 		return TEXT("Unknown");
 	}
@@ -69,7 +73,8 @@ class FPostHogEventQueue
 public:
 	FPostHogEventQueue(IPostHogStorageProvider& InStorageProvider,
 		IPostHogBatchTransport& InTransport, const FString& InApiKey,
-		int32 InMaxQueueSize, int32 InMaxBatchSize, int32 InFlushEventCount);
+		int32 InMaxQueueSize, int32 InMaxBatchSize, int32 InFlushEventCount,
+		IPostHogClock* InClock = nullptr);
 	~FPostHogEventQueue();
 
 	EPostHogEventQueueEnqueueResult Enqueue(const FPostHogEvent& Event);
@@ -97,6 +102,13 @@ private:
 	int32 ActiveFlushInitialCount = 0;
 	int32 ActiveFlushBatchCount = 0;
 	bool bIsFlushing = false;
+
+	TUniquePtr<IPostHogClock> OwnedClock;
+	IPostHogClock& Clock;
+	int32 ConsecutiveRetryableFailures = 0;
+	TOptional<FDateTime> PausedUntil;
+	static constexpr int32 RetryDelaySeconds = 5;
+	static constexpr int32 MaxRetryDelaySeconds = 30;
 
 	struct FFlushBatch
 	{
