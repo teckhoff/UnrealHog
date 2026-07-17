@@ -30,6 +30,7 @@ bool FPostHogCapturePolicyReservedKeysTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Contains $process_person_profile"), ReservedKeys.Contains(TEXT("$process_person_profile")));
 	TestTrue(TEXT("Contains $session_id"), ReservedKeys.Contains(TEXT("$session_id")));
 	TestTrue(TEXT("Contains $groups"), ReservedKeys.Contains(TEXT("$groups")));
+	TestTrue(TEXT("Contains $screen_name"), ReservedKeys.Contains(TEXT("$screen_name")));
 	TestTrue(TEXT("Contains $os"), ReservedKeys.Contains(TEXT("$os")));
 	TestTrue(TEXT("Contains $device_type"), ReservedKeys.Contains(TEXT("$device_type")));
 	TestTrue(TEXT("Contains $device_manufacturer"), ReservedKeys.Contains(TEXT("$device_manufacturer")));

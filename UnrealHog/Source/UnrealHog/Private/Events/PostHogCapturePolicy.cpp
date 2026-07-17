@@ -38,6 +38,7 @@ const TSet<FString>& PostHogCapturePolicy::GetReservedPropertyKeys()
 		TEXT("$app_build"),
 		TEXT("$screen_width"),
 		TEXT("$screen_height"),
+		TEXT("$screen_name"),
 		TEXT("$process_person_profile"),
 		TEXT("$session_id"),
 		TEXT("$groups"),
