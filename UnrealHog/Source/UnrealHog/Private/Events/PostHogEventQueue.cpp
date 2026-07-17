@@ -313,7 +313,6 @@ void FPostHogEventQueue::SendBatch(FFlushBatch&& Batch)
 
 void FPostHogEventQueue::HandleBatchComplete(uint64 Generation, const TArray<FString>& BatchEventIds, bool bSuccess, int32 StatusCode, const FString& ResponseBody)
 {
-	(void)StatusCode;
 	(void)ResponseBody;
 
 	if (!bIsFlushing || ActiveFlushGeneration != Generation)
@@ -329,6 +328,17 @@ void FPostHogEventQueue::HandleBatchComplete(uint64 Generation, const TArray<FSt
 
 	if (!bSuccess)
 	{
+		if (IsPermanentFailureStatus(StatusCode))
+		{
+			UE_LOGFMT(LogPostHog, Warning, "PostHog event queue classified batch delivery failure as permanent; deleting attempted batch and ending flush. StatusCode={0}, BatchEventCount={1}.",
+				StatusCode, BatchEventIds.Num());
+			DeleteSentBatchRecords(BatchEventIds);
+			CompleteFlush(EPostHogEventQueueFlushResult::Failed);
+			return;
+		}
+
+		UE_LOGFMT(LogPostHog, Warning, "PostHog event queue classified batch delivery failure as retryable; retaining attempted batch. StatusCode={0}.",
+			StatusCode);
 		CompleteFlush(EPostHogEventQueueFlushResult::Failed);
 		return;
 	}
@@ -340,6 +350,11 @@ void FPostHogEventQueue::HandleBatchComplete(uint64 Generation, const TArray<FSt
 	}
 
 	ContinueFlush();
+}
+
+bool FPostHogEventQueue::IsPermanentFailureStatus(int32 StatusCode)
+{
+	return StatusCode >= 400 && StatusCode < 500 && StatusCode != 413;
 }
 
 bool FPostHogEventQueue::DeleteSentBatchRecords(const TArray<FString>& BatchEventIds)

@@ -114,4 +114,5 @@ private:
 	void HandleBatchComplete(uint64 Generation, const TArray<FString>& BatchEventIds, bool bSuccess, int32 StatusCode, const FString& ResponseBody);
 	bool DeleteSentBatchRecords(const TArray<FString>& BatchEventIds);
 	void CompleteFlush(EPostHogEventQueueFlushResult Result);
+	static bool IsPermanentFailureStatus(int32 StatusCode);
 };

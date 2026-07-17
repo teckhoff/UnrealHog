@@ -499,6 +499,110 @@ bool FPostHogEventQueueFailureStopsBeforeLaterBatchAndPreservesRecordsTest::RunT
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueuePermanentFailureDeletesOnlyAttemptedBatchAndEndsFlushTest, "UnrealHog.Events.EventQueue.PermanentFailureDeletesOnlyAttemptedBatchAndEndsFlush", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogEventQueuePermanentFailureDeletesOnlyAttemptedBatchAndEndsFlushTest::RunTest(const FString& Parameters)
+{
+	FControllableQueueStorageProvider Storage;
+	FPostHogFakeBatchTransport Transport;
+	TOptional<EPostHogEventQueueFlushResult> Result;
+
+	Storage.SeedEvent(SeedEventId1);
+	Storage.SeedEvent(SeedEventId2);
+	Storage.SeedEvent(SeedEventId3);
+
+	FPostHogEventQueue Queue(Storage, Transport, TEXT("test-api-key"), 100, 2, 100);
+	Queue.Flush([&Result](EPostHogEventQueueFlushResult InResult)
+	{
+		Result = InResult;
+	});
+
+	CheckPayloadUuids(*this, Transport.GetPayloadAt(0), { SeedEventId1, SeedEventId2 }, TEXT("Permanent failure first batch"));
+	Transport.CompleteLast(false, 404, TEXT(""));
+
+	TestEqual(TEXT("Permanent failure sends no later batch"), Transport.GetTotalSendCount(), 1);
+	TestEqual(TEXT("No pending request after permanent failure"), Transport.GetPendingCount(), 0);
+	TestEqual(TEXT("Permanent failure deletes only the attempted batch"), Storage.DeleteAttempts, 2);
+	CheckEventIds(*this, Storage, { SeedEventId3 }, TEXT("Permanent failure final storage"));
+	TestTrue(TEXT("Permanent failure result completed"), Result.IsSet());
+	if (Result.IsSet())
+	{
+		TestEqual(TEXT("Permanent failure result"), Result.GetValue(), EPostHogEventQueueFlushResult::Failed);
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueClassifiesDeliveryFailuresTest, "UnrealHog.Events.EventQueue.ClassifiesDeliveryFailuresAsPermanentOrRetryable", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogEventQueueClassifiesDeliveryFailuresTest::RunTest(const FString& Parameters)
+{
+	struct FStatusClassificationRow
+	{
+		int32 StatusCode;
+		bool bExpectPermanent;
+		const TCHAR* Label;
+	};
+
+	const FStatusClassificationRow Rows[] = {
+		{ 0, false, TEXT("Status0") },
+		{ 100, false, TEXT("Status100") },
+		{ 200, false, TEXT("Status200") },
+		{ 204, false, TEXT("Status204") },
+		{ 301, false, TEXT("Status301") },
+		{ 302, false, TEXT("Status302") },
+		{ 308, false, TEXT("Status308") },
+		{ 399, false, TEXT("Status399") },
+		{ 400, true, TEXT("Status400") },
+		{ 401, true, TEXT("Status401") },
+		{ 404, true, TEXT("Status404") },
+		{ 413, false, TEXT("Status413") },
+		{ 429, true, TEXT("Status429") },
+		{ 499, true, TEXT("Status499") },
+		{ 500, false, TEXT("Status500") },
+		{ 599, false, TEXT("Status599") },
+	};
+
+	for (const FStatusClassificationRow& Row : Rows)
+	{
+		FControllableQueueStorageProvider Storage;
+		FPostHogFakeBatchTransport Transport;
+		TOptional<EPostHogEventQueueFlushResult> Result;
+
+		Storage.SeedEvent(SeedEventId1);
+		Storage.SeedEvent(SeedEventId2);
+		Storage.SeedEvent(SeedEventId3);
+
+		FPostHogEventQueue Queue(Storage, Transport, TEXT("test-api-key"), 100, 2, 100);
+		Queue.Flush([&Result](EPostHogEventQueueFlushResult InResult)
+		{
+			Result = InResult;
+		});
+
+		Transport.CompleteLast(false, Row.StatusCode, TEXT(""));
+
+		TestTrue(*FString::Printf(TEXT("%s: result set"), Row.Label), Result.IsSet());
+		if (Result.IsSet())
+		{
+			TestEqual(*FString::Printf(TEXT("%s: result is Failed"), Row.Label), Result.GetValue(), EPostHogEventQueueFlushResult::Failed);
+		}
+
+		if (Row.bExpectPermanent)
+		{
+			TestEqual(*FString::Printf(TEXT("%s: permanent failure deletes attempted batch"), Row.Label), Storage.DeleteAttempts, 2);
+			CheckEventIds(*this, Storage, { SeedEventId3 }, FString::Printf(TEXT("%s: permanent failure storage"), Row.Label));
+			TestEqual(*FString::Printf(TEXT("%s: permanent failure ends flush without a later batch"), Row.Label), Transport.GetTotalSendCount(), 1);
+		}
+		else
+		{
+			TestEqual(*FString::Printf(TEXT("%s: retryable failure deletes nothing"), Row.Label), Storage.DeleteAttempts, 0);
+			CheckEventIds(*this, Storage, { SeedEventId1, SeedEventId2, SeedEventId3 }, FString::Printf(TEXT("%s: retryable failure storage"), Row.Label));
+		}
+	}
+
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueEnqueueDuringFlushDrainedByActiveOperationTest, "UnrealHog.Events.EventQueue.EnqueueDuringFlushDrainedByActiveOperation", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 
 bool FPostHogEventQueueEnqueueDuringFlushDrainedByActiveOperationTest::RunTest(const FString& Parameters)
