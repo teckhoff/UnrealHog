@@ -11,6 +11,7 @@
 #include "Dom/JsonValue.h"
 #include "Events/PostHogBatchPayload.h"
 #include "Events/PostHogEvent.h"
+#include "SDK/PostHogSdkInfo.h"
 #include "Storage/PostHogFileStorageProvider.h"
 #include "Tests/PostHogFakeBatchTransport.h"
 
@@ -33,6 +34,11 @@ namespace
 
 		const FString& GetRootPath() const { return RootPath; }
 
+		FString GetQueueDirectory() const
+		{
+			return FPaths::Combine(RootPath, FPostHogSdkInfo::GetLibraryName(), TEXT("Queue"));
+		}
+
 	private:
 		FString RootPath;
 	};
@@ -50,14 +56,18 @@ namespace
 	const FString SeedEventId1 = TEXT("00000000-0000-7000-8000-000000000001");
 	const FString SeedEventId2 = TEXT("00000000-0000-7000-8000-000000000002");
 	const FString SeedEventId3 = TEXT("00000000-0000-7000-8000-000000000003");
+	const FString CorruptFirstEventId = TEXT("00000000-0000-3000-8000-000000000001");
+	const FString LegacyUuidV4EventId = TEXT("00000000-0000-4000-8000-000000000002");
 
 	class FControllableQueueStorageProvider final : public IPostHogStorageProvider
 	{
 	public:
 		int32 DeleteAttempts = 0;
+		int32 LoadAttempts = 0;
 		int32 SaveAttempts = 0;
 		FString LastDeletedEventId;
 		FString LastSavedEventId;
+		TMap<FString, int32> LoadAttemptsById;
 
 		void SeedEvent(const FString& EventId)
 		{
@@ -67,6 +77,13 @@ namespace
 		void SeedEvent(const FString& EventId, const FString& EventJson)
 		{
 			Events.Add(EventId, EventJson);
+			EventIdIndex.AddUnique(EventId);
+			EventIdIndex.Sort();
+		}
+
+		void SeedIndexedMissingEvent(const FString& EventId)
+		{
+			Events.Remove(EventId);
 			EventIdIndex.AddUnique(EventId);
 			EventIdIndex.Sort();
 		}
@@ -99,6 +116,10 @@ namespace
 
 		virtual bool LoadEvent(const FString& EventId, FString& EventJson) override
 		{
+			++LoadAttempts;
+			int32& AttemptsForId = LoadAttemptsById.FindOrAdd(EventId);
+			++AttemptsForId;
+
 			const FString* Found = Events.Find(EventId);
 			if (!Found)
 			{
@@ -121,13 +142,9 @@ namespace
 				return false;
 			}
 
-			if (Events.Remove(EventId) == 0)
-			{
-				return false;
-			}
-
-			EventIdIndex.Remove(EventId);
-			return true;
+			const bool bWasIndexed = EventIdIndex.Remove(EventId) > 0;
+			const bool bHadEvent = Events.Remove(EventId) > 0;
+			return bWasIndexed || bHadEvent;
 		}
 
 		virtual bool ClearEvents() override
@@ -239,6 +256,122 @@ namespace
 			}
 		}
 	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueCorruptFirstRecordDeletedAndLaterRecordsFillBatchTest, "UnrealHog.Events.EventQueue.CorruptFirstRecordDeletedAndLaterRecordsFillBatch", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogEventQueueCorruptFirstRecordDeletedAndLaterRecordsFillBatchTest::RunTest(const FString& Parameters)
+{
+	FControllableQueueStorageProvider Storage;
+	FPostHogFakeBatchTransport Transport;
+
+	Storage.SeedEvent(CorruptFirstEventId, TEXT("{not-json"));
+	Storage.SeedEvent(LegacyUuidV4EventId, MakePersistedEventJson(LegacyUuidV4EventId));
+	Storage.SeedEvent(SeedEventId3, MakePersistedEventJson(SeedEventId3));
+
+	FPostHogEventQueue Queue(Storage, Transport, TEXT("test-api-key"), 100, 2, 100);
+	Queue.Flush();
+
+	TestEqual(TEXT("One corrupt record delete attempted"), Storage.DeleteAttempts, 1);
+	TestEqual(TEXT("Malformed first record deleted"), Storage.LastDeletedEventId, CorruptFirstEventId);
+	TestEqual(TEXT("One batch sent after deleting corrupt first record"), Transport.GetSentCount(), 1);
+	TestEqual(TEXT("Batch filled with two later valid records"), Transport.GetLastPayload().Num(), 2);
+
+	const TSharedRef<FJsonObject> BatchPayloadJson = Transport.GetLastPayload().ToJsonObject();
+	const TArray<TSharedPtr<FJsonValue>>* BatchArray = nullptr;
+	TestTrue(TEXT("Payload has a batch array"), BatchPayloadJson->TryGetArrayField(TEXT("batch"), BatchArray));
+
+	if (BatchArray && BatchArray->Num() == 2)
+	{
+		FString FirstUuid;
+		FString SecondUuid;
+		(*BatchArray)[0]->AsObject()->TryGetStringField(TEXT("uuid"), FirstUuid);
+		(*BatchArray)[1]->AsObject()->TryGetStringField(TEXT("uuid"), SecondUuid);
+
+		TestEqual(TEXT("First valid payload keeps legacy UUIDv4"), FirstUuid, LegacyUuidV4EventId);
+		TestEqual(TEXT("Second valid payload sent after legacy record"), SecondUuid, SeedEventId3);
+	}
+
+	TestEqual(TEXT("Only valid in-flight records remain before success"), Queue.Num(), 2);
+	Transport.CompleteLast(true, 200, TEXT(""));
+	TestEqual(TEXT("Successful completion empties remaining queue"), Queue.Num(), 0);
+	CheckEventIds(*this, Storage, {}, TEXT("Corrupt first success final storage"));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueMissingFileDeletedAndLaterRecordSentTest, "UnrealHog.Events.EventQueue.MissingFileDeletedAndLaterRecordSent", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogEventQueueMissingFileDeletedAndLaterRecordSentTest::RunTest(const FString& Parameters)
+{
+	FScopedQueueTestStorageDirectory Fixture;
+	FPostHogFileStorageProvider Storage(Fixture.GetRootPath());
+	FPostHogFakeBatchTransport Transport;
+
+	TestTrue(TEXT("First save succeeds"), Storage.SaveEvent(SeedEventId1, MakePersistedEventJson(SeedEventId1)));
+	TestTrue(TEXT("Second save succeeds"), Storage.SaveEvent(SeedEventId2, MakePersistedEventJson(SeedEventId2)));
+	Storage.FlushPendingWrites();
+
+	const FString MissingEventPath = FPaths::Combine(Fixture.GetQueueDirectory(), FString::Printf(TEXT("%s.json"), *SeedEventId1));
+	TestTrue(TEXT("Seeded first event file deleted directly"), IFileManager::Get().Delete(*MissingEventPath, false, true));
+
+	FPostHogEventQueue Queue(Storage, Transport, TEXT("test-api-key"), 100, 1, 100);
+	Queue.Flush();
+
+	TestEqual(TEXT("Missing file does not block later event send"), Transport.GetSentCount(), 1);
+	TestEqual(TEXT("Batch contains later valid event"), Transport.GetLastPayload().Num(), 1);
+
+	const TArray<FString> EventIdsAfterFlush = Storage.GetEventIds();
+	TestFalse(TEXT("Missing ID removed from provider index"), EventIdsAfterFlush.Contains(SeedEventId1));
+	TestTrue(TEXT("Later valid ID remains in flight"), EventIdsAfterFlush.Contains(SeedEventId2));
+
+	const TSharedRef<FJsonObject> BatchPayloadJson = Transport.GetLastPayload().ToJsonObject();
+	const TArray<TSharedPtr<FJsonValue>>* BatchArray = nullptr;
+	TestTrue(TEXT("Payload has a batch array"), BatchPayloadJson->TryGetArrayField(TEXT("batch"), BatchArray));
+
+	if (BatchArray && BatchArray->Num() == 1)
+	{
+		FString SentUuid;
+		(*BatchArray)[0]->AsObject()->TryGetStringField(TEXT("uuid"), SentUuid);
+		TestEqual(TEXT("Later valid event was sent"), SentUuid, SeedEventId2);
+	}
+
+	Transport.CompleteLast(true, 200, TEXT(""));
+	TestEqual(TEXT("Successful completion empties queue"), Queue.Num(), 0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueCorruptDeleteFailureStopsFlushWithoutRepeatedReadTest, "UnrealHog.Events.EventQueue.CorruptDeleteFailureStopsFlushWithoutRepeatedRead", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogEventQueueCorruptDeleteFailureStopsFlushWithoutRepeatedReadTest::RunTest(const FString& Parameters)
+{
+	FControllableQueueStorageProvider Storage;
+	FPostHogFakeBatchTransport Transport;
+
+	Storage.SeedEvent(CorruptFirstEventId, FString::Printf(TEXT("{\"uuid\":\"%s\",\"event\":\"seeded-event\",\"distinct_id\":\"distinct-id\",\"timestamp\":\"2026-07-16T00:00:00.000Z\",\"properties\":\"not-an-object\"}"), *CorruptFirstEventId));
+	Storage.SeedEvent(SeedEventId3, MakePersistedEventJson(SeedEventId3));
+	Storage.SetFailNextDelete(true);
+
+	FPostHogEventQueue Queue(Storage, Transport, TEXT("test-api-key"), 100, 2, 100);
+	Queue.Flush();
+
+	TestEqual(TEXT("No batch sent when corrupt delete fails"), Transport.GetSentCount(), 0);
+	TestEqual(TEXT("Exactly one corrupt delete attempted"), Storage.DeleteAttempts, 1);
+	TestEqual(TEXT("Failed delete targeted corrupt first record"), Storage.LastDeletedEventId, CorruptFirstEventId);
+	TestEqual(TEXT("Only corrupt record was loaded"), Storage.LoadAttempts, 1);
+
+	const int32* CorruptLoadAttempts = Storage.LoadAttemptsById.Find(CorruptFirstEventId);
+	TestTrue(TEXT("Corrupt first record load was recorded"), CorruptLoadAttempts != nullptr);
+	if (CorruptLoadAttempts)
+	{
+		TestEqual(TEXT("Corrupt first record read once"), *CorruptLoadAttempts, 1);
+	}
+
+	TestFalse(TEXT("Later valid record was not read after delete failure"), Storage.LoadAttemptsById.Contains(SeedEventId3));
+	CheckEventIds(*this, Storage, { CorruptFirstEventId, SeedEventId3 }, TEXT("Delete failure final storage"));
+
+	return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueFlushesAtFlushEventCountTest, "UnrealHog.Events.EventQueue.EnqueueTriggersFlushAtFlushEventCount", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
