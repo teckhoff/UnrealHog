@@ -2,7 +2,7 @@
 
 ## Status and dependencies
 
-- **State:** Blocked
+- **State:** Completed
 - **Blocked by:** EP-022
 - **Blocks:** EP-024, EP-025, EP-029
 - **Parity row:** Unity `ShouldDeleteEventsOnError`
