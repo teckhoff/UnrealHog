@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "PostHogDeveloperSettings.h"
 
 class UPostHogDeveloperSettings;
 
@@ -15,6 +16,7 @@ struct FPostHogSettingsValidationResult
 	bool bIsValid = false;
 	FString ResolvedHost;
 	FString FailureReason;
+	EPostHogPersonProfiles PersonProfiles = EPostHogPersonProfiles::IdentifiedOnly;
 };
 
 namespace PostHogSettingsValidation

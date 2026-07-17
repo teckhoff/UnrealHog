@@ -59,6 +59,7 @@ FPostHogSettingsValidationResult PostHogSettingsValidation::Validate(const UPost
 
 	Result.bIsValid = true;
 	Result.ResolvedHost = ResolvedHost;
+	Result.PersonProfiles = Settings.GetPersonProfiles();
 
 	return Result;
 }

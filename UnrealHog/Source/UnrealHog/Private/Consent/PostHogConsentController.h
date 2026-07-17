@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Events/PostHogBeforeSend.h"
 #include "Lifecycle/PostHogApplicationLifecycleHandler.h"
+#include "PostHogDeveloperSettings.h"
 #include "Templates/Function.h"
 
 class IPostHogStorageProvider;
@@ -12,7 +13,6 @@ class FPostHogApplicationLifecycleHandler;
 class FPostHogIdentityManager;
 class FPostHogSessionManager;
 class FPostHogSuperPropertiesManager;
-class UPostHogDeveloperSettings;
 class UPostHogEventProperties;
 struct FPostHogEvent;
 struct FPostHogEventProperty;
@@ -72,7 +72,11 @@ public:
 	// persisted super properties, call properties, SDK-owned properties, session id, and groups
 	// (in that precedence order) before enqueuing via Capture(). Reserved keys in CallProperties
 	// are stripped by UPostHogEventProperties::ApplyToEvent, never overriding SDK-owned values.
-	EPostHogCaptureResult CaptureEvent(const FString& EventName, UPostHogEventProperties* CallProperties, bool bProcessPersonProfile);
+	// $process_person_profile is computed internally from the PersonProfilesPolicy snapshot
+	// captured at EnableCollection time and IdentityManager->IsIdentified(); it can never be
+	// influenced by CallProperties or super properties (both already strip reserved keys via
+	// PostHogCapturePolicy::GetReservedPropertyKeys()).
+	EPostHogCaptureResult CaptureEvent(const FString& EventName, UPostHogEventProperties* CallProperties);
 
 	// Blank DistinctId is a safe no-op (no event, no state mutation). Persists the new
 	// identity first, then emits $identify via CaptureEvent so distinct_id reflects it;
@@ -141,6 +145,8 @@ private:
 	FPostHogBeforeSendDelegate BeforeSend;
 
 	bool bIsOptedIn = false;
+
+	EPostHogPersonProfiles PersonProfilesPolicy = EPostHogPersonProfiles::IdentifiedOnly;
 
 	TUniquePtr<IPostHogStorageProvider> StorageProvider;
 	TUniquePtr<IPostHogBatchTransport> Transport;
