@@ -411,11 +411,17 @@ void FPostHogConsentController::ApplyGroups(FPostHogEvent& Event) const
 	Event.SetObjectProperty(TEXT("$groups"), GroupsObject);
 }
 
-void FPostHogConsentController::Flush()
+void FPostHogConsentController::Flush(FPostHogEventQueueFlushComplete OnComplete)
 {
 	if (EventQueue.IsValid())
 	{
-		EventQueue->Flush();
+		EventQueue->Flush(MoveTemp(OnComplete));
+		return;
+	}
+
+	if (OnComplete)
+	{
+		OnComplete(EPostHogEventQueueFlushResult::Empty);
 	}
 }
 

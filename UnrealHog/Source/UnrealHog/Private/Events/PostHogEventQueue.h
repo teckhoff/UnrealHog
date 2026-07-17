@@ -14,6 +14,15 @@ enum class EPostHogEventQueueEnqueueResult : uint8
 	RejectedSaveFailed
 };
 
+enum class EPostHogEventQueueFlushResult : uint8
+{
+	Empty,
+	Drained,
+	Failed,
+	Cancelled,
+	ProgressBlocked
+};
+
 inline const TCHAR* LexToString(EPostHogEventQueueEnqueueResult Result)
 {
 	switch (Result)
@@ -31,6 +40,27 @@ inline const TCHAR* LexToString(EPostHogEventQueueEnqueueResult Result)
 	}
 }
 
+inline const TCHAR* LexToString(EPostHogEventQueueFlushResult Result)
+{
+	switch (Result)
+	{
+	case EPostHogEventQueueFlushResult::Empty:
+		return TEXT("Empty");
+	case EPostHogEventQueueFlushResult::Drained:
+		return TEXT("Drained");
+	case EPostHogEventQueueFlushResult::Failed:
+		return TEXT("Failed");
+	case EPostHogEventQueueFlushResult::Cancelled:
+		return TEXT("Cancelled");
+	case EPostHogEventQueueFlushResult::ProgressBlocked:
+		return TEXT("ProgressBlocked");
+	default:
+		return TEXT("Unknown");
+	}
+}
+
+using FPostHogEventQueueFlushComplete = TFunction<void(EPostHogEventQueueFlushResult Result)>;
+
 /**
  *
  */
@@ -43,7 +73,7 @@ public:
 	~FPostHogEventQueue();
 
 	EPostHogEventQueueEnqueueResult Enqueue(const FPostHogEvent& Event);
-	void Flush();
+	void Flush(FPostHogEventQueueFlushComplete OnComplete = {});
 	void CancelInFlightRequest();
 
 	// Cancels any in-flight send, clears all persisted and in-memory queued events.
@@ -61,10 +91,27 @@ private:
 
 	TSet<FString> InFlightEventIds;
 	TSharedPtr<IPostHogBatchRequestHandle> ActiveRequestHandle;
+	TArray<FPostHogEventQueueFlushComplete> PendingFlushCallbacks;
+	TSharedPtr<bool> FlushLifetimeToken;
+	uint64 ActiveFlushGeneration = 0;
+	int32 ActiveFlushInitialCount = 0;
+	int32 ActiveFlushBatchCount = 0;
 	bool bIsFlushing = false;
+
+	struct FFlushBatch
+	{
+		TArray<FString> EventIds;
+		TArray<FPostHogEvent> Events;
+	};
 
 	EPostHogEventQueueEnqueueResult EnsureCapacityForSave(const FString& IncomingEventId);
 	bool TryGetOldestEvictableEventId(FString& OutEventId);
 	bool TryLoadPersistedEventForBatch(const FString& EventId, FPostHogEvent& OutEvent, bool& bOutStopFlush);
 	bool DeleteCorruptPersistedEvent(const FString& EventId, const FString& Reason);
+	void ContinueFlush();
+	bool TryBuildNextBatch(FFlushBatch& OutBatch, bool& bOutProgressBlocked);
+	void SendBatch(FFlushBatch&& Batch);
+	void HandleBatchComplete(uint64 Generation, const TArray<FString>& BatchEventIds, bool bSuccess, int32 StatusCode, const FString& ResponseBody);
+	bool DeleteSentBatchRecords(const TArray<FString>& BatchEventIds);
+	void CompleteFlush(EPostHogEventQueueFlushResult Result);
 };
