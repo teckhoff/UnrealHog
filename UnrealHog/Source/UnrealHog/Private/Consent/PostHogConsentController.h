@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Events/PostHogBeforeSend.h"
+#include "Events/PostHogExceptionInput.h"
 #include "Lifecycle/PostHogApplicationLifecycleHandler.h"
 #include "PostHogDeveloperSettings.h"
 #include "Templates/Function.h"
@@ -105,6 +106,14 @@ public:
 
 	// Clears all persisted group membership. No event emitted. Safe no-op when not opted in.
 	void ResetGroups();
+
+	// Blank/whitespace-only Exception.Message or Exception.Type is a safe no-op (returns
+	// InvalidEventName; no event, no property objects retained). Otherwise builds SDK-owned
+	// exception properties ($exception_list and $exception_* summary fields) layered over
+	// caller-supplied Properties (SDK-owned keys always win on collision) and emits via
+	// CaptureEvent(TEXT("$exception"), ...), so consent, session, before-send, persistence, and
+	// retry behavior are inherited rather than reimplemented.
+	EPostHogCaptureResult CaptureException(const FPostHogExceptionInput& Exception, UPostHogEventProperties* Properties);
 
 	// Registers Key=Value as a persisted super property applied to every future event ahead of
 	// call and SDK-owned properties. Returns false (safe no-op) when not opted in.

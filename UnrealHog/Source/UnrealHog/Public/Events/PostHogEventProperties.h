@@ -111,6 +111,12 @@ public:
 
 	void ApplyToEvent(FPostHogEvent& Event);
 
+	// C++-only helper (not Blueprint-exposed): appends Other's properties onto this object, in
+	// order. Used to layer caller-supplied properties beneath SDK-owned keys added afterward, so
+	// the later SDK-owned entries win on key collision once ApplyToEvent runs (FJsonObject::SetField
+	// is last-write-wins per key). A null Other is a no-op.
+	UPostHogEventProperties* AppendFrom(const UPostHogEventProperties* Other);
+
 	const TArray<FPostHogEventProperty>& GetProperties() const { return Properties; }
 
 private:

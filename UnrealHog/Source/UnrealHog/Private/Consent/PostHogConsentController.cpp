@@ -5,6 +5,7 @@
 #include "Events/PostHogEvent.h"
 #include "Events/PostHogEventProperties.h"
 #include "Events/PostHogEventQueue.h"
+#include "Events/PostHogExceptionPropertiesBuilder.h"
 #include "Http/PostHogBatchTransport.h"
 #include "Lifecycle/PostHogApplicationLifecycleHandler.h"
 #include "Identity/PostHogIdentityManager.h"
@@ -312,6 +313,23 @@ EPostHogCaptureResult FPostHogConsentController::Group(const FString& GroupType,
 	}
 
 	return CaptureEvent(TEXT("$groupidentify"), Props);
+}
+
+EPostHogCaptureResult FPostHogConsentController::CaptureException(const FPostHogExceptionInput& Exception, UPostHogEventProperties* Properties)
+{
+	if (Exception.Message.TrimStartAndEnd().IsEmpty() || Exception.Type.TrimStartAndEnd().IsEmpty())
+	{
+#if !WITH_DEV_AUTOMATION_TESTS
+		UE_LOGFMT(LogPostHog, Warning, "PostHog Consent Controller rejected CaptureException with an empty or whitespace-only message or type.");
+#endif
+		return EPostHogCaptureResult::InvalidEventName;
+	}
+
+	UPostHogEventProperties* Props = NewObject<UPostHogEventProperties>();
+	Props->AppendFrom(Properties);
+	PostHogExceptionPropertiesBuilder::Build(*Props, Exception);
+
+	return CaptureEvent(TEXT("$exception"), Props);
 }
 
 void FPostHogConsentController::ResetGroups()

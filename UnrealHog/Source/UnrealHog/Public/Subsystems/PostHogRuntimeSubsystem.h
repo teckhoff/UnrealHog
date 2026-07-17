@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Events/PostHogBeforeSend.h"
+#include "Events/PostHogExceptionInput.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "TimerManager.h"
 #include "PostHogRuntimeSubsystem.generated.h"
@@ -29,6 +30,9 @@ public:
 	void CaptureEvent(const FString& EventName, UPostHogEventProperties* Properties = nullptr);
 
 	UFUNCTION(BlueprintCallable, Category="PostHog|Events")
+	void CaptureException(const FPostHogExceptionInput& Exception, UPostHogEventProperties* Properties = nullptr);
+  
+  UFUNCTION(BlueprintCallable, Category="PostHog|Events")
 	void CaptureScreen(const FString& ScreenName, UPostHogEventProperties* Properties = nullptr);
 
 	UFUNCTION(BlueprintCallable, Category="PostHog|Events")

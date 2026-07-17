@@ -85,6 +85,16 @@ UPostHogEventProperties* UPostHogEventProperties::AddArray(const FString& Key, U
 	return this;
 }
 
+UPostHogEventProperties* UPostHogEventProperties::AppendFrom(const UPostHogEventProperties* Other)
+{
+	if (Other)
+	{
+		Properties.Append(Other->GetProperties());
+	}
+
+	return this;
+}
+
 void UPostHogEventProperties::ApplyToEvent(FPostHogEvent& Event)
 {
 	for (const auto& Property : Properties)
