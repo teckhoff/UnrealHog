@@ -31,6 +31,9 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category="PostHog|Events")
 	void CaptureException(const FPostHogExceptionInput& Exception, UPostHogEventProperties* Properties = nullptr);
+  
+  UFUNCTION(BlueprintCallable, Category="PostHog|Events")
+	void CaptureScreen(const FString& ScreenName, UPostHogEventProperties* Properties = nullptr);
 
 	UFUNCTION(BlueprintCallable, Category="PostHog|Events")
 	UPostHogEventProperties* CreateEventProperties();

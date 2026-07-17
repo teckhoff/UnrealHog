@@ -99,6 +99,36 @@ void UPostHogRuntimeSubsystem::CaptureException(const FPostHogExceptionInput& Ex
 	ConsentController->CaptureException(Exception, Properties);
 }
 
+void UPostHogRuntimeSubsystem::CaptureScreen(const FString& ScreenName, UPostHogEventProperties* Properties)
+{
+	if (!ConsentController)
+	{
+		UE_LOGFMT(LogPostHog, Warning, "PostHog Runtime Subsystem has no analytics consent; dropping screen {ScreenName}.", ScreenName);
+		return;
+	}
+
+	const EPostHogCaptureResult Result = ConsentController->CaptureScreen(ScreenName, Properties);
+
+	switch (Result)
+	{
+	case EPostHogCaptureResult::InvalidEventName:
+		UE_LOGFMT(LogPostHog, Warning, "PostHog Runtime Subsystem rejected an empty or whitespace-only screen name.");
+		break;
+	case EPostHogCaptureResult::NotOptedIn:
+		UE_LOGFMT(LogPostHog, Warning, "PostHog Runtime Subsystem has no analytics consent; dropping screen {ScreenName}.", ScreenName);
+		break;
+	case EPostHogCaptureResult::DroppedByBeforeSend:
+	case EPostHogCaptureResult::BeforeSendFailed:
+		break;
+	case EPostHogCaptureResult::EnqueueFailed:
+		UE_LOGFMT(LogPostHog, Error, "PostHog Runtime Subsystem failed to enqueue screen {ScreenName}.", ScreenName);
+		break;
+	case EPostHogCaptureResult::Success:
+	default:
+		break;
+	}
+}
+
 UPostHogEventProperties* UPostHogRuntimeSubsystem::CreateEventProperties()
 {
 	return NewObject<UPostHogEventProperties>(this);

@@ -70,7 +70,8 @@ public:
 	bool Capture(const FPostHogEvent& Event);
 
 	// Single producer path for composing a capture: validates the event name, then layers
-	// persisted super properties, call properties, SDK-owned properties, session id, and groups
+	// persisted super properties, call properties, producer-owned properties, SDK-owned
+	// properties, session id, and groups
 	// (in that precedence order) before enqueuing via Capture(). Reserved keys in CallProperties
 	// are stripped by UPostHogEventProperties::ApplyToEvent, never overriding SDK-owned values.
 	// $process_person_profile is computed internally from the PersonProfilesPolicy snapshot
@@ -78,6 +79,10 @@ public:
 	// influenced by CallProperties or super properties (both already strip reserved keys via
 	// PostHogCapturePolicy::GetReservedPropertyKeys()).
 	EPostHogCaptureResult CaptureEvent(const FString& EventName, UPostHogEventProperties* CallProperties);
+
+	// Emits a $screen event with SDK-owned $screen_name taken from the explicit screen argument.
+	// Blank (or whitespace-only) screen names are rejected before event creation.
+	EPostHogCaptureResult CaptureScreen(const FString& ScreenName, UPostHogEventProperties* CallProperties);
 
 	// Blank DistinctId is a safe no-op (no event, no state mutation). Persists the new
 	// identity first, then emits $identify via CaptureEvent so distinct_id reflects it;
@@ -150,6 +155,10 @@ private:
 
 	void PersistOptIn(bool bOptIn) const;
 	static bool TryLoadPersistedOptIn(IPostHogStorageProvider& StorageProvider, bool& OutOptedIn);
+
+	EPostHogCaptureResult CaptureEventWithProducerProperties(const FString& EventName,
+		UPostHogEventProperties* CallProperties,
+		TFunctionRef<void(FPostHogEvent&)> ApplyProducerProperties);
 
 	void ApplySuperProperties(FPostHogEvent& Event) const;
 

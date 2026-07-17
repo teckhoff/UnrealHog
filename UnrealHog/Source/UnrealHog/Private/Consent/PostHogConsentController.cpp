@@ -129,6 +129,29 @@ void FPostHogConsentController::ClearBeforeSend()
 
 EPostHogCaptureResult FPostHogConsentController::CaptureEvent(const FString& EventName, UPostHogEventProperties* CallProperties)
 {
+	return CaptureEventWithProducerProperties(EventName, CallProperties, [](FPostHogEvent&) {});
+}
+
+EPostHogCaptureResult FPostHogConsentController::CaptureScreen(const FString& ScreenName, UPostHogEventProperties* CallProperties)
+{
+	if (!PostHogCapturePolicy::IsValidEventName(ScreenName))
+	{
+#if !WITH_DEV_AUTOMATION_TESTS
+		UE_LOGFMT(LogPostHog, Warning, "PostHog Consent Controller rejected screen capture with an empty or whitespace-only screen name.");
+#endif
+		return EPostHogCaptureResult::InvalidEventName;
+	}
+
+	return CaptureEventWithProducerProperties(TEXT("$screen"), CallProperties, [&ScreenName](FPostHogEvent& Event)
+	{
+		Event.SetStringProperty(TEXT("$screen_name"), ScreenName);
+	});
+}
+
+EPostHogCaptureResult FPostHogConsentController::CaptureEventWithProducerProperties(const FString& EventName,
+	UPostHogEventProperties* CallProperties,
+	TFunctionRef<void(FPostHogEvent&)> ApplyProducerProperties)
+{
 	if (!PostHogCapturePolicy::IsValidEventName(EventName))
 	{
 #if !WITH_DEV_AUTOMATION_TESTS
@@ -153,6 +176,8 @@ EPostHogCaptureResult FPostHogConsentController::CaptureEvent(const FString& Eve
 	{
 		CallProperties->ApplyToEvent(GeneratedEvent);
 	}
+
+	ApplyProducerProperties(GeneratedEvent);
 
 	const bool bProcessPersonProfile = PostHogCapturePolicy::ShouldProcessPersonProfile(PersonProfilesPolicy, IdentityManager->IsIdentified());
 	GeneratedEvent.ApplySdkProperties(bProcessPersonProfile);
