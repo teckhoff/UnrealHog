@@ -159,11 +159,13 @@ void FPostHogEventQueue::Flush()
 		return;
 	}
 
+	const int32 BatchCapacity = FMath::Min(MaxBatchSize, EventIds.Num());
+
 	TArray<FPostHogEvent> BatchEvents;
-	BatchEvents.Reserve(MaxBatchSize);
+	BatchEvents.Reserve(BatchCapacity);
 
 	TArray<FString> BatchEventIds;
-	BatchEventIds.Reserve(MaxBatchSize);
+	BatchEventIds.Reserve(BatchCapacity);
 
 	for (const FString& EventId : EventIds)
 	{
