@@ -2,7 +2,7 @@
 
 ## Status and dependencies
 
-- **State:** Blocked
+- **State:** Comppleted
 - **Blocked by:** EP-004, EP-007
 - **Blocks:** EP-029
 - **Parity row:** `PersonProfiles` and `$process_person_profile`

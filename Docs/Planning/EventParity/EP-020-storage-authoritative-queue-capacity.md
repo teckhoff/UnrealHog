@@ -2,7 +2,7 @@
 
 ## Status and dependencies
 
-- **State:** Ready
+- **State:** Completed
 - **Blocked by:** EP-019
 - **Blocks:** EP-029
 - **Parity row:** `MaxQueueSize` oldest-event eviction
