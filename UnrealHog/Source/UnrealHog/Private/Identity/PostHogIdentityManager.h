@@ -41,6 +41,18 @@ public:
 	// UuidGenerator unless bReuseAnonymousId is true. Always persists.
 	void Reset(IPostHogStorageProvider& Storage, bool bReuseAnonymousId);
 
+	// Returns a copy of current group membership; TMap copy-by-value is a deep copy, so
+	// callers cannot mutate manager state through the result.
+	TMap<FString, FString> GetGroups() const { return Groups; }
+
+	// Trims GroupType/GroupKey and replaces the membership for that group type, leaving
+	// other group types untouched. Returns false and mutates no state (no persist) if
+	// either trimmed value is empty.
+	bool SetGroup(const FString& GroupType, const FString& GroupKey, IPostHogStorageProvider& Storage);
+
+	// Clears all group membership and persists.
+	void ClearGroups(IPostHogStorageProvider& Storage);
+
 private:
 	void PersistState(IPostHogStorageProvider& Storage);
 

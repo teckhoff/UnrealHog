@@ -55,7 +55,7 @@ EP-017 is verified separately when the feature-flag subsystem exists.
 |[EP-008](EP-008-identify-reset-and-alias-apis.md)|Identity-producing public event APIs|EP-003, EP-004, EP-007|✅|
 |[EP-009](EP-009-session-manager.md)|Independent rotating `$session\_id`|EP-002|✅|
 |[EP-010](EP-010-person-profile-policy.md)|Configured `$process\_person\_profile` behavior|EP-004, EP-007|✅|
-|[EP-011](EP-011-group-membership-and-events.md)|Persistent groups and `$groupidentify`|EP-003, EP-004, EP-007|⏳|
+|[EP-011](EP-011-group-membership-and-events.md)|Persistent groups and `$groupidentify`|EP-003, EP-004, EP-007|✅|
 |[EP-012](EP-012-persistent-super-properties.md)|Register/unregister and precedence|EP-003, EP-004|✅|
 |[EP-013](EP-013-screen-event-api.md)|`$screen` public producer|EP-003, EP-004|⏳|
 |[EP-014](EP-014-manual-exception-events.md)|Manual `$exception` capture|EP-003, EP-004, EP-007|⏳|
