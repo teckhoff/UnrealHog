@@ -2,7 +2,7 @@
 
 ## Status and dependencies
 
-- **State:** Blocked
+- **State:** Ready
 - **Blocked by:** EP-023
 - **Blocks:** EP-029
 - **Parity row:** Payload-too-large recovery
