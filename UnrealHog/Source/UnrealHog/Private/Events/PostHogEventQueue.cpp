@@ -8,16 +8,20 @@
 #include "Logging/StructuredLog.h"
 #include "Serialization/JsonSerializer.h"
 #include "Storage/PostHogStorageProvider.h"
+#include "Time/PostHogClock.h"
 
 FPostHogEventQueue::FPostHogEventQueue(IPostHogStorageProvider& InStorageProvider, IPostHogBatchTransport& InTransport,
-	const FString& InApiKey, int32 InMaxQueueSize, int32 InMaxBatchSize, int32 InFlushEventCount) :
+	const FString& InApiKey, int32 InMaxQueueSize, int32 InMaxBatchSize, int32 InFlushEventCount,
+	IPostHogClock* InClock) :
 	StorageProvider(InStorageProvider),
 	Transport(InTransport),
 	ApiKey(InApiKey),
-	MaxQueueSize(FMath::Max(InMaxQueueSize, 1)), 
+	MaxQueueSize(FMath::Max(InMaxQueueSize, 1)),
 	MaxBatchSize(FMath::Max(InMaxBatchSize, 1)),
 	FlushEventCount(FMath::Max(InFlushEventCount, 1)),
-	FlushLifetimeToken(MakeShared<bool>(true))
+	FlushLifetimeToken(MakeShared<bool>(true)),
+	OwnedClock(InClock ? nullptr : MakeUnique<FPostHogSystemClock>()),
+	Clock(InClock ? *InClock : *OwnedClock)
 {
 }
 
@@ -164,14 +168,27 @@ bool FPostHogEventQueue::DeleteCorruptPersistedEvent(const FString& EventId, con
 
 void FPostHogEventQueue::Flush(FPostHogEventQueueFlushComplete OnComplete)
 {
+	if (bIsFlushing)
+	{
+		if (OnComplete)
+		{
+			PendingFlushCallbacks.Add(MoveTemp(OnComplete));
+		}
+		return;
+	}
+
+	if (PausedUntil.IsSet() && Clock.UtcNow() < PausedUntil.GetValue())
+	{
+		if (OnComplete)
+		{
+			OnComplete(EPostHogEventQueueFlushResult::Paused);
+		}
+		return;
+	}
+
 	if (OnComplete)
 	{
 		PendingFlushCallbacks.Add(MoveTemp(OnComplete));
-	}
-
-	if (bIsFlushing)
-	{
-		return;
 	}
 
 	bIsFlushing = true;
@@ -339,9 +356,15 @@ void FPostHogEventQueue::HandleBatchComplete(uint64 Generation, const TArray<FSt
 
 		UE_LOGFMT(LogPostHog, Warning, "PostHog event queue classified batch delivery failure as retryable; retaining attempted batch. StatusCode={0}.",
 			StatusCode);
+		++ConsecutiveRetryableFailures;
+		const int32 DelaySeconds = FMath::Min(ConsecutiveRetryableFailures * RetryDelaySeconds, MaxRetryDelaySeconds);
+		PausedUntil = Clock.UtcNow() + FTimespan::FromSeconds(DelaySeconds);
 		CompleteFlush(EPostHogEventQueueFlushResult::Failed);
 		return;
 	}
+
+	ConsecutiveRetryableFailures = 0;
+	PausedUntil.Reset();
 
 	if (!DeleteSentBatchRecords(BatchEventIds))
 	{
