@@ -11,10 +11,13 @@
 #include "Dom/JsonValue.h"
 #include "Events/PostHogBatchPayload.h"
 #include "Events/PostHogEvent.h"
+#include "PostHogDeveloperSettings.h"
 #include "SDK/PostHogSdkInfo.h"
 #include "Storage/PostHogFileStorageProvider.h"
 #include "Tests/PostHogFakeBatchTransport.h"
 #include "Tests/PostHogFakeClock.h"
+#include "Tests/PostHogTestPropertyHelpers.h"
+#include "UObject/Package.h"
 
 namespace
 {
@@ -52,6 +55,31 @@ namespace
 	FString MakePersistedEventJson(const FString& EventId)
 	{
 		return FString::Printf(TEXT("{\"uuid\":\"%s\",\"event\":\"seeded-event\",\"distinct_id\":\"distinct-id\",\"timestamp\":\"2026-07-16T00:00:00.000Z\",\"properties\":{}}"), *EventId);
+	}
+
+	FString MakeNumberedSeedEventId(int32 Index)
+	{
+		return FString::Printf(TEXT("00000000-0000-7000-8000-%012d"), Index);
+	}
+
+	UPostHogDeveloperSettings* MakeTransientQueueSettings(int32 MaxBatchSize, int32 FlushEventCount)
+	{
+		UPostHogDeveloperSettings* Settings = NewObject<UPostHogDeveloperSettings>(GetTransientPackage());
+		UnrealHogTests::SetPropertyValue<FString>(Settings, TEXT("ApiKey"), TEXT("phc_valid_key"));
+		UnrealHogTests::SetPropertyValue<int32>(Settings, TEXT("MaxBatchSize"), MaxBatchSize);
+		UnrealHogTests::SetPropertyValue<int32>(Settings, TEXT("FlushEventCount"), FlushEventCount);
+		return Settings;
+	}
+
+	EPostHogEventQueueFlushResult FlushQueueAndCaptureResult(FPostHogEventQueue& Queue)
+	{
+		TOptional<EPostHogEventQueueFlushResult> Result;
+		Queue.Flush([&Result](EPostHogEventQueueFlushResult InResult)
+		{
+			Result = InResult;
+		});
+		check(Result.IsSet());
+		return Result.GetValue();
 	}
 
 	const FString SeedEventId1 = TEXT("00000000-0000-7000-8000-000000000001");
@@ -199,6 +227,34 @@ namespace
 		bool bFailNextDelete = false;
 		bool bFailNextSave = false;
 	};
+
+	TArray<FString> SeedNumberedEvents(FControllableQueueStorageProvider& Storage, int32 Count)
+	{
+		TArray<FString> EventIds;
+		EventIds.Reserve(Count);
+
+		for (int32 Index = 1; Index <= Count; ++Index)
+		{
+			const FString EventId = MakeNumberedSeedEventId(Index);
+			Storage.SeedEvent(EventId);
+			EventIds.Add(EventId);
+		}
+
+		return EventIds;
+	}
+
+	TArray<FString> CopyEventIdRange(const TArray<FString>& EventIds, int32 StartIndex, int32 Count)
+	{
+		TArray<FString> Range;
+		Range.Reserve(Count);
+
+		for (int32 Index = 0; Index < Count && EventIds.IsValidIndex(StartIndex + Index); ++Index)
+		{
+			Range.Add(EventIds[StartIndex + Index]);
+		}
+
+		return Range;
+	}
 
 	void CheckEventIds(FAutomationTestBase& Test, FControllableQueueStorageProvider& Storage, const TArray<FString>& ExpectedIds, const FString& Context)
 	{
@@ -599,6 +655,199 @@ bool FPostHogEventQueueClassifiesDeliveryFailuresTest::RunTest(const FString& Pa
 			TestEqual(*FString::Printf(TEXT("%s: retryable failure deletes nothing"), Row.Label), Storage.DeleteAttempts, 0);
 			CheckEventIds(*this, Storage, { SeedEventId1, SeedEventId2, SeedEventId3 }, FString::Printf(TEXT("%s: retryable failure storage"), Row.Label));
 		}
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueuePayloadTooLargeHalvesAdjustedLimitsTest, "UnrealHog.Events.EventQueue.PayloadTooLargeHalvesAdjustedLimits", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogEventQueuePayloadTooLargeHalvesAdjustedLimitsTest::RunTest(const FString& Parameters)
+{
+	FControllableQueueStorageProvider Storage;
+	FPostHogFakeBatchTransport Transport;
+	FPostHogFakeClock Clock;
+	UPostHogDeveloperSettings* Settings = MakeTransientQueueSettings(50, 20);
+	const TArray<FString> EventIds = SeedNumberedEvents(Storage, 60);
+
+	FPostHogEventQueue Queue(Storage, Transport, Settings->GetApiKey(), 100, Settings->GetMaxBatchSize(), Settings->GetFlushEventCount(), &Clock);
+	TestEqual(TEXT("Initial adjusted MaxBatchSize comes from settings"), Queue.GetAdjustedMaxBatchSizeForTests(), 50);
+	TestEqual(TEXT("Initial adjusted FlushEventCount comes from settings"), Queue.GetAdjustedFlushEventCountForTests(), 20);
+
+	TOptional<EPostHogEventQueueFlushResult> FirstResult;
+	Queue.Flush([&FirstResult](EPostHogEventQueueFlushResult Result)
+	{
+		FirstResult = Result;
+	});
+	TestEqual(TEXT("Initial flush sends one batch"), Transport.GetTotalSendCount(), 1);
+	TestEqual(TEXT("Initial batch uses configured MaxBatchSize"), Transport.GetPayloadAt(0).Num(), 50);
+	CheckPayloadUuids(*this, Transport.GetPayloadAt(0), CopyEventIdRange(EventIds, 0, 50), TEXT("Initial oversized batch"));
+
+	Transport.CompleteLast(false, 413, TEXT(""));
+	TestEqual(TEXT("First 413 retains every event"), Queue.Num(), 60);
+	TestEqual(TEXT("First 413 deletes no records"), Storage.DeleteAttempts, 0);
+	TestTrue(TEXT("First 413 completes the flush"), FirstResult.IsSet());
+	if (FirstResult.IsSet())
+	{
+		TestEqual(TEXT("First 413 result"), FirstResult.GetValue(), EPostHogEventQueueFlushResult::Failed);
+	}
+	TestEqual(TEXT("First 413 halves adjusted MaxBatchSize"), Queue.GetAdjustedMaxBatchSizeForTests(), 25);
+	TestEqual(TEXT("First 413 halves adjusted FlushEventCount"), Queue.GetAdjustedFlushEventCountForTests(), 10);
+	TestEqual(TEXT("Settings MaxBatchSize stays unchanged"), Settings->GetMaxBatchSize(), 50);
+	TestEqual(TEXT("Settings FlushEventCount stays unchanged"), Settings->GetFlushEventCount(), 20);
+
+	const EPostHogEventQueueFlushResult ImmediateRetryResult = FlushQueueAndCaptureResult(Queue);
+	TestEqual(TEXT("Immediate retry after first 413 is paused"), ImmediateRetryResult, EPostHogEventQueueFlushResult::Paused);
+	TestEqual(TEXT("Paused retry sends no request"), Transport.GetTotalSendCount(), 1);
+
+	Clock.Advance(FTimespan::FromSeconds(5));
+	TOptional<EPostHogEventQueueFlushResult> SecondResult;
+	Queue.Flush([&SecondResult](EPostHogEventQueueFlushResult Result)
+	{
+		SecondResult = Result;
+	});
+	TestEqual(TEXT("Retry after first backoff sends one more batch"), Transport.GetTotalSendCount(), 2);
+	TestEqual(TEXT("Retry batch uses reduced MaxBatchSize"), Transport.GetPayloadAt(1).Num(), 25);
+	CheckPayloadUuids(*this, Transport.GetPayloadAt(1), CopyEventIdRange(EventIds, 0, 25), TEXT("First reduced retry batch"));
+
+	Transport.CompleteLast(false, 413, TEXT(""));
+	TestEqual(TEXT("Second 413 still retains every event"), Queue.Num(), 60);
+	TestEqual(TEXT("Second 413 still deletes no records"), Storage.DeleteAttempts, 0);
+	TestTrue(TEXT("Second 413 completes the flush"), SecondResult.IsSet());
+	if (SecondResult.IsSet())
+	{
+		TestEqual(TEXT("Second 413 result"), SecondResult.GetValue(), EPostHogEventQueueFlushResult::Failed);
+	}
+	TestEqual(TEXT("Second 413 halves adjusted MaxBatchSize with integer floor"), Queue.GetAdjustedMaxBatchSizeForTests(), 12);
+	TestEqual(TEXT("Second 413 halves adjusted FlushEventCount with integer floor"), Queue.GetAdjustedFlushEventCountForTests(), 5);
+	TestEqual(TEXT("Settings MaxBatchSize remains unchanged after second 413"), Settings->GetMaxBatchSize(), 50);
+	TestEqual(TEXT("Settings FlushEventCount remains unchanged after second 413"), Settings->GetFlushEventCount(), 20);
+
+	Clock.Advance(FTimespan::FromSeconds(10));
+	TOptional<EPostHogEventQueueFlushResult> DrainResult;
+	Queue.Flush([&DrainResult](EPostHogEventQueueFlushResult Result)
+	{
+		DrainResult = Result;
+	});
+	TestEqual(TEXT("Retry after second backoff sends the smaller batch"), Transport.GetTotalSendCount(), 3);
+	TestEqual(TEXT("Second reduced retry batch uses adjusted MaxBatchSize"), Transport.GetPayloadAt(2).Num(), 12);
+	CheckPayloadUuids(*this, Transport.GetPayloadAt(2), CopyEventIdRange(EventIds, 0, 12), TEXT("Second reduced retry batch"));
+
+	int32 SuccessfulRetryBatches = 0;
+	while (Transport.GetPendingCount() > 0)
+	{
+		Transport.CompleteLast(true, 200, TEXT(""));
+		++SuccessfulRetryBatches;
+	}
+
+	TestEqual(TEXT("Adjusted retry drains in five successful batches"), SuccessfulRetryBatches, 5);
+	TestEqual(TEXT("All retained events were deleted after successful drain"), Storage.DeleteAttempts, 60);
+	TestEqual(TEXT("Queue drains retained events without recapture"), Queue.Num(), 0);
+	TestTrue(TEXT("Successful drain completes the flush"), DrainResult.IsSet());
+	if (DrainResult.IsSet())
+	{
+		TestEqual(TEXT("Successful drain result"), DrainResult.GetValue(), EPostHogEventQueueFlushResult::Drained);
+	}
+	TestEqual(TEXT("Adjusted MaxBatchSize is not restored during queue lifetime"), Queue.GetAdjustedMaxBatchSizeForTests(), 12);
+	TestEqual(TEXT("Adjusted FlushEventCount is not restored during queue lifetime"), Queue.GetAdjustedFlushEventCountForTests(), 5);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueuePayloadTooLargeAdjustedThresholdTriggersLaterFlushTest, "UnrealHog.Events.EventQueue.PayloadTooLargeAdjustedThresholdTriggersLaterFlush", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogEventQueuePayloadTooLargeAdjustedThresholdTriggersLaterFlushTest::RunTest(const FString& Parameters)
+{
+	FControllableQueueStorageProvider Storage;
+	FPostHogFakeBatchTransport Transport;
+	FPostHogFakeClock Clock;
+	UPostHogDeveloperSettings* Settings = MakeTransientQueueSettings(50, 20);
+	SeedNumberedEvents(Storage, 12);
+
+	FPostHogEventQueue Queue(Storage, Transport, Settings->GetApiKey(), 100, Settings->GetMaxBatchSize(), Settings->GetFlushEventCount(), &Clock);
+	Queue.Flush();
+	TestEqual(TEXT("Initial threshold test sends one manual batch"), Transport.GetTotalSendCount(), 1);
+
+	Transport.CompleteLast(false, 413, TEXT(""));
+	TestEqual(TEXT("413 halves threshold to ten"), Queue.GetAdjustedFlushEventCountForTests(), 10);
+	TestEqual(TEXT("413 halves MaxBatchSize to twenty-five"), Queue.GetAdjustedMaxBatchSizeForTests(), 25);
+
+	Clock.Advance(FTimespan::FromSeconds(5));
+	TOptional<EPostHogEventQueueFlushResult> DrainResult;
+	Queue.Flush([&DrainResult](EPostHogEventQueueFlushResult Result)
+	{
+		DrainResult = Result;
+	});
+	TestEqual(TEXT("Retry after 413 sends retained events"), Transport.GetTotalSendCount(), 2);
+	Transport.CompleteLast(true, 200, TEXT(""));
+	TestTrue(TEXT("Retained events drain successfully"), DrainResult.IsSet());
+	if (DrainResult.IsSet())
+	{
+		TestEqual(TEXT("Retained drain result"), DrainResult.GetValue(), EPostHogEventQueueFlushResult::Drained);
+	}
+	TestEqual(TEXT("Queue empty before adjusted-threshold enqueue"), Queue.Num(), 0);
+
+	const int32 SendsBeforeThresholdProbe = Transport.GetTotalSendCount();
+	for (int32 Index = 1; Index <= 9; ++Index)
+	{
+		const FString Suffix = FString::Printf(TEXT("adjusted-threshold-%d"), Index);
+		TestEqual(*FString::Printf(TEXT("Enqueue %d below adjusted threshold succeeds"), Index), Queue.Enqueue(MakeTestEvent(Suffix)), EPostHogEventQueueEnqueueResult::Enqueued);
+		TestEqual(*FString::Printf(TEXT("Enqueue %d below adjusted threshold does not send"), Index), Transport.GetTotalSendCount(), SendsBeforeThresholdProbe);
+	}
+
+	TestEqual(TEXT("Nine queued events stay below adjusted threshold"), Queue.Num(), 9);
+	TestEqual(TEXT("Tenth adjusted-threshold enqueue succeeds"), Queue.Enqueue(MakeTestEvent(TEXT("adjusted-threshold-10"))), EPostHogEventQueueEnqueueResult::Enqueued);
+	TestEqual(TEXT("Adjusted threshold triggers one later auto-flush"), Transport.GetTotalSendCount(), SendsBeforeThresholdProbe + 1);
+	TestEqual(TEXT("Adjusted threshold payload contains ten events"), Transport.GetLastPayload().Num(), 10);
+	TestEqual(TEXT("Settings FlushEventCount remains unchanged after threshold adjustment"), Settings->GetFlushEventCount(), 20);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueuePayloadTooLargeAtOneRetainsAndBacksOffTest, "UnrealHog.Events.EventQueue.PayloadTooLargeAtOneRetainsAndBacksOff", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogEventQueuePayloadTooLargeAtOneRetainsAndBacksOffTest::RunTest(const FString& Parameters)
+{
+	FControllableQueueStorageProvider Storage;
+	FPostHogFakeBatchTransport Transport;
+	FPostHogFakeClock Clock;
+	UPostHogDeveloperSettings* Settings = MakeTransientQueueSettings(1, 1);
+
+	FPostHogEventQueue Queue(Storage, Transport, Settings->GetApiKey(), 100, Settings->GetMaxBatchSize(), Settings->GetFlushEventCount(), &Clock);
+	const FPostHogEvent Event = MakeTestEvent(TEXT("payload-too-large-floor"));
+	const FString EventId = Event.GetEventId();
+
+	TestEqual(TEXT("Floor test enqueue succeeds"), Queue.Enqueue(Event), EPostHogEventQueueEnqueueResult::Enqueued);
+	TestEqual(TEXT("Flush threshold one sends immediately"), Transport.GetTotalSendCount(), 1);
+	TestEqual(TEXT("Floor test first payload has one event"), Transport.GetPayloadAt(0).Num(), 1);
+	CheckPayloadUuids(*this, Transport.GetPayloadAt(0), { EventId }, TEXT("Floor initial batch"));
+
+	Transport.CompleteLast(false, 413, TEXT(""));
+	TestEqual(TEXT("413 at batch size one retains the event"), Queue.Num(), 1);
+	TestEqual(TEXT("413 at batch size one deletes nothing"), Storage.DeleteAttempts, 0);
+	TestEqual(TEXT("Adjusted MaxBatchSize remains at floor"), Queue.GetAdjustedMaxBatchSizeForTests(), 1);
+	TestEqual(TEXT("Adjusted FlushEventCount remains at floor"), Queue.GetAdjustedFlushEventCountForTests(), 1);
+
+	const EPostHogEventQueueFlushResult ImmediateRetryResult = FlushQueueAndCaptureResult(Queue);
+	TestEqual(TEXT("Immediate retry at floor is paused"), ImmediateRetryResult, EPostHogEventQueueFlushResult::Paused);
+	TestEqual(TEXT("Immediate retry at floor sends no request"), Transport.GetTotalSendCount(), 1);
+
+	Clock.Advance(FTimespan::FromSeconds(5));
+	TOptional<EPostHogEventQueueFlushResult> RetryResult;
+	Queue.Flush([&RetryResult](EPostHogEventQueueFlushResult Result)
+	{
+		RetryResult = Result;
+	});
+	TestEqual(TEXT("Retry after floor backoff sends one event"), Transport.GetTotalSendCount(), 2);
+	TestEqual(TEXT("Retry floor payload has one event"), Transport.GetPayloadAt(1).Num(), 1);
+	CheckPayloadUuids(*this, Transport.GetPayloadAt(1), { EventId }, TEXT("Floor retry batch"));
+
+	Transport.CompleteLast(true, 200, TEXT(""));
+	TestEqual(TEXT("Floor retry success drains the retained event"), Queue.Num(), 0);
+	TestTrue(TEXT("Floor retry result completes"), RetryResult.IsSet());
+	if (RetryResult.IsSet())
+	{
+		TestEqual(TEXT("Floor retry result"), RetryResult.GetValue(), EPostHogEventQueueFlushResult::Drained);
 	}
 
 	return true;
