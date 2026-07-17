@@ -2,7 +2,7 @@
 
 ## Status and dependencies
 
-- **State:** Blocked
+- **State:** Ready
 - **Blocked by:** EP-022, EP-024
 - **Blocks:** EP-029
 - **Parity row:** Unity network reachability gate
