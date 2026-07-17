@@ -2,7 +2,7 @@
 
 ## Status and dependencies
 
-- **State:** Blocked
+- **State:** Completed
 - **Blocked by:** EP-014
 - **Blocks:** EP-029
 - **Parity row:** Unity automatic handled/unhandled exception integration

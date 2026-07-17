@@ -1,6 +1,7 @@
 #include "Subsystems/PostHogRuntimeSubsystem.h"
 
 #include "Consent/PostHogConsentController.h"
+#include "ErrorTracking/PostHogExceptionCapture.h"
 #include "PostHogDeveloperSettings.h"
 #include "Engine/World.h"
 #include "Http/PostHogHttpClient.h"
@@ -31,6 +32,9 @@ void UPostHogRuntimeSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 	ConsentController->Initialize(*GetDefault<UPostHogDeveloperSettings>());
 
+	ExceptionCapture = MakeUnique<FPostHogExceptionCapture>(*ConsentController);
+	UpdateExceptionCaptureRegistration();
+
 	if (ConsentController->IsOptedIn())
 	{
 		const FString LibraryName = FPostHogSdkInfo::GetLibraryName();
@@ -50,6 +54,12 @@ void UPostHogRuntimeSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 void UPostHogRuntimeSubsystem::Deinitialize()
 {
 	StopFlushTimer();
+
+	if (ExceptionCapture)
+	{
+		ExceptionCapture->UnregisterHandlers();
+		ExceptionCapture.Reset();
+	}
 
 	if (ConsentController)
 	{
@@ -164,6 +174,8 @@ void UPostHogRuntimeSubsystem::SetAnalyticsOptIn(bool bOptIn)
 	{
 		StopFlushTimer();
 	}
+
+	UpdateExceptionCaptureRegistration();
 }
 
 bool UPostHogRuntimeSubsystem::IsAnalyticsOptedIn() const
@@ -392,5 +404,24 @@ void UPostHogRuntimeSubsystem::StopFlushTimer()
 	if (UWorld* World = GetWorld())
 	{
 		World->GetTimerManager().ClearTimer(FlushTimerHandle);
+	}
+}
+
+void UPostHogRuntimeSubsystem::UpdateExceptionCaptureRegistration()
+{
+	if (!ExceptionCapture)
+	{
+		return;
+	}
+
+	const UPostHogDeveloperSettings* Settings = GetDefault<UPostHogDeveloperSettings>();
+
+	if (Settings->ShouldCaptureExceptions() && ConsentController && ConsentController->IsOptedIn())
+	{
+		ExceptionCapture->RegisterHandlers(Settings->ShouldCaptureExceptionsInEditor(), Settings->GetExceptionDebounceIntervalMs());
+	}
+	else
+	{
+		ExceptionCapture->UnregisterHandlers();
 	}
 }
