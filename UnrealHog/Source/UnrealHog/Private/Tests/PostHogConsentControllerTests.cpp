@@ -656,6 +656,198 @@ bool FPostHogConsentControllerCaptureEventDuplicateCallerKeyLastWriteWinsTest::R
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerCaptureScreenNullPropertiesEmitsScreenEventTest, "UnrealHog.Consent.ConsentController.CaptureScreenNullPropertiesEmitsScreenEvent", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogConsentControllerCaptureScreenNullPropertiesEmitsScreenEventTest::RunTest(const FString& Parameters)
+{
+	FScopedConsentTestStorageDirectory Fixture;
+	FPostHogFakeBatchTransport* LastTransport = nullptr;
+	int32 UuidCounter = 0;
+
+	FPostHogConsentController Controller(MakeStorageFactory(Fixture.GetRootPath()), MakeTransportFactory(LastTransport), MakeUuidGenerator(UuidCounter));
+	UPostHogDeveloperSettings* Settings = MakeTransientSettings(true, true, false);
+
+	Controller.Initialize(*Settings);
+	Controller.SetOptIn(true, *Settings);
+
+	const EPostHogCaptureResult Result = Controller.CaptureScreen(TEXT("Main Menu"), nullptr);
+
+	TestEqual(TEXT("Screen capture succeeds"), Result, EPostHogCaptureResult::Success);
+	TestEqual(TEXT("Exactly one screen event queued"), Controller.GetQueuedEventCount(), 1);
+
+	Controller.Flush();
+	if (!TestNotNull(TEXT("Transport created"), LastTransport))
+	{
+		return false;
+	}
+	TestEqual(TEXT("One batch sent"), LastTransport->GetSentCount(), 1);
+
+	TSharedPtr<FJsonObject> EventObject;
+	if (!TestTrue(TEXT("Payload contains exactly one event"), TryGetSinglePayloadEvent(LastTransport->GetLastPayload(), EventObject)))
+	{
+		return false;
+	}
+	LastTransport->CompleteLast(true, 200, TEXT(""));
+
+	FString EventName;
+	TestTrue(TEXT("Persisted event has name"), EventObject->TryGetStringField(TEXT("event"), EventName));
+	TestEqual(TEXT("Persisted event is $screen"), EventName, TEXT("$screen"));
+
+	const TSharedPtr<FJsonObject>* PropertiesObject = nullptr;
+	if (!TestTrue(TEXT("Persisted event has properties object"), EventObject->TryGetObjectField(TEXT("properties"), PropertiesObject)))
+	{
+		return false;
+	}
+
+	FString ScreenNameValue;
+	TestTrue(TEXT("Persisted properties include $screen_name"), (*PropertiesObject)->TryGetStringField(TEXT("$screen_name"), ScreenNameValue));
+	TestEqual(TEXT("$screen_name uses explicit screen argument"), ScreenNameValue, TEXT("Main Menu"));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerCaptureScreenPropertiesCannotOverrideScreenNameTest, "UnrealHog.Consent.ConsentController.CaptureScreenPropertiesCannotOverrideScreenName", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogConsentControllerCaptureScreenPropertiesCannotOverrideScreenNameTest::RunTest(const FString& Parameters)
+{
+	FScopedConsentTestStorageDirectory Fixture;
+	FPostHogFakeBatchTransport* LastTransport = nullptr;
+	int32 UuidCounter = 0;
+
+	FPostHogConsentController Controller(MakeStorageFactory(Fixture.GetRootPath()), MakeTransportFactory(LastTransport), MakeUuidGenerator(UuidCounter));
+	UPostHogDeveloperSettings* Settings = MakeTransientSettings(true, true, false);
+
+	Controller.Initialize(*Settings);
+	Controller.SetOptIn(true, *Settings);
+
+	UPostHogEventProperties* Properties = NewObject<UPostHogEventProperties>();
+	Properties->AddString(TEXT("source"), TEXT("ui"));
+	Properties->AddString(TEXT("$screen_name"), TEXT("attacker"));
+
+	bool bHookCalled = false;
+	FString HookScreenName;
+	FString HookSource;
+
+	FPostHogBeforeSendDelegate BeforeSend;
+	BeforeSend.BindLambda([&](FPostHogBeforeSendEvent& Event)
+	{
+		bHookCalled = true;
+		Event.GetProperties().TryGetStringField(TEXT("$screen_name"), HookScreenName);
+		Event.GetProperties().TryGetStringField(TEXT("source"), HookSource);
+		return EPostHogBeforeSendResult::Continue;
+	});
+	Controller.SetBeforeSend(MoveTemp(BeforeSend));
+
+	const EPostHogCaptureResult Result = Controller.CaptureScreen(TEXT("Inventory"), Properties);
+
+	TestEqual(TEXT("Screen capture succeeds"), Result, EPostHogCaptureResult::Success);
+	TestTrue(TEXT("Before-send hook was invoked"), bHookCalled);
+	TestEqual(TEXT("Before-send sees explicit $screen_name"), HookScreenName, TEXT("Inventory"));
+	TestEqual(TEXT("Before-send sees caller property"), HookSource, TEXT("ui"));
+	TestEqual(TEXT("Exactly one screen event queued"), Controller.GetQueuedEventCount(), 1);
+
+	Controller.Flush();
+	if (!TestNotNull(TEXT("Transport created"), LastTransport))
+	{
+		return false;
+	}
+	TestEqual(TEXT("One batch sent"), LastTransport->GetSentCount(), 1);
+
+	TSharedPtr<FJsonObject> EventObject;
+	if (!TestTrue(TEXT("Payload contains exactly one event"), TryGetSinglePayloadEvent(LastTransport->GetLastPayload(), EventObject)))
+	{
+		return false;
+	}
+	LastTransport->CompleteLast(true, 200, TEXT(""));
+
+	FString EventName;
+	TestTrue(TEXT("Persisted event has name"), EventObject->TryGetStringField(TEXT("event"), EventName));
+	TestEqual(TEXT("Persisted event is $screen"), EventName, TEXT("$screen"));
+
+	const TSharedPtr<FJsonObject>* PropertiesObject = nullptr;
+	if (!TestTrue(TEXT("Persisted event has properties object"), EventObject->TryGetObjectField(TEXT("properties"), PropertiesObject)))
+	{
+		return false;
+	}
+
+	FString ScreenNameValue;
+	TestTrue(TEXT("Persisted properties include $screen_name"), (*PropertiesObject)->TryGetStringField(TEXT("$screen_name"), ScreenNameValue));
+	TestEqual(TEXT("Caller cannot override $screen_name"), ScreenNameValue, TEXT("Inventory"));
+	TestNotEqual(TEXT("$screen_name is not the caller's reserved value"), ScreenNameValue, TEXT("attacker"));
+
+	FString SourceValue;
+	TestTrue(TEXT("Persisted properties keep caller source"), (*PropertiesObject)->TryGetStringField(TEXT("source"), SourceValue));
+	TestEqual(TEXT("Caller source is preserved"), SourceValue, TEXT("ui"));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerCaptureScreenRejectsBlankNameTest, "UnrealHog.Consent.ConsentController.CaptureScreenRejectsBlankName", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogConsentControllerCaptureScreenRejectsBlankNameTest::RunTest(const FString& Parameters)
+{
+	FScopedConsentTestStorageDirectory Fixture;
+	FPostHogFakeBatchTransport* LastTransport = nullptr;
+	int32 UuidCounter = 0;
+
+	FPostHogConsentController Controller(MakeStorageFactory(Fixture.GetRootPath()), MakeTransportFactory(LastTransport), MakeUuidGenerator(UuidCounter));
+	UPostHogDeveloperSettings* Settings = MakeTransientSettings(true, true, false);
+
+	Controller.Initialize(*Settings);
+	Controller.SetOptIn(true, *Settings);
+
+	const EPostHogCaptureResult Result = Controller.CaptureScreen(TEXT("   "), nullptr);
+
+	TestEqual(TEXT("Whitespace-only screen name is rejected"), Result, EPostHogCaptureResult::InvalidEventName);
+	TestEqual(TEXT("No screen event queued"), Controller.GetQueuedEventCount(), 0);
+	TestFalse(TEXT("No queue directory created"), IFileManager::Get().DirectoryExists(*Fixture.GetQueueDirectory()));
+	if (!TestNotNull(TEXT("Transport exists from opt-in"), LastTransport))
+	{
+		return false;
+	}
+	TestEqual(TEXT("No batch sent"), LastTransport->GetSentCount(), 0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerCaptureScreenHonorsConsentGatesTest, "UnrealHog.Consent.ConsentController.CaptureScreenHonorsConsentGates", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogConsentControllerCaptureScreenHonorsConsentGatesTest::RunTest(const FString& Parameters)
+{
+	FScopedConsentTestStorageDirectory Fixture;
+	FPostHogFakeBatchTransport* LastTransport = nullptr;
+	int32 UuidCounter = 0;
+
+	FPostHogConsentController Controller(MakeStorageFactory(Fixture.GetRootPath()), MakeTransportFactory(LastTransport), MakeUuidGenerator(UuidCounter));
+	UPostHogDeveloperSettings* Settings = MakeTransientSettings(true, true, false);
+
+	Controller.Initialize(*Settings);
+
+	const EPostHogCaptureResult PreConsentResult = Controller.CaptureScreen(TEXT("PreConsent"), nullptr);
+
+	TestEqual(TEXT("Screen capture before consent is rejected"), PreConsentResult, EPostHogCaptureResult::NotOptedIn);
+	TestEqual(TEXT("No pre-consent screen event queued"), Controller.GetQueuedEventCount(), 0);
+	TestNull(TEXT("No transport created before consent"), LastTransport);
+	TestFalse(TEXT("No pre-consent queue directory created"), IFileManager::Get().DirectoryExists(*Fixture.GetQueueDirectory()));
+
+	TestTrue(TEXT("Opt-in succeeds"), Controller.SetOptIn(true, *Settings));
+	TestNotNull(TEXT("Transport created by opt-in"), LastTransport);
+	const int32 TransportCountAfterOptIn = Controller.GetTransportCreationCount();
+	TestTrue(TEXT("Opt-out succeeds"), Controller.SetOptIn(false, *Settings));
+	LastTransport = nullptr;
+
+	const EPostHogCaptureResult PostOptOutResult = Controller.CaptureScreen(TEXT("PostOptOut"), nullptr);
+
+	TestEqual(TEXT("Screen capture after opt-out is rejected"), PostOptOutResult, EPostHogCaptureResult::NotOptedIn);
+	TestEqual(TEXT("No post-opt-out screen event queued"), Controller.GetQueuedEventCount(), 0);
+	TestNull(TEXT("Event queue remains released after opt-out"), Controller.GetEventQueue());
+	TestEqual(TEXT("Capture after opt-out does not create transport"), Controller.GetTransportCreationCount(), TransportCountAfterOptIn);
+	TestNull(TEXT("No new transport created after opt-out"), LastTransport);
+	TestFalse(TEXT("No post-opt-out queue directory created"), IFileManager::Get().DirectoryExists(*Fixture.GetQueueDirectory()));
+
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerBeforeSendMutateTest, "UnrealHog.Consent.ConsentController.BeforeSendCanInspectAndMutateFinalEvent", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 
 bool FPostHogConsentControllerBeforeSendMutateTest::RunTest(const FString& Parameters)
