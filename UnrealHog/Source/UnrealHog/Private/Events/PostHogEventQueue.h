@@ -65,4 +65,6 @@ private:
 
 	EPostHogEventQueueEnqueueResult EnsureCapacityForSave(const FString& IncomingEventId);
 	bool TryGetOldestEvictableEventId(FString& OutEventId);
+	bool TryLoadPersistedEventForBatch(const FString& EventId, FPostHogEvent& OutEvent, bool& bOutStopFlush);
+	bool DeleteCorruptPersistedEvent(const FString& EventId, const FString& Reason);
 };

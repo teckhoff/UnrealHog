@@ -101,6 +101,51 @@ bool FPostHogEventQueue::TryGetOldestEvictableEventId(FString& OutEventId)
 	return false;
 }
 
+bool FPostHogEventQueue::TryLoadPersistedEventForBatch(const FString& EventId, FPostHogEvent& OutEvent, bool& bOutStopFlush)
+{
+	bOutStopFlush = false;
+
+	FString EventJson;
+	if (!StorageProvider.LoadEvent(EventId, EventJson))
+	{
+		bOutStopFlush = !DeleteCorruptPersistedEvent(EventId, TEXT("LoadEvent failed."));
+		return false;
+	}
+
+	TSharedPtr<FJsonObject> EventJsonObject;
+	const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(EventJson);
+	if (!FJsonSerializer::Deserialize(Reader, EventJsonObject) || !EventJsonObject.IsValid())
+	{
+		bOutStopFlush = !DeleteCorruptPersistedEvent(EventId, TEXT("Malformed JSON."));
+		return false;
+	}
+
+	FString ParseError;
+	TOptional<FPostHogEvent> ParsedEvent = FPostHogEvent::TryParseFromJson(EventJsonObject.ToSharedRef(), ParseError);
+	if (!ParsedEvent.IsSet())
+	{
+		bOutStopFlush = !DeleteCorruptPersistedEvent(EventId, ParseError);
+		return false;
+	}
+
+	OutEvent = ParsedEvent.GetValue();
+	return true;
+}
+
+bool FPostHogEventQueue::DeleteCorruptPersistedEvent(const FString& EventId, const FString& Reason)
+{
+	if (!StorageProvider.DeleteEvent(EventId))
+	{
+		UE_LOGFMT(LogPostHog, Warning, "PostHog event queue failed to delete corrupt persisted event; stopping flush. EventId={0}, Reason={1}.",
+			EventId, Reason);
+		return false;
+	}
+
+	UE_LOGFMT(LogPostHog, Warning, "PostHog event queue deleted corrupt persisted event. EventId={0}, Reason={1}.",
+		EventId, Reason);
+	return true;
+}
+
 void FPostHogEventQueue::Flush()
 {
 	if (bIsFlushing)
@@ -114,47 +159,43 @@ void FPostHogEventQueue::Flush()
 		return;
 	}
 
-	const int32 BatchSize = FMath::Min(MaxBatchSize, EventIds.Num());
-
 	TArray<FPostHogEvent> BatchEvents;
-	BatchEvents.Reserve(BatchSize);
+	BatchEvents.Reserve(MaxBatchSize);
 
 	TArray<FString> BatchEventIds;
-	BatchEventIds.Reserve(BatchSize);
+	BatchEventIds.Reserve(MaxBatchSize);
 
-	for (int32 EventIndex = 0; EventIndex < BatchSize; ++EventIndex)
+	for (const FString& EventId : EventIds)
 	{
-		const FString& EventId = EventIds[EventIndex];
-
-		FString EventJson;
-		if (!StorageProvider.LoadEvent(EventId, EventJson))
+		if (BatchEvents.Num() >= MaxBatchSize)
 		{
+			break;
+		}
+
+		FPostHogEvent Event(TEXT(""), TEXT(""));
+		bool bStopFlush = false;
+		if (!TryLoadPersistedEventForBatch(EventId, Event, bStopFlush))
+		{
+			if (bStopFlush)
+			{
+				return;
+			}
+
 			continue;
 		}
 
-		TSharedPtr<FJsonObject> EventJsonObject;
-		const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(EventJson);
-		if (!FJsonSerializer::Deserialize(Reader, EventJsonObject) || !EventJsonObject.IsValid())
-		{
-			continue;
-		}
-
-		FString ParseError;
-		TOptional<FPostHogEvent> ParsedEvent = FPostHogEvent::TryParseFromJson(EventJsonObject.ToSharedRef(), ParseError);
-		if (!ParsedEvent.IsSet())
-		{
-			UE_LOG(LogPostHog, Warning, TEXT("Skipping unparseable persisted PostHog event %s: %s"), *EventId, *ParseError);
-			continue;
-		}
-
-		BatchEvents.Add(ParsedEvent.GetValue());
+		BatchEvents.Add(Event);
 		BatchEventIds.Add(EventId);
-		InFlightEventIds.Add(EventId);
 	}
 
 	if (BatchEvents.Num() == 0)
 	{
 		return;
+	}
+
+	for (const FString& EventId : BatchEventIds)
+	{
+		InFlightEventIds.Add(EventId);
 	}
 
 	bIsFlushing = true;
