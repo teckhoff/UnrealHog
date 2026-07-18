@@ -13,6 +13,42 @@
 #include "TimerManager.h"
 #include "Utilities/PostHogUuidV7.h"
 
+namespace
+{
+	EPostHogFlushOutcome TranslateFlushOutcome(EPostHogEventQueueFlushResult Result)
+	{
+		switch (Result)
+		{
+		case EPostHogEventQueueFlushResult::Drained:
+			return EPostHogFlushOutcome::Drained;
+		case EPostHogEventQueueFlushResult::Failed:
+			return EPostHogFlushOutcome::Failed;
+		case EPostHogEventQueueFlushResult::Cancelled:
+			return EPostHogFlushOutcome::Cancelled;
+		case EPostHogEventQueueFlushResult::ProgressBlocked:
+			return EPostHogFlushOutcome::ProgressBlocked;
+		case EPostHogEventQueueFlushResult::Paused:
+			return EPostHogFlushOutcome::Paused;
+		case EPostHogEventQueueFlushResult::Empty:
+		default:
+			return EPostHogFlushOutcome::Empty;
+		}
+	}
+
+	EPostHogFlushRequestResult TranslateFlushRequestResult(EPostHogConsentFlushRequestResult Result)
+	{
+		switch (Result)
+		{
+		case EPostHogConsentFlushRequestResult::Started:
+			return EPostHogFlushRequestResult::Started;
+		case EPostHogConsentFlushRequestResult::AlreadyInProgress:
+			return EPostHogFlushRequestResult::AlreadyInProgress;
+		case EPostHogConsentFlushRequestResult::Skipped:
+		default:
+			return EPostHogFlushRequestResult::Skipped;
+		}
+	}
+}
 
 bool UPostHogRuntimeSubsystem::ShouldCreateSubsystem(UObject* Outer) const
 {
@@ -149,12 +185,14 @@ UPostHogEventPropertyArray* UPostHogRuntimeSubsystem::CreateEventPropertyArray()
 	return NewObject<UPostHogEventPropertyArray>(this);
 }
 
-void UPostHogRuntimeSubsystem::Flush()
+EPostHogFlushRequestResult UPostHogRuntimeSubsystem::Flush()
 {
-	if (ConsentController)
-	{
-		ConsentController->Flush();
-	}
+	return RequestFlushInternal({});
+}
+
+EPostHogFlushRequestResult UPostHogRuntimeSubsystem::Flush(FPostHogFlushCompletedDelegate OnComplete)
+{
+	return RequestFlushInternal(MoveTemp(OnComplete));
 }
 
 void UPostHogRuntimeSubsystem::SetAnalyticsOptIn(bool bOptIn)
@@ -365,13 +403,42 @@ void UPostHogRuntimeSubsystem::ClearBeforeSend()
 	}
 }
 
+EPostHogFlushRequestResult UPostHogRuntimeSubsystem::RequestFlushInternal(FPostHogFlushCompletedDelegate OnComplete)
+{
+	if (!ConsentController)
+	{
+		UE_LOGFMT(LogPostHog, Warning, "PostHog Runtime Subsystem has no analytics consent; skipping flush request.");
+		OnComplete.ExecuteIfBound(EPostHogFlushOutcome::Empty);
+		return EPostHogFlushRequestResult::Skipped;
+	}
+
+	if (ConsentController->IsShuttingDown())
+	{
+		UE_LOGFMT(LogPostHog, Log, "PostHog Runtime Subsystem is shutting down; skipping flush request.");
+		OnComplete.ExecuteIfBound(EPostHogFlushOutcome::Empty);
+		return EPostHogFlushRequestResult::Skipped;
+	}
+
+	if (!ConsentController->IsOptedIn())
+	{
+		UE_LOGFMT(LogPostHog, Log, "PostHog Runtime Subsystem has no analytics consent; skipping flush request.");
+		OnComplete.ExecuteIfBound(EPostHogFlushOutcome::Empty);
+		return EPostHogFlushRequestResult::Skipped;
+	}
+
+	const EPostHogConsentFlushRequestResult Result = ConsentController->RequestFlush(
+		[OnComplete](EPostHogEventQueueFlushResult FlushResult)
+		{
+			OnComplete.ExecuteIfBound(TranslateFlushOutcome(FlushResult));
+		});
+
+	return TranslateFlushRequestResult(Result);
+}
+
 void UPostHogRuntimeSubsystem::FlushQueuedEvents()
 {
-	if (ConsentController)
-	{
-		UE_LOGFMT(LogPostHog, Log, "Timer Queue Flush!");
-		ConsentController->Flush();
-	}
+	UE_LOGFMT(LogPostHog, Log, "Timer Queue Flush!");
+	RequestFlushInternal({});
 }
 
 void UPostHogRuntimeSubsystem::StartFlushTimer()
