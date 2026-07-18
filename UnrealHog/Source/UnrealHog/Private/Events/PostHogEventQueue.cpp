@@ -17,8 +17,8 @@ FPostHogEventQueue::FPostHogEventQueue(IPostHogStorageProvider& InStorageProvide
 	Transport(InTransport),
 	ApiKey(InApiKey),
 	MaxQueueSize(FMath::Max(InMaxQueueSize, 1)),
-	MaxBatchSize(FMath::Max(InMaxBatchSize, 1)),
-	FlushEventCount(FMath::Max(InFlushEventCount, 1)),
+	AdjustedMaxBatchSize(FMath::Max(InMaxBatchSize, 1)),
+	AdjustedFlushEventCount(FMath::Max(InFlushEventCount, 1)),
 	FlushLifetimeToken(MakeShared<bool>(true)),
 	OwnedClock(InClock ? nullptr : MakeUnique<FPostHogSystemClock>()),
 	Clock(InClock ? *InClock : *OwnedClock)
@@ -52,7 +52,7 @@ EPostHogEventQueueEnqueueResult FPostHogEventQueue::Enqueue(const FPostHogEvent&
 		return EPostHogEventQueueEnqueueResult::RejectedSaveFailed;
 	}
 
-	if (StorageProvider.GetEventCount() >= FlushEventCount)
+	if (StorageProvider.GetEventCount() >= AdjustedFlushEventCount)
 	{
 		Flush();
 	}
@@ -250,13 +250,13 @@ bool FPostHogEventQueue::TryBuildNextBatch(FFlushBatch& OutBatch, bool& bOutProg
 	bOutProgressBlocked = false;
 
 	const TArray<FString> EventIds = StorageProvider.GetEventIds();
-	const int32 BatchCapacity = FMath::Min(MaxBatchSize, EventIds.Num());
+	const int32 BatchCapacity = FMath::Min(AdjustedMaxBatchSize, EventIds.Num());
 	OutBatch.Events.Reset(BatchCapacity);
 	OutBatch.EventIds.Reset(BatchCapacity);
 
 	for (const FString& EventId : EventIds)
 	{
-		if (OutBatch.Events.Num() >= MaxBatchSize)
+		if (OutBatch.Events.Num() >= AdjustedMaxBatchSize)
 		{
 			break;
 		}
@@ -354,6 +354,11 @@ void FPostHogEventQueue::HandleBatchComplete(uint64 Generation, const TArray<FSt
 			return;
 		}
 
+		if (StatusCode == 413)
+		{
+			ReduceBatchLimitsAfterPayloadTooLarge();
+		}
+
 		UE_LOGFMT(LogPostHog, Warning, "PostHog event queue classified batch delivery failure as retryable; retaining attempted batch. StatusCode={0}.",
 			StatusCode);
 		++ConsecutiveRetryableFailures;
@@ -378,6 +383,15 @@ void FPostHogEventQueue::HandleBatchComplete(uint64 Generation, const TArray<FSt
 bool FPostHogEventQueue::IsPermanentFailureStatus(int32 StatusCode)
 {
 	return StatusCode >= 400 && StatusCode < 500 && StatusCode != 413;
+}
+
+void FPostHogEventQueue::ReduceBatchLimitsAfterPayloadTooLarge()
+{
+	AdjustedMaxBatchSize = FMath::Max(AdjustedMaxBatchSize / 2, 1);
+	AdjustedFlushEventCount = FMath::Max(AdjustedFlushEventCount / 2, 1);
+
+	UE_LOGFMT(LogPostHog, Warning, "PostHog event queue received HTTP 413; reducing local batch limits. AdjustedMaxBatchSize={0}, AdjustedFlushEventCount={1}.",
+		AdjustedMaxBatchSize, AdjustedFlushEventCount);
 }
 
 bool FPostHogEventQueue::DeleteSentBatchRecords(const TArray<FString>& BatchEventIds)
