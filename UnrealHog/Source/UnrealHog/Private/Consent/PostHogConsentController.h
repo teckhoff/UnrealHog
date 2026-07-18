@@ -171,9 +171,19 @@ public:
 	void NotifyApplicationForegrounded();
 	void NotifyApplicationBackgrounded();
 
+	// Blocks until any pending durable storage writes complete. Never issues network requests;
+	// safe to call from teardown paths (Deinitialize, OnEnginePreExit, terminate) that must not
+	// touch the network. Safe no-op when there is no storage provider.
+	void DrainPendingStorageWrites();
+
 private:
 	bool EnableCollection(const UPostHogDeveloperSettings& Settings, FString& OutFailureReason);
 	void DisableCollection();
+
+	// FCoreDelegates::ApplicationWillEnterBackgroundDelegate handler: the engine is still alive
+	// here, so it is safe to request a best-effort asynchronous flush before synchronously
+	// draining pending storage writes as the durability guarantee.
+	void HandleApplicationEnteringBackground();
 
 	void PersistOptIn(bool bOptIn) const;
 	static bool TryLoadPersistedOptIn(IPostHogStorageProvider& StorageProvider, bool& OutOptedIn);
@@ -212,4 +222,9 @@ private:
 	int32 IdentityManagerLoadCount = 0;
 
 	bool bIsShuttingDown = false;
+
+	// Bound only while opted in, unbound idempotently in DisableCollection() and at the start
+	// of Shutdown() so overlapping teardown paths never fire into a partially destroyed controller.
+	FDelegateHandle BackgroundFlushHandle;
+	FDelegateHandle TerminateShutdownHandle;
 };

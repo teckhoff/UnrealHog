@@ -2,7 +2,7 @@
 
 ## Status and dependencies
 
-- **State:** Blocked
+- **State:** Completed
 - **Blocked by:** EP-002, EP-016, EP-022, EP-026
 - **Blocks:** EP-029
 - **Parity row:** Background persistence and `FlushOnQuit`

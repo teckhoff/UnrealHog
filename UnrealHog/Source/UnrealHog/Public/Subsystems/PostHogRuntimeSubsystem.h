@@ -12,6 +12,7 @@ class UPostHogEventProperties;
 class UPostHogEventPropertyArray;
 class FPostHogConsentController;
 class FPostHogExceptionCapture;
+class FPostHogQuitFlushCoordinator;
 
 // Immediate, Blueprint-friendly acceptance result returned by UPostHogRuntimeSubsystem::Flush.
 // Reports only whether a drain request was accepted, not how it eventually finished.
@@ -133,6 +134,15 @@ public:
 	void SetBeforeSend(FPostHogBeforeSendDelegate InBeforeSend);
 	void ClearBeforeSend();
 
+	// Bounded drain-then-exit: performs the same flush/timeout/shutdown sequence as the
+	// bFlushOnQuit-gated window-close veto, then requests engine exit. Not gated by bFlushOnQuit
+	// since this is an explicit developer action, and it covers programmatic quit paths
+	// (UKismetSystemLibrary::QuitGame, the `quit` console command) that bypass the veto entirely.
+	// Safe to call alongside an in-progress vetoed close: only the first caller to reach the
+	// coordinator starts the flush, and engine exit is still requested exactly once.
+	UFUNCTION(BlueprintCallable, Category="PostHog|Events")
+	void FlushAndQuit();
+
 private:
 	EPostHogFlushRequestResult RequestFlushInternal(FPostHogFlushCompletedDelegate OnComplete);
 	void FlushQueuedEvents();
@@ -140,8 +150,19 @@ private:
 	void StopFlushTimer();
 	void UpdateExceptionCaptureRegistration();
 
+	// FCoreDelegates::OnEnginePreExit handler: storage-only finalize, no coordinator involvement
+	// and no network I/O, since the engine may already be tearing down by this point.
+	void HandleEnginePreExit();
+
+	// UGameViewportClient::OnWindowCloseRequested() handler, bound only when bFlushOnQuit is
+	// enabled. Always vetoes the close (returns false); the coordinator itself requests engine
+	// exit once the bounded drain completes or times out.
+	bool HandleWindowCloseRequested();
+
 	FTimerHandle FlushTimerHandle;
 
 	TUniquePtr<FPostHogConsentController> ConsentController;
 	TUniquePtr<FPostHogExceptionCapture> ExceptionCapture;
+	TUniquePtr<FPostHogQuitFlushCoordinator> QuitCoordinator;
+	FDelegateHandle OnEnginePreExitHandle;
 };

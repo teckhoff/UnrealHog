@@ -80,9 +80,17 @@ public:
 		return State.Remove(StateKey) > 0;
 	}
 
+	virtual void FlushPendingWrites() override
+	{
+		++FlushPendingWritesCallCount;
+	}
+
+	int32 GetFlushPendingWritesCallCount() const { return FlushPendingWritesCallCount; }
+
 private:
 	TMap<FString, FString> Events;
 	TMap<FString, FString> State;
+	int32 FlushPendingWritesCallCount = 0;
 };
 
 #endif // WITH_DEV_AUTOMATION_TESTS

@@ -3,10 +3,14 @@
 #include "Consent/PostHogConsentController.h"
 #include "ErrorTracking/PostHogExceptionCapture.h"
 #include "PostHogDeveloperSettings.h"
+#include "Engine/GameInstance.h"
+#include "Engine/GameViewportClient.h"
 #include "Engine/World.h"
 #include "Http/PostHogHttpClient.h"
+#include "Lifecycle/PostHogQuitFlushCoordinator.h"
 #include "Logging/PostHogLogger.h"
 #include "Logging/StructuredLog.h"
+#include "Misc/CoreDelegates.h"
 #include "SDK/PostHogSdkInfo.h"
 #include "Storage/PostHogStorageProvider.h"
 #include "Events/PostHogEventProperties.h"
@@ -61,15 +65,35 @@ void UPostHogRuntimeSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
 
+	const UPostHogDeveloperSettings* Settings = GetDefault<UPostHogDeveloperSettings>();
+
 	ConsentController = MakeUnique<FPostHogConsentController>(
 		[]() { return IPostHogStorageProvider::CreateDefaultProvider(); },
 		[](const FString& Host) -> TUniquePtr<IPostHogBatchTransport> { return MakeUnique<FPostHogHttpClient>(Host); },
 		[]() { return PostHogUuidV7::New(); });
 
-	ConsentController->Initialize(*GetDefault<UPostHogDeveloperSettings>());
+	ConsentController->Initialize(*Settings);
 
 	ExceptionCapture = MakeUnique<FPostHogExceptionCapture>(*ConsentController);
 	UpdateExceptionCaptureRegistration();
+
+	QuitCoordinator = MakeUnique<FPostHogQuitFlushCoordinator>(
+		[this](FPostHogEventQueueFlushComplete OnComplete) { ConsentController->RequestFlush(MoveTemp(OnComplete)); },
+		[this]() { ConsentController->Shutdown(); },
+		Settings->GetFlushOnQuitTimeoutSeconds());
+
+	OnEnginePreExitHandle = FCoreDelegates::OnEnginePreExit.AddUObject(this, &UPostHogRuntimeSubsystem::HandleEnginePreExit);
+
+	if (Settings->ShouldFlushOnQuit())
+	{
+		if (UGameInstance* OwningGameInstance = GetGameInstance())
+		{
+			if (UGameViewportClient* ViewportClient = OwningGameInstance->GetGameViewportClient())
+			{
+				ViewportClient->OnWindowCloseRequested().BindUObject(this, &UPostHogRuntimeSubsystem::HandleWindowCloseRequested);
+			}
+		}
+	}
 
 	if (ConsentController->IsOptedIn())
 	{
@@ -91,6 +115,29 @@ void UPostHogRuntimeSubsystem::Deinitialize()
 {
 	StopFlushTimer();
 
+	if (OnEnginePreExitHandle.IsValid())
+	{
+		FCoreDelegates::OnEnginePreExit.Remove(OnEnginePreExitHandle);
+		OnEnginePreExitHandle.Reset();
+	}
+
+	if (UGameInstance* OwningGameInstance = GetGameInstance())
+	{
+		if (UGameViewportClient* ViewportClient = OwningGameInstance->GetGameViewportClient())
+		{
+			// Only unbind our own handler: OnWindowCloseRequested is single-bind, so clobbering
+			// a different (e.g. game code's) handler here would silently break it.
+			if (ViewportClient->OnWindowCloseRequested().IsBoundToObject(this))
+			{
+				ViewportClient->OnWindowCloseRequested().Unbind();
+			}
+		}
+	}
+
+	// Destroying the coordinator invokes any still-pending timeout cancel closure; it never
+	// initiates network I/O itself.
+	QuitCoordinator.Reset();
+
 	if (ExceptionCapture)
 	{
 		ExceptionCapture->UnregisterHandlers();
@@ -99,10 +146,41 @@ void UPostHogRuntimeSubsystem::Deinitialize()
 
 	if (ConsentController)
 	{
+		// Storage-only finalize: Deinitialize must never initiate network I/O.
 		ConsentController->Shutdown();
 	}
 
 	Super::Deinitialize();
+}
+
+void UPostHogRuntimeSubsystem::HandleEnginePreExit()
+{
+	if (ConsentController)
+	{
+		// Storage-only finalize: the engine may already be tearing down, so no network I/O and
+		// no coordinator involvement here.
+		ConsentController->Shutdown();
+	}
+}
+
+bool UPostHogRuntimeSubsystem::HandleWindowCloseRequested()
+{
+	if (QuitCoordinator)
+	{
+		QuitCoordinator->BeginFlushAndQuit();
+	}
+
+	// Always veto: the coordinator itself requests engine exit once the bounded drain completes
+	// or times out.
+	return false;
+}
+
+void UPostHogRuntimeSubsystem::FlushAndQuit()
+{
+	if (QuitCoordinator)
+	{
+		QuitCoordinator->BeginFlushAndQuit();
+	}
 }
 
 void UPostHogRuntimeSubsystem::CaptureEvent(const FString& EventName, UPostHogEventProperties* Properties)

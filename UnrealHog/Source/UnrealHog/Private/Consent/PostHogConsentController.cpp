@@ -11,6 +11,7 @@
 #include "Identity/PostHogIdentityManager.h"
 #include "Logging/PostHogLogger.h"
 #include "Logging/StructuredLog.h"
+#include "Misc/CoreDelegates.h"
 #include "PostHogDeveloperSettings.h"
 #include "PostHogSettingsValidation.h"
 #include "Serialization/JsonSerializer.h"
@@ -69,6 +70,18 @@ void FPostHogConsentController::Initialize(const UPostHogDeveloperSettings& Sett
 
 void FPostHogConsentController::Shutdown()
 {
+	if (BackgroundFlushHandle.IsValid())
+	{
+		FCoreDelegates::ApplicationWillEnterBackgroundDelegate.Remove(BackgroundFlushHandle);
+		BackgroundFlushHandle.Reset();
+	}
+
+	if (TerminateShutdownHandle.IsValid())
+	{
+		FCoreDelegates::GetApplicationWillTerminateDelegate().Remove(TerminateShutdownHandle);
+		TerminateShutdownHandle.Reset();
+	}
+
 	bIsShuttingDown = true;
 
 	if (LifecycleHandler)
@@ -80,6 +93,11 @@ void FPostHogConsentController::Shutdown()
 	{
 		EventQueue->CancelInFlightRequest();
 	}
+
+	// Storage-only finalize: this path (also reached via Deinitialize, OnEnginePreExit, and the
+	// terminate delegate binding above) must never initiate network I/O once engine teardown may
+	// be underway.
+	DrainPendingStorageWrites();
 }
 
 bool FPostHogConsentController::SetOptIn(bool bOptIn, const UPostHogDeveloperSettings& Settings)
@@ -478,6 +496,29 @@ void FPostHogConsentController::NotifyApplicationBackgrounded()
 	SessionManager->OnBackground();
 }
 
+void FPostHogConsentController::DrainPendingStorageWrites()
+{
+	if (StorageProvider.IsValid())
+	{
+		StorageProvider->FlushPendingWrites();
+	}
+}
+
+void FPostHogConsentController::HandleApplicationEnteringBackground()
+{
+	// Session activity is already stopped by LifecycleHandler's own binding to this same
+	// delegate (NotifyApplicationBackgrounded -> SessionManager->OnBackground()); this handler
+	// only adds the flush/drain behavior required by EP-027.
+
+	// Best-effort: the engine is still alive here so starting a request is safe, but on iOS the
+	// process may be suspended moments later, so this is a latency optimization only.
+	RequestFlush({});
+
+	// The durability guarantee: synchronously ensure queued events are durably persisted before
+	// the process may be suspended.
+	DrainPendingStorageWrites();
+}
+
 bool FPostHogConsentController::EnableCollection(const UPostHogDeveloperSettings& Settings, FString& OutFailureReason)
 {
 	if (!Settings.IsAnalyticsEnabled())
@@ -543,11 +584,26 @@ bool FPostHogConsentController::EnableCollection(const UPostHogDeveloperSettings
 		LifecycleMetadataProvider);
 	LifecycleHandler->Start(Settings, *StorageProvider);
 
+	BackgroundFlushHandle = FCoreDelegates::ApplicationWillEnterBackgroundDelegate.AddRaw(this, &FPostHogConsentController::HandleApplicationEnteringBackground);
+	TerminateShutdownHandle = FCoreDelegates::GetApplicationWillTerminateDelegate().AddRaw(this, &FPostHogConsentController::Shutdown);
+
 	return true;
 }
 
 void FPostHogConsentController::DisableCollection()
 {
+	if (BackgroundFlushHandle.IsValid())
+	{
+		FCoreDelegates::ApplicationWillEnterBackgroundDelegate.Remove(BackgroundFlushHandle);
+		BackgroundFlushHandle.Reset();
+	}
+
+	if (TerminateShutdownHandle.IsValid())
+	{
+		FCoreDelegates::GetApplicationWillTerminateDelegate().Remove(TerminateShutdownHandle);
+		TerminateShutdownHandle.Reset();
+	}
+
 	if (LifecycleHandler)
 	{
 		LifecycleHandler->Stop();
