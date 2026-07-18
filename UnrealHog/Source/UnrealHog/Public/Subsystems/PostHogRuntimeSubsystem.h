@@ -12,6 +12,35 @@ class UPostHogEventProperties;
 class UPostHogEventPropertyArray;
 class FPostHogConsentController;
 class FPostHogExceptionCapture;
+
+// Immediate, Blueprint-friendly acceptance result returned by UPostHogRuntimeSubsystem::Flush.
+// Reports only whether a drain request was accepted, not how it eventually finished.
+UENUM(BlueprintType)
+enum class EPostHogFlushRequestResult : uint8
+{
+	Started,
+	AlreadyInProgress,
+	Skipped
+};
+
+// Eventual outcome of a manual flush, delivered to a bound FPostHogFlushCompletedDelegate.
+// Mirrors the internal queue drain result, kept as a separate public type so callers are
+// insulated from internal queue implementation changes.
+UENUM(BlueprintType)
+enum class EPostHogFlushOutcome : uint8
+{
+	Drained,
+	Empty,
+	Failed,
+	Cancelled,
+	ProgressBlocked,
+	Paused
+};
+
+// C++-only completion notification for a manual Flush() call; not Blueprint-exposed since
+// delegates with payloads are not natively assignable from Blueprint graphs.
+DECLARE_DELEGATE_OneParam(FPostHogFlushCompletedDelegate, EPostHogFlushOutcome);
+
 /**
  *
  */
@@ -42,8 +71,16 @@ public:
 	UFUNCTION(BlueprintCallable, Category="PostHog|Events")
 	UPostHogEventPropertyArray* CreateEventPropertyArray();
 
+	// Requests a complete asynchronous drain of the queued events. Returns immediately with
+	// acceptance status; does not block Blueprint or the game thread. Safe to call before
+	// consent, before Initialize(), during/after Deinitialize(), or with an empty queue.
 	UFUNCTION(BlueprintCallable, Category="PostHog|Events")
-	void Flush();
+	EPostHogFlushRequestResult Flush();
+
+	// C++-only overload that additionally reports the eventual drain outcome via OnComplete,
+	// invoked exactly once (synchronously for a Skipped result, otherwise when the shared
+	// drain completes).
+	EPostHogFlushRequestResult Flush(FPostHogFlushCompletedDelegate OnComplete);
 
 	UFUNCTION(BlueprintCallable, Category="PostHog|Consent")
 	void SetAnalyticsOptIn(bool bOptIn);
@@ -97,6 +134,7 @@ public:
 	void ClearBeforeSend();
 
 private:
+	EPostHogFlushRequestResult RequestFlushInternal(FPostHogFlushCompletedDelegate OnComplete);
 	void FlushQueuedEvents();
 	void StartFlushTimer();
 	void StopFlushTimer();
