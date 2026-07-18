@@ -12,6 +12,7 @@
 #include "Storage/PostHogFileStorageProvider.h"
 #include "Tests/PostHogFakeBatchTransport.h"
 #include "Tests/PostHogFakeClock.h"
+#include "Tests/PostHogFakeReachabilityProvider.h"
 
 namespace
 {
@@ -203,6 +204,41 @@ bool FPostHogEventQueueRetryEnqueueDuringPauseDoesNotCreateHttpRequestTest::RunT
 	Clock.Advance(FTimespan::FromSeconds(5));
 	Queue.Flush();
 	TestEqual(TEXT("Flush after pause elapses sends"), Transport.GetTotalSendCount(), TotalSendsBeforePause + 1);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueOfflineSkipPreservesRetryBackoffTest, "UnrealHog.Events.EventQueue.OfflineSkipPreservesRetryBackoff", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogEventQueueOfflineSkipPreservesRetryBackoffTest::RunTest(const FString& Parameters)
+{
+	FScopedRetryBackoffTestStorageDirectory Fixture;
+	FPostHogFileStorageProvider Storage(Fixture.GetRootPath());
+	FPostHogFakeBatchTransport Transport;
+	FPostHogFakeClock Clock;
+	FPostHogFakeReachabilityProvider Reachability(EPostHogReachabilityState::Reachable);
+
+	FPostHogEventQueue Queue(Storage, Transport, TEXT("test-api-key"), 100, 100, 1, &Clock, &Reachability);
+
+	Queue.Enqueue(MakeRetryTestEvent(TEXT("1")));
+	TestEqual(TEXT("Initial send occurred"), Transport.GetSentCount(), 1);
+	Transport.CompleteLast(false, 500, TEXT(""));
+
+	const int32 TotalSendsBeforeOfflineSkip = Transport.GetTotalSendCount();
+
+	Reachability.SetState(EPostHogReachabilityState::NotReachable);
+	TestEqual(TEXT("Offline flush is skipped"), static_cast<uint8>(FlushAndCaptureResult(Queue)), static_cast<uint8>(EPostHogEventQueueFlushResult::SkippedOffline));
+	TestEqual(TEXT("Offline skip issues no send"), Transport.GetTotalSendCount(), TotalSendsBeforeOfflineSkip);
+	TestEqual(TEXT("Offline skip leaves no pending request"), Transport.GetSentCount(), 0);
+
+	Reachability.SetState(EPostHogReachabilityState::Reachable);
+	TestEqual(TEXT("Reachable flush before pause expires remains paused"), static_cast<uint8>(FlushAndCaptureResult(Queue)), static_cast<uint8>(EPostHogEventQueueFlushResult::Paused));
+	TestEqual(TEXT("Paused reachable flush issues no send"), Transport.GetTotalSendCount(), TotalSendsBeforeOfflineSkip);
+
+	Clock.Advance(FTimespan::FromSeconds(5));
+	Queue.Flush();
+	TestEqual(TEXT("Reachable flush at pause boundary sends"), Transport.GetTotalSendCount(), TotalSendsBeforeOfflineSkip + 1);
+	TestEqual(TEXT("Reachable flush creates one pending request"), Transport.GetSentCount(), 1);
 
 	return true;
 }

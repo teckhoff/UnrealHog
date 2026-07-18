@@ -6,6 +6,7 @@
 
 class IPostHogStorageProvider;
 class IPostHogClock;
+class IPostHogReachabilityProvider;
 
 enum class EPostHogEventQueueEnqueueResult : uint8
 {
@@ -22,7 +23,8 @@ enum class EPostHogEventQueueFlushResult : uint8
 	Failed,
 	Cancelled,
 	ProgressBlocked,
-	Paused
+	Paused,
+	SkippedOffline
 };
 
 inline const TCHAR* LexToString(EPostHogEventQueueEnqueueResult Result)
@@ -58,6 +60,8 @@ inline const TCHAR* LexToString(EPostHogEventQueueFlushResult Result)
 		return TEXT("ProgressBlocked");
 	case EPostHogEventQueueFlushResult::Paused:
 		return TEXT("Paused");
+	case EPostHogEventQueueFlushResult::SkippedOffline:
+		return TEXT("SkippedOffline");
 	default:
 		return TEXT("Unknown");
 	}
@@ -74,7 +78,8 @@ public:
 	FPostHogEventQueue(IPostHogStorageProvider& InStorageProvider,
 		IPostHogBatchTransport& InTransport, const FString& InApiKey,
 		int32 InMaxQueueSize, int32 InMaxBatchSize, int32 InFlushEventCount,
-		IPostHogClock* InClock = nullptr);
+		IPostHogClock* InClock = nullptr,
+		IPostHogReachabilityProvider* InReachabilityProvider = nullptr);
 	~FPostHogEventQueue();
 
 	EPostHogEventQueueEnqueueResult Enqueue(const FPostHogEvent& Event);
@@ -110,6 +115,8 @@ private:
 
 	TUniquePtr<IPostHogClock> OwnedClock;
 	IPostHogClock& Clock;
+	TUniquePtr<IPostHogReachabilityProvider> OwnedReachabilityProvider;
+	IPostHogReachabilityProvider& ReachabilityProvider;
 	int32 ConsecutiveRetryableFailures = 0;
 	TOptional<FDateTime> PausedUntil;
 	static constexpr int32 RetryDelaySeconds = 5;

@@ -72,6 +72,5 @@ EP-017 is verified separately when the feature-flag subsystem exists.
 |[EP-025](EP-025-payload-too-large-adaptation.md)|Adaptive batching after HTTP 413|EP-023|✅|
 |[EP-026](EP-026-public-manual-flush.md)|Blueprint/C++ manual flush API|EP-022|⏳|
 |[EP-027](EP-027-background-and-shutdown-flush.md)|Background persistence and bounded final flush|EP-002, EP-016, EP-022, EP-026|❌|
-|[EP-028](EP-028-offline-flush-gate.md)|Skip HTTP while the platform is known offline|EP-022, EP-024|⏳|
+|[EP-028](EP-028-offline-flush-gate.md)|Skip HTTP while the platform is known offline|EP-022, EP-024|✅|
 |[EP-029](EP-029-core-ingress-acceptance-suite.md)|End-to-end isolated core ingress acceptance suite|EP-001–EP-016, EP-018–EP-028|❌|
-

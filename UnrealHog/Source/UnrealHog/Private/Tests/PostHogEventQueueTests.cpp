@@ -16,6 +16,7 @@
 #include "Storage/PostHogFileStorageProvider.h"
 #include "Tests/PostHogFakeBatchTransport.h"
 #include "Tests/PostHogFakeClock.h"
+#include "Tests/PostHogFakeReachabilityProvider.h"
 #include "Tests/PostHogTestPropertyHelpers.h"
 #include "UObject/Package.h"
 
@@ -356,6 +357,146 @@ namespace
 			}
 		}
 	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueKnownOfflineFlushSkipsTransportAndPreservesQueueTest, "UnrealHog.Events.EventQueue.KnownOfflineFlushSkipsTransportAndPreservesQueue", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogEventQueueKnownOfflineFlushSkipsTransportAndPreservesQueueTest::RunTest(const FString& Parameters)
+{
+	FControllableQueueStorageProvider Storage;
+	FPostHogFakeBatchTransport Transport;
+	FPostHogFakeReachabilityProvider Reachability(EPostHogReachabilityState::NotReachable);
+	TOptional<EPostHogEventQueueFlushResult> Result;
+
+	Storage.SeedEvent(SeedEventId1);
+	Storage.SeedEvent(SeedEventId2);
+
+	const TArray<FString> ExpectedIds = Storage.GetEventIds();
+	FPostHogEventQueue Queue(Storage, Transport, TEXT("test-api-key"), 100, 2, 100, nullptr, &Reachability);
+	Queue.Flush([&Result](EPostHogEventQueueFlushResult InResult)
+	{
+		Result = InResult;
+	});
+
+	TestTrue(TEXT("Known-offline flush completed synchronously"), Result.IsSet());
+	if (Result.IsSet())
+	{
+		TestEqual(TEXT("Known-offline flush result"), Result.GetValue(), EPostHogEventQueueFlushResult::SkippedOffline);
+	}
+	TestEqual(TEXT("Known-offline flush creates no transport request"), Transport.GetTotalSendCount(), 0);
+	TestEqual(TEXT("Known-offline flush loads no event"), Storage.LoadAttempts, 0);
+	TestEqual(TEXT("Known-offline flush deletes no event"), Storage.DeleteAttempts, 0);
+	CheckEventIds(*this, Storage, ExpectedIds, TEXT("Known-offline flush preserves queue"));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueReachableFlushSendsBatchTest, "UnrealHog.Events.EventQueue.ReachableFlushSendsBatch", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogEventQueueReachableFlushSendsBatchTest::RunTest(const FString& Parameters)
+{
+	FControllableQueueStorageProvider Storage;
+	FPostHogFakeBatchTransport Transport;
+	FPostHogFakeReachabilityProvider Reachability(EPostHogReachabilityState::Reachable);
+	TOptional<EPostHogEventQueueFlushResult> Result;
+
+	Storage.SeedEvent(SeedEventId1);
+
+	FPostHogEventQueue Queue(Storage, Transport, TEXT("test-api-key"), 100, 2, 100, nullptr, &Reachability);
+	Queue.Flush([&Result](EPostHogEventQueueFlushResult InResult)
+	{
+		Result = InResult;
+	});
+
+	TestEqual(TEXT("Reachable flush sends one request"), Transport.GetTotalSendCount(), 1);
+	TestEqual(TEXT("Reachable flush loads one event"), Storage.LoadAttempts, 1);
+	TestFalse(TEXT("Reachable flush waits for request completion"), Result.IsSet());
+
+	Transport.CompleteLast(true, 200, TEXT(""));
+
+	TestEqual(TEXT("Reachable success deletes sent event"), Storage.DeleteAttempts, 1);
+	TestEqual(TEXT("Reachable success drains queue"), Queue.Num(), 0);
+	TestTrue(TEXT("Reachable flush completed"), Result.IsSet());
+	if (Result.IsSet())
+	{
+		TestEqual(TEXT("Reachable flush result"), Result.GetValue(), EPostHogEventQueueFlushResult::Drained);
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueUnknownFlushSendsBatchTest, "UnrealHog.Events.EventQueue.UnknownFlushSendsBatch", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogEventQueueUnknownFlushSendsBatchTest::RunTest(const FString& Parameters)
+{
+	FControllableQueueStorageProvider Storage;
+	FPostHogFakeBatchTransport Transport;
+	FPostHogFakeReachabilityProvider Reachability(EPostHogReachabilityState::Unknown);
+	TOptional<EPostHogEventQueueFlushResult> Result;
+
+	Storage.SeedEvent(SeedEventId1);
+
+	FPostHogEventQueue Queue(Storage, Transport, TEXT("test-api-key"), 100, 2, 100, nullptr, &Reachability);
+	Queue.Flush([&Result](EPostHogEventQueueFlushResult InResult)
+	{
+		Result = InResult;
+	});
+
+	TestEqual(TEXT("Unknown flush sends one request"), Transport.GetTotalSendCount(), 1);
+	TestEqual(TEXT("Unknown flush loads one event"), Storage.LoadAttempts, 1);
+	TestFalse(TEXT("Unknown flush waits for request completion"), Result.IsSet());
+
+	Transport.CompleteLast(true, 200, TEXT(""));
+
+	TestEqual(TEXT("Unknown success deletes sent event"), Storage.DeleteAttempts, 1);
+	TestEqual(TEXT("Unknown success drains queue"), Queue.Num(), 0);
+	TestTrue(TEXT("Unknown flush completed"), Result.IsSet());
+	if (Result.IsSet())
+	{
+		TestEqual(TEXT("Unknown flush result"), Result.GetValue(), EPostHogEventQueueFlushResult::Drained);
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueOfflineToReachableNextFlushDrainsTest, "UnrealHog.Events.EventQueue.OfflineToReachableNextFlushDrains", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogEventQueueOfflineToReachableNextFlushDrainsTest::RunTest(const FString& Parameters)
+{
+	FControllableQueueStorageProvider Storage;
+	FPostHogFakeBatchTransport Transport;
+	FPostHogFakeReachabilityProvider Reachability(EPostHogReachabilityState::NotReachable);
+	TOptional<EPostHogEventQueueFlushResult> ReachableResult;
+
+	Storage.SeedEvent(SeedEventId1);
+
+	FPostHogEventQueue Queue(Storage, Transport, TEXT("test-api-key"), 100, 2, 100, nullptr, &Reachability);
+
+	const EPostHogEventQueueFlushResult OfflineResult = FlushQueueAndCaptureResult(Queue);
+	TestEqual(TEXT("Offline flush is skipped"), OfflineResult, EPostHogEventQueueFlushResult::SkippedOffline);
+	TestEqual(TEXT("Offline flush sends no request"), Transport.GetTotalSendCount(), 0);
+	TestEqual(TEXT("Offline flush preserves queued event"), Queue.Num(), 1);
+
+	Reachability.SetState(EPostHogReachabilityState::Reachable);
+	Queue.Flush([&ReachableResult](EPostHogEventQueueFlushResult InResult)
+	{
+		ReachableResult = InResult;
+	});
+
+	TestEqual(TEXT("Reachable follow-up sends existing queued event"), Transport.GetTotalSendCount(), 1);
+	CheckPayloadUuids(*this, Transport.GetPayloadAt(0), { SeedEventId1 }, TEXT("Offline-to-reachable batch"));
+	TestFalse(TEXT("Reachable follow-up waits for request completion"), ReachableResult.IsSet());
+
+	Transport.CompleteLast(true, 200, TEXT(""));
+
+	TestEqual(TEXT("Reachable follow-up drains queue"), Queue.Num(), 0);
+	TestTrue(TEXT("Reachable follow-up completed"), ReachableResult.IsSet());
+	if (ReachableResult.IsSet())
+	{
+		TestEqual(TEXT("Reachable follow-up result"), ReachableResult.GetValue(), EPostHogEventQueueFlushResult::Drained);
+	}
+
+	return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueEmptyFlushCompletesWithoutRequestTest, "UnrealHog.Events.EventQueue.EmptyFlushCompletesWithoutRequest", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
