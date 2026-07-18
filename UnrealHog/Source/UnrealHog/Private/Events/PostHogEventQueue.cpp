@@ -6,13 +6,14 @@
 #include "Events/PostHogEvent.h"
 #include "Logging/PostHogLogger.h"
 #include "Logging/StructuredLog.h"
+#include "Reachability/PostHogReachabilityProvider.h"
 #include "Serialization/JsonSerializer.h"
 #include "Storage/PostHogStorageProvider.h"
 #include "Time/PostHogClock.h"
 
 FPostHogEventQueue::FPostHogEventQueue(IPostHogStorageProvider& InStorageProvider, IPostHogBatchTransport& InTransport,
 	const FString& InApiKey, int32 InMaxQueueSize, int32 InMaxBatchSize, int32 InFlushEventCount,
-	IPostHogClock* InClock) :
+	IPostHogClock* InClock, IPostHogReachabilityProvider* InReachabilityProvider) :
 	StorageProvider(InStorageProvider),
 	Transport(InTransport),
 	ApiKey(InApiKey),
@@ -21,7 +22,9 @@ FPostHogEventQueue::FPostHogEventQueue(IPostHogStorageProvider& InStorageProvide
 	AdjustedFlushEventCount(FMath::Max(InFlushEventCount, 1)),
 	FlushLifetimeToken(MakeShared<bool>(true)),
 	OwnedClock(InClock ? nullptr : MakeUnique<FPostHogSystemClock>()),
-	Clock(InClock ? *InClock : *OwnedClock)
+	Clock(InClock ? *InClock : *OwnedClock),
+	OwnedReachabilityProvider(InReachabilityProvider ? nullptr : MakeUnique<FPostHogPlatformReachabilityProvider>()),
+	ReachabilityProvider(InReachabilityProvider ? *InReachabilityProvider : *OwnedReachabilityProvider)
 {
 }
 
@@ -173,6 +176,15 @@ void FPostHogEventQueue::Flush(FPostHogEventQueueFlushComplete OnComplete)
 		if (OnComplete)
 		{
 			PendingFlushCallbacks.Add(MoveTemp(OnComplete));
+		}
+		return;
+	}
+
+	if (ReachabilityProvider.GetReachability() == EPostHogReachabilityState::NotReachable)
+	{
+		if (OnComplete)
+		{
+			OnComplete(EPostHogEventQueueFlushResult::SkippedOffline);
 		}
 		return;
 	}
