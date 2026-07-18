@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Recreate the gitignored Docs/Reference/UnrealEngine symlink in a git worktree.
+# Recreate the gitignored Design/Reference/UnrealEngine symlink in a git worktree.
 #
 # The symlink is machine-local and untracked, so fresh worktrees do not have
 # it. This script copies the symlink target from the main working tree, which
@@ -11,7 +11,7 @@ set -euo pipefail
 repo_root="$(git rev-parse --show-toplevel)"
 main_tree="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
 
-rel_path="Docs/Reference/UnrealEngine"
+rel_path="Design/Reference/UnrealEngine"
 src="$main_tree/$rel_path"
 dst="$repo_root/$rel_path"
 
