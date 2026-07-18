@@ -33,7 +33,12 @@ public:
 	bool SaveState(const FString& StateKey, const TSharedRef<FJsonObject>& StateJsonObject);
 	virtual bool LoadState(const FString& StateKey, FString& StateJson) = 0;
 	virtual bool DeleteState(const FString& StateKey) = 0;
-	
+
+	// Blocks until any asynchronous durable writes queued by this provider have completed.
+	// Default no-op for providers whose writes are already synchronous. Never issues network
+	// requests; used by lifecycle shutdown/background paths that must not touch the network.
+	virtual void FlushPendingWrites() {}
+
 private:
 	static bool SerializeJsonObject(const TSharedRef<FJsonObject>& JsonObject, FString& OutJson);
 };

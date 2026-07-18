@@ -31,8 +31,8 @@ public:
 	virtual bool LoadState(const FString& StateKey, FString& StateJson) override;
 	virtual bool DeleteState(const FString& StateKey) override;
 
-	/** Blocks the calling thread until all queued event writes have completed. Not part of IPostHogStorageProvider, matching Unity's FileStorageProvider.FlushPendingWrites(). */
-	void FlushPendingWrites();
+	/** Blocks the calling thread until all queued event writes have completed, matching Unity's FileStorageProvider.FlushPendingWrites(). */
+	virtual void FlushPendingWrites() override;
 
 private:
 	FString BasePath;

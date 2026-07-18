@@ -174,6 +174,12 @@ public:
 	UFUNCTION()
 	EPostHogPersonProfiles GetPersonProfiles() const { return PersonProfiles; }
 
+	UFUNCTION()
+	bool ShouldFlushOnQuit() const { return bFlushOnQuit; }
+
+	UFUNCTION()
+	float GetFlushOnQuitTimeoutSeconds() const { return FlushOnQuitTimeoutSeconds; }
+
 #if WITH_EDITOR
 	virtual bool CanEditChange(const FProperty* InProperty) const override;
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
