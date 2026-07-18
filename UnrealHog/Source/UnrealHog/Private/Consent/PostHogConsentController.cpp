@@ -69,6 +69,8 @@ void FPostHogConsentController::Initialize(const UPostHogDeveloperSettings& Sett
 
 void FPostHogConsentController::Shutdown()
 {
+	bIsShuttingDown = true;
+
 	if (LifecycleHandler)
 	{
 		LifecycleHandler->Stop();
@@ -423,6 +425,31 @@ void FPostHogConsentController::Flush(FPostHogEventQueueFlushComplete OnComplete
 	{
 		OnComplete(EPostHogEventQueueFlushResult::Empty);
 	}
+}
+
+EPostHogConsentFlushRequestResult FPostHogConsentController::RequestFlush(FPostHogEventQueueFlushComplete OnComplete)
+{
+	if (bIsShuttingDown || !bIsOptedIn || !EventQueue.IsValid())
+	{
+		if (OnComplete)
+		{
+			OnComplete(EPostHogEventQueueFlushResult::Empty);
+		}
+		return EPostHogConsentFlushRequestResult::Skipped;
+	}
+
+	const bool bAlreadyFlushing = EventQueue->IsFlushing();
+	if (!bAlreadyFlushing && !EventQueue->HasPendingEvents())
+	{
+		if (OnComplete)
+		{
+			OnComplete(EPostHogEventQueueFlushResult::Empty);
+		}
+		return EPostHogConsentFlushRequestResult::Skipped;
+	}
+
+	EventQueue->Flush(MoveTemp(OnComplete));
+	return bAlreadyFlushing ? EPostHogConsentFlushRequestResult::AlreadyInProgress : EPostHogConsentFlushRequestResult::Started;
 }
 
 int32 FPostHogConsentController::GetQueuedEventCount() const

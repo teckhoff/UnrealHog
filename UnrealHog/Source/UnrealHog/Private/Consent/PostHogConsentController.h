@@ -29,6 +29,16 @@ enum class EPostHogCaptureResult : uint8
 	EnqueueFailed
 };
 
+// Immediate acceptance outcome of FPostHogConsentController::RequestFlush, observable by
+// callers and tests. Distinct from EPostHogEventQueueFlushResult, which reports how the
+// underlying drain eventually finished.
+enum class EPostHogConsentFlushRequestResult : uint8
+{
+	Started,
+	AlreadyInProgress,
+	Skipped
+};
+
 /**
  * @brief Owns the opt-in/opt-out lifecycle and the runtime collaborators (storage, transport,
  * event queue, session id) that must not exist until analytics collection is permitted.
@@ -127,6 +137,18 @@ public:
 
 	void Flush(FPostHogEventQueueFlushComplete OnComplete = {});
 
+	// Single decision point shared by the subsystem's timer-driven and public manual flush
+	// callers: deterministically resolves uninitialized/opted-out/shutting-down/empty/
+	// already-flushing states and only ever starts at most one underlying queue flush at a
+	// time. OnComplete is invoked exactly once, synchronously for a Skipped result (with
+	// Empty, mirroring Flush()'s existing no-queue behavior) or when the shared drain
+	// eventually completes for Started/AlreadyInProgress.
+	EPostHogConsentFlushRequestResult RequestFlush(FPostHogEventQueueFlushComplete OnComplete = {});
+
+	// True from the start of Shutdown() onward (never cleared), so callers racing
+	// Deinitialize() get a deterministic Skipped result instead of touching a mid-teardown queue.
+	bool IsShuttingDown() const { return bIsShuttingDown; }
+
 	// Rotating in-memory session id, independent of the persistent distinct id. Never
 	// generated before collection is permitted.
 	FString GetSessionId();
@@ -188,4 +210,6 @@ private:
 	int32 StorageProviderCreationCount = 0;
 	int32 TransportCreationCount = 0;
 	int32 IdentityManagerLoadCount = 0;
+
+	bool bIsShuttingDown = false;
 };

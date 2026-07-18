@@ -91,6 +91,15 @@ public:
 
 	int32 Num() const;
 
+	// True from the start of a Flush() call until CompleteFlush() runs; a second Flush() call
+	// while this is true coalesces its callback instead of starting a parallel request.
+	bool IsFlushing() const { return bIsFlushing; }
+
+	// Whether any event is currently persisted and not yet delivered. Can be false while
+	// IsFlushing() is still true (e.g. the last batch has been dequeued but its response is
+	// still in flight), so callers deciding whether a flush would do anything should check both.
+	bool HasPendingEvents() const { return Num() > 0; }
+
 #if WITH_DEV_AUTOMATION_TESTS
 	int32 GetAdjustedMaxBatchSizeForTests() const { return AdjustedMaxBatchSize; }
 	int32 GetAdjustedFlushEventCountForTests() const { return AdjustedFlushEventCount; }
