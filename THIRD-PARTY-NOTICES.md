@@ -11,11 +11,11 @@ by the repository's own LICENSE file.
 ## PostHog Unity SDK
 
 - **Source:** https://github.com/PostHog/posthog-unity
-- **Location in this repository:** `Docs/Reference/posthog-unity` (unmodified
+- **Location in this repository:** `Design/Reference/posthog-unity` (unmodified
   snapshot as a git submodule, kept as a behavioral reference for the UnrealHog plugins; not
   compiled into or distributed with any build artifact; not required to run any code from this repository.)
 - **License:** MIT — the original `LICENSE` file is retained inside
-  `Docs/Reference/posthog-unity` and is reproduced below.
+  `Design/Reference/posthog-unity` and is reproduced below.
 
 ```
 MIT License
