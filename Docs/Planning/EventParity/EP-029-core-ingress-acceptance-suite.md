@@ -2,7 +2,7 @@
 
 ## Status and dependencies
 
-- **State:** Blocked
+- **State:** Completed
 - **Blocked by:** EP-001 through EP-016 and EP-018 through EP-028
 - **Blocks:** Declaring core `/batch` event ingress parity complete
 - **Parity row:** End-to-end event ingress excluding feature-flag fetching and session replay
