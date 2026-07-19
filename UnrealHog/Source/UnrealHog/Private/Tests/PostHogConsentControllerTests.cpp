@@ -13,6 +13,7 @@
 #include "Events/PostHogEventProperties.h"
 #include "Events/PostHogEventQueue.h"
 #include "PostHogDeveloperSettings.h"
+#include "PostHogSettingsValidation.h"
 #include "SDK/PostHogSdkInfo.h"
 #include "Storage/PostHogFileStorageProvider.h"
 #include "Tests/PostHogFakeBatchTransport.h"
@@ -68,6 +69,8 @@ namespace
 		UnrealHogTests::SetPropertyValue<bool>(Settings, TEXT("bAnalyticsEnabled"), bAnalyticsEnabled);
 		UnrealHogTests::SetPropertyValue<bool>(Settings, TEXT("bDefaultUserOptIn"), bDefaultUserOptIn);
 		UnrealHogTests::SetPropertyValue<bool>(Settings, TEXT("bCaptureApplicationLifecycleEvents"), bCaptureApplicationLifecycleEvents);
+		UnrealHogTests::SetPropertyValue<bool>(Settings, TEXT("bPreloadFeatureFlags"), false);
+		UnrealHogTests::SetPropertyValue<bool>(Settings, TEXT("bSessionReplay"), false);
 		UnrealHogTests::SetPropertyValue<EPostHogPersonProfiles>(Settings, TEXT("PersonProfiles"), PersonProfiles);
 		return Settings;
 	}
@@ -1070,6 +1073,39 @@ bool FPostHogConsentControllerBeforeSendFailureTest::RunTest(const FString& Para
 		return false;
 	}
 	TestEqual(TEXT("No batch sent"), LastTransport->GetSentCount(), 0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerUnavailableCapabilityDiagnosticsEmitOnceTest, "UnrealHog.Consent.ConsentController.UnavailableCapabilityDiagnosticsEmitOnce", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogConsentControllerUnavailableCapabilityDiagnosticsEmitOnceTest::RunTest(const FString& Parameters)
+{
+	PostHogSettingsValidation::ResetUnavailableCapabilityDiagnosticLogStateForTests();
+	AddExpectedError(TEXT("feature-flag preload is unavailable until SDKP-012"), EAutomationExpectedErrorFlags::Contains, 1, false);
+	AddExpectedError(TEXT("session replay is unavailable until SDKP-018"), EAutomationExpectedErrorFlags::Contains, 1, false);
+
+	FScopedConsentTestStorageDirectory Fixture;
+	FPostHogFakeBatchTransport* LastTransport = nullptr;
+	int32 UuidCounter = 0;
+
+	FPostHogConsentController Controller(MakeStorageFactory(Fixture.GetRootPath()), MakeTransportFactory(LastTransport), MakeUuidGenerator(UuidCounter));
+	UPostHogDeveloperSettings* Settings = MakeTransientSettings(true, true, false);
+	UnrealHogTests::SetPropertyValue<bool>(Settings, TEXT("bPreloadFeatureFlags"), true);
+	UnrealHogTests::SetPropertyValue<bool>(Settings, TEXT("bSessionReplay"), true);
+
+	Controller.Initialize(*Settings);
+
+	TestTrue(TEXT("Opt-in succeeds with unavailable settings enabled"), Controller.SetOptIn(true, *Settings));
+	TestTrue(TEXT("Collection is opted in"), Controller.IsOptedIn());
+	TestEqual(TEXT("First opt-in creates one transport"), Controller.GetTransportCreationCount(), 1);
+
+	TestTrue(TEXT("Opt-out succeeds"), Controller.SetOptIn(false, *Settings));
+	TestFalse(TEXT("Collection is opted out"), Controller.IsOptedIn());
+
+	TestTrue(TEXT("Re-opt-in succeeds without repeated unavailable warnings"), Controller.SetOptIn(true, *Settings));
+	TestTrue(TEXT("Collection is opted in again"), Controller.IsOptedIn());
+	TestEqual(TEXT("Re-opt-in creates the expected second transport"), Controller.GetTransportCreationCount(), 2);
 
 	return true;
 }

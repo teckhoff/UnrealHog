@@ -45,6 +45,8 @@ namespace
 		UnrealHogTests::SetPropertyValue<bool>(Settings, TEXT("bAnalyticsEnabled"), true);
 		UnrealHogTests::SetPropertyValue<bool>(Settings, TEXT("bDefaultUserOptIn"), false);
 		UnrealHogTests::SetPropertyValue<bool>(Settings, TEXT("bCaptureApplicationLifecycleEvents"), false);
+		UnrealHogTests::SetPropertyValue<bool>(Settings, TEXT("bPreloadFeatureFlags"), false);
+		UnrealHogTests::SetPropertyValue<bool>(Settings, TEXT("bSessionReplay"), false);
 		UnrealHogTests::SetPropertyValue<bool>(Settings, TEXT("bReuseAnonymousId"), bReuseAnonymousId);
 		return Settings;
 	}

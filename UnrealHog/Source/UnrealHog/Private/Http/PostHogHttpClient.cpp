@@ -36,17 +36,12 @@ namespace
 }
 
 FPostHogHttpClient::FPostHogHttpClient(const FString& InHost)
-	: Host(PostHogEndpointUrls::NormalizeHost(InHost))
-{
-}
-
-FPostHogHttpClient::FPostHogHttpClient(const FString& InHost)
 	: FPostHogHttpClient(InHost, []() { return FHttpModule::Get().CreateRequest(); })
 {
 }
 
 FPostHogHttpClient::FPostHogHttpClient(const FString& InHost, FRequestFactory InRequestFactory)
-	: Host(NormalizeHost(InHost))
+	: Host(PostHogEndpointUrls::NormalizeHost(InHost))
 	, RequestFactory(MoveTemp(InRequestFactory))
 {
 }
