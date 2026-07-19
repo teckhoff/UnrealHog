@@ -667,6 +667,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueFailureStopsBeforeLaterBatchA
 
 bool FPostHogEventQueueFailureStopsBeforeLaterBatchAndPreservesRecordsTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("classified batch delivery failure as retryable; retaining attempted batch. StatusCode=500"), EAutomationExpectedErrorFlags::Contains, 1);
+
 	FControllableQueueStorageProvider Storage;
 	FPostHogFakeBatchTransport Transport;
 	TOptional<EPostHogEventQueueFlushResult> Result;
@@ -701,6 +703,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueuePermanentFailureDeletesOnlyAt
 
 bool FPostHogEventQueuePermanentFailureDeletesOnlyAttemptedBatchAndEndsFlushTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("classified batch delivery failure as permanent; deleting attempted batch and ending flush. StatusCode=404"), EAutomationExpectedErrorFlags::Contains, 1);
+
 	FControllableQueueStorageProvider Storage;
 	FPostHogFakeBatchTransport Transport;
 	TOptional<EPostHogEventQueueFlushResult> Result;
@@ -735,6 +739,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueClassifiesDeliveryFailuresTes
 
 bool FPostHogEventQueueClassifiesDeliveryFailuresTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("classified batch delivery failure as retryable"), EAutomationExpectedErrorFlags::Contains, 11);
+	AddExpectedError(TEXT("classified batch delivery failure as permanent"), EAutomationExpectedErrorFlags::Contains, 5);
+	AddExpectedError(TEXT("received HTTP 413"), EAutomationExpectedErrorFlags::Contains, 1);
+
 	struct FStatusClassificationRow
 	{
 		int32 StatusCode;
@@ -805,6 +813,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueuePayloadTooLargeHalvesAdjusted
 
 bool FPostHogEventQueuePayloadTooLargeHalvesAdjustedLimitsTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("received HTTP 413"), EAutomationExpectedErrorFlags::Contains, 2);
+	AddExpectedError(TEXT("classified batch delivery failure as retryable; retaining attempted batch. StatusCode=413"), EAutomationExpectedErrorFlags::Contains, 2);
+
 	FControllableQueueStorageProvider Storage;
 	FPostHogFakeBatchTransport Transport;
 	FPostHogFakeClock Clock;
@@ -899,6 +910,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueuePayloadTooLargeAdjustedThresh
 
 bool FPostHogEventQueuePayloadTooLargeAdjustedThresholdTriggersLaterFlushTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("received HTTP 413"), EAutomationExpectedErrorFlags::Contains, 1);
+	AddExpectedError(TEXT("classified batch delivery failure as retryable; retaining attempted batch. StatusCode=413"), EAutomationExpectedErrorFlags::Contains, 1);
+
 	FControllableQueueStorageProvider Storage;
 	FPostHogFakeBatchTransport Transport;
 	FPostHogFakeClock Clock;
@@ -949,6 +963,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueuePayloadTooLargeAtOneRetainsAn
 
 bool FPostHogEventQueuePayloadTooLargeAtOneRetainsAndBacksOffTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("received HTTP 413"), EAutomationExpectedErrorFlags::Contains, 1);
+	AddExpectedError(TEXT("classified batch delivery failure as retryable; retaining attempted batch. StatusCode=413"), EAutomationExpectedErrorFlags::Contains, 1);
+
 	FControllableQueueStorageProvider Storage;
 	FPostHogFakeBatchTransport Transport;
 	FPostHogFakeClock Clock;
@@ -1073,6 +1090,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueDeleteFailureStopsDrainAndPre
 
 bool FPostHogEventQueueDeleteFailureStopsDrainAndPreservesFailedAndLaterRecordsTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("deleting a sent event failed"), EAutomationExpectedErrorFlags::Contains, 1);
+
 	FControllableQueueStorageProvider Storage;
 	FPostHogFakeBatchTransport Transport;
 	TOptional<EPostHogEventQueueFlushResult> Result;
@@ -1108,6 +1127,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueCorruptFirstRecordDeletedAndL
 
 bool FPostHogEventQueueCorruptFirstRecordDeletedAndLaterRecordsFillBatchTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("deleted corrupt persisted event"), EAutomationExpectedErrorFlags::Contains, 1);
+
 	FControllableQueueStorageProvider Storage;
 	FPostHogFakeBatchTransport Transport;
 
@@ -1150,6 +1171,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueMissingFileDeletedAndLaterRec
 
 bool FPostHogEventQueueMissingFileDeletedAndLaterRecordSentTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("deleted corrupt persisted event"), EAutomationExpectedErrorFlags::Contains, 1);
+
 	FScopedQueueTestStorageDirectory Fixture;
 	FPostHogFileStorageProvider Storage(Fixture.GetRootPath());
 	FPostHogFakeBatchTransport Transport;
@@ -1192,6 +1215,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueCorruptDeleteFailureStopsFlus
 
 bool FPostHogEventQueueCorruptDeleteFailureStopsFlushWithoutRepeatedReadTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("failed to delete corrupt persisted event"), EAutomationExpectedErrorFlags::Contains, 1);
+
 	FControllableQueueStorageProvider Storage;
 	FPostHogFakeBatchTransport Transport;
 
@@ -1272,6 +1297,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueFailureRetainsQueueTest, "Unr
 
 bool FPostHogEventQueueFailureRetainsQueueTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("classified batch delivery failure as retryable; retaining attempted batch. StatusCode=500"), EAutomationExpectedErrorFlags::Contains, 1);
+
 	FScopedQueueTestStorageDirectory Fixture;
 	FPostHogFileStorageProvider Storage(Fixture.GetRootPath());
 	FPostHogFakeBatchTransport Transport;
@@ -1306,6 +1333,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueSynchronousFailureCompletesOn
 
 bool FPostHogEventQueueSynchronousFailureCompletesOnceTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("classified batch delivery failure as retryable; retaining attempted batch. StatusCode=0"), EAutomationExpectedErrorFlags::Contains, 1);
+
 	FScopedQueueTestStorageDirectory Fixture;
 	FPostHogFileStorageProvider Storage(Fixture.GetRootPath());
 	FPostHogFakeBatchTransport Transport;
@@ -1660,6 +1689,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueAllInFlightAtCapacityRejectsN
 
 bool FPostHogEventQueueAllInFlightAtCapacityRejectsNewEventTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("every persisted record is in flight"), EAutomationExpectedErrorFlags::Contains, 1);
+
 	FControllableQueueStorageProvider Storage;
 	FPostHogFakeBatchTransport Transport;
 	Storage.SeedEvent(SeedEventId1);
@@ -1685,6 +1716,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueDeleteFailureRejectsAndPreser
 
 bool FPostHogEventQueueDeleteFailureRejectsAndPreservesOldRecordTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("capacity eviction failed"), EAutomationExpectedErrorFlags::Contains, 1);
+
 	FControllableQueueStorageProvider Storage;
 	FPostHogFakeBatchTransport Transport;
 	Storage.SeedEvent(SeedEventId1);
@@ -1713,6 +1746,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueSaveFailureRejectedAndConsist
 
 bool FPostHogEventQueueSaveFailureRejectedAndConsistentCountTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("SaveEvent failed"), EAutomationExpectedErrorFlags::Contains, 1);
+
 	FControllableQueueStorageProvider Storage;
 	FPostHogFakeBatchTransport Transport;
 	Storage.SeedEvent(SeedEventId1);

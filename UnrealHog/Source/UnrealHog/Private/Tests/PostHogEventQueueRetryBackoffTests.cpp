@@ -54,6 +54,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueRetryLinearBackoffDelaysMatch
 
 bool FPostHogEventQueueRetryLinearBackoffDelaysMatchSequenceTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("classified batch delivery failure as retryable; retaining attempted batch. StatusCode=500"), EAutomationExpectedErrorFlags::Contains, 7);
+
 	FScopedRetryBackoffTestStorageDirectory Fixture;
 	FPostHogFileStorageProvider Storage(Fixture.GetRootPath());
 	FPostHogFakeBatchTransport Transport;
@@ -92,6 +94,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueRetryBoundaryAtExactPauseInst
 
 bool FPostHogEventQueueRetryBoundaryAtExactPauseInstantSendsTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("classified batch delivery failure as retryable; retaining attempted batch. StatusCode=500"), EAutomationExpectedErrorFlags::Contains, 1);
+
 	FScopedRetryBackoffTestStorageDirectory Fixture;
 	FPostHogFileStorageProvider Storage(Fixture.GetRootPath());
 	FPostHogFakeBatchTransport Transport;
@@ -116,6 +120,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueRetrySuccessResetsBackoffToFi
 
 bool FPostHogEventQueueRetrySuccessResetsBackoffToFiveSecondsTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("classified batch delivery failure as retryable; retaining attempted batch. StatusCode=500"), EAutomationExpectedErrorFlags::Contains, 2);
+
 	FScopedRetryBackoffTestStorageDirectory Fixture;
 	FPostHogFileStorageProvider Storage(Fixture.GetRootPath());
 	FPostHogFakeBatchTransport Transport;
@@ -155,6 +161,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueRetryPermanentFailureDoesNotE
 
 bool FPostHogEventQueueRetryPermanentFailureDoesNotEnterBackoffTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("classified batch delivery failure as permanent; deleting attempted batch and ending flush. StatusCode=404"), EAutomationExpectedErrorFlags::Contains, 1);
+
 	FScopedRetryBackoffTestStorageDirectory Fixture;
 	FPostHogFileStorageProvider Storage(Fixture.GetRootPath());
 	FPostHogFakeBatchTransport Transport;
@@ -178,6 +186,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueRetryEnqueueDuringPauseDoesNo
 
 bool FPostHogEventQueueRetryEnqueueDuringPauseDoesNotCreateHttpRequestTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("classified batch delivery failure as retryable; retaining attempted batch. StatusCode=500"), EAutomationExpectedErrorFlags::Contains, 1);
+
 	FScopedRetryBackoffTestStorageDirectory Fixture;
 	FPostHogFileStorageProvider Storage(Fixture.GetRootPath());
 	FPostHogFakeBatchTransport Transport;
@@ -212,6 +222,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueOfflineSkipPreservesRetryBack
 
 bool FPostHogEventQueueOfflineSkipPreservesRetryBackoffTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("classified batch delivery failure as retryable; retaining attempted batch. StatusCode=500"), EAutomationExpectedErrorFlags::Contains, 1);
+
 	FScopedRetryBackoffTestStorageDirectory Fixture;
 	FPostHogFileStorageProvider Storage(Fixture.GetRootPath());
 	FPostHogFakeBatchTransport Transport;
