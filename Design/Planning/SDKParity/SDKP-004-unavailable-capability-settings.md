@@ -2,7 +2,7 @@
 
 ## Status and dependencies
 
-- **State:** Ready
+- **State:** Completed
 - **Blocked by:** None
 - **Blocks:** Honest configuration surface while feature flags and replay are absent
 - **Parity row:** Project Settings reflect actual runtime capability
@@ -38,3 +38,27 @@ Prevent feature-flag and session-replay settings from silently implying that uni
 
 - `Design/Reference/posthog-unity/com.posthog.unity/Runtime/PostHogConfig.cs`
 - `Design/Reference/posthog-unity/com.posthog.unity/Runtime/PostHogSettings.cs`
+
+## Implementation notes
+
+- Feature-flag preload and related feature-flag settings remain serialized with their existing names and defaults, but Project Settings marks them unavailable and disables editing until SDKP-012.
+- Session replay and `FPostHogSessionReplayConfig` remain serialized with their existing names and defaults, but Project Settings marks them unavailable and disables editing until SDKP-018.
+- Runtime validation reports unavailable feature-flag preload or session replay as diagnostics only; valid analytics config remains valid and collection behavior is unchanged.
+- Diagnostics are logged at most once per unavailable family per process when collection is enabled.
+
+## Removal criteria
+
+- Remove the SDKP-012 feature-flag unavailable metadata, edit lock, and diagnostic when feature-flag preload is implemented and covered by SDKP-012.
+- Remove the SDKP-018 session-replay unavailable metadata, edit lock, and diagnostic when session replay is implemented and covered by SDKP-018.
+
+## Zeroshot validation
+
+- Command: `Scripts/run-windows-tests.sh`
+- Environment: WSL2 using repository `CI/UnrealEngine`, `CI/HostProject`, and `CI/Reports` links.
+- Result:
+
+```text
+BUILD RESULT: PASS
+AUTOMATION RESULT: 256 passed, 0 passed-with-warnings, 0 failed, 0 not run
+AUTOMATION RESULT: PASS
+```

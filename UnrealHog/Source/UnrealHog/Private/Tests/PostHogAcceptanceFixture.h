@@ -115,10 +115,12 @@ struct FPostHogAcceptanceFixture
 		UPostHogDeveloperSettings* Settings = NewObject<UPostHogDeveloperSettings>(GetTransientPackage());
 		UnrealHogTests::SetPropertyValue<FString>(Settings, TEXT("ApiKey"), bValidApiKey ? TEXT("phc_valid_key") : TEXT(""));
 		UnrealHogTests::SetPropertyValue<bool>(Settings, TEXT("bAnalyticsEnabled"), bAnalyticsEnabled);
-		UnrealHogTests::SetPropertyValue<bool>(Settings, TEXT("bDefaultUserOptIn"), bDefaultUserOptIn);
-		UnrealHogTests::SetPropertyValue<bool>(Settings, TEXT("bCaptureApplicationLifecycleEvents"), bCaptureApplicationLifecycleEvents);
-		UnrealHogTests::SetPropertyValue<EPostHogPersonProfiles>(Settings, TEXT("PersonProfiles"), PersonProfiles);
-		UnrealHogTests::SetPropertyValue<int32>(Settings, TEXT("MaxQueueSize"), MaxQueueSize);
+			UnrealHogTests::SetPropertyValue<bool>(Settings, TEXT("bDefaultUserOptIn"), bDefaultUserOptIn);
+			UnrealHogTests::SetPropertyValue<bool>(Settings, TEXT("bCaptureApplicationLifecycleEvents"), bCaptureApplicationLifecycleEvents);
+			UnrealHogTests::SetPropertyValue<bool>(Settings, TEXT("bPreloadFeatureFlags"), false);
+			UnrealHogTests::SetPropertyValue<bool>(Settings, TEXT("bSessionReplay"), false);
+			UnrealHogTests::SetPropertyValue<EPostHogPersonProfiles>(Settings, TEXT("PersonProfiles"), PersonProfiles);
+			UnrealHogTests::SetPropertyValue<int32>(Settings, TEXT("MaxQueueSize"), MaxQueueSize);
 		UnrealHogTests::SetPropertyValue<int32>(Settings, TEXT("MaxBatchSize"), MaxBatchSize);
 		UnrealHogTests::SetPropertyValue<int32>(Settings, TEXT("FlushEventCount"), FlushEventCount);
 		UnrealHogTests::SetPropertyValue<float>(Settings, TEXT("FlushOnQuitTimeoutSeconds"), FlushOnQuitTimeoutSeconds);

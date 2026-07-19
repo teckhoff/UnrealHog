@@ -44,11 +44,10 @@ enum class EPostHogPersonProfiles : uint8
 
 /**
  * @enum EPostHogSessionReplayLogLevel
- * @brief Defines levels of verbosity for Unreal log messages included in session replay.
+ * @brief Defines levels of verbosity for future Unreal log messages included in session replay.
  *
- * This enum specifies the minimum log severity to capture when the session replay
- * log capture feature is enabled. It provides options to filter log messages based
- * on their importance or severity level.
+ * This enum is serialized for future SDKP-018 session replay support and is not
+ * editable until that runtime capability is implemented.
  *
  * - Log: Captures all log messages, including the least severe ones.
  * - Warning: Captures log messages of warning level and above.
@@ -64,53 +63,54 @@ enum class EPostHogSessionReplayLogLevel : uint8
 
 /**
  * @struct FPostHogSessionReplayConfig
- * @brief Configuration for PostHog session replay features in Unreal Engine projects.
+ * @brief Serialized compatibility settings for future PostHog session replay support.
  *
- * This structure provides multiple settings to fine-tune the behavior of session replay functionality,
- * including screenshot captures, telemetry, logging, and event flushing. It allows developers to
- * customize how session replay data is collected, compressed, and transmitted for analysis.
+ * These properties remain serialized so existing config files keep their values, but the
+ * editor disables them until SDKP-018 implements the owning runtime subsystem.
  *
- * Designed to be configured through the Unreal Engine editor or programmatically.
+ * Removal criteria: SDKP-018 must compile the replay lifecycle, capture, queue,
+ * and transport path that consumes these values. Until then no runtime replay
+ * collaborator is created from this struct.
  */
 USTRUCT(BlueprintType)
 struct UNREALHOG_API FPostHogSessionReplayConfig
 {
 	GENERATED_BODY()
 
-	// Minimum time between session replay screenshot captures, in seconds.
-	UPROPERTY(EditAnywhere, Category="PostHog|Session Replay", meta = (ClampMin = "0.1", UIMin = "0.1"))
+	// Future minimum time between session replay screenshot captures, in seconds.
+	UPROPERTY(EditAnywhere, Category="PostHog|Session Replay", meta = (ClampMin = "0.1", UIMin = "0.1", DisplayName = "Throttle Delay Seconds (Unavailable until SDKP-018)", ToolTip = "Unavailable until SDKP-018 implements session replay. This value remains serialized for future compatibility."))
 	float ThrottleDelaySeconds = 1.0f;
 
-	// JPEG compression quality for session replay screenshots.
-	UPROPERTY(EditAnywhere, Category="PostHog|Session Replay", meta = (ClampMin = 1, ClampMax = 100, UIMin = 1, UIMax = 100))
+	// Future JPEG compression quality for session replay screenshots.
+	UPROPERTY(EditAnywhere, Category="PostHog|Session Replay", meta = (ClampMin = 1, ClampMax = 100, UIMin = 1, UIMax = 100, DisplayName = "Screenshot Quality (Unavailable until SDKP-018)", ToolTip = "Unavailable until SDKP-018 implements session replay. This value remains serialized for future compatibility."))
 	int32 ScreenshotQuality = 80;
 
-	// Whether to include HTTP request telemetry in session replay.
-	UPROPERTY(EditAnywhere, Category="PostHog|Session Replay")
+	// Future option for including HTTP request telemetry in session replay.
+	UPROPERTY(EditAnywhere, Category="PostHog|Session Replay", meta = (DisplayName = "Capture Network Telemetry (Unavailable until SDKP-018)", ToolTip = "Unavailable until SDKP-018 implements session replay. This value remains serialized for future compatibility."))
 	bool bCaptureNetworkTelemetry = true;
 
-	// Whether to include Unreal log messages in session replay.
-	UPROPERTY(EditAnywhere, Category="PostHog|Session Replay")
+	// Future option for including Unreal log messages in session replay.
+	UPROPERTY(EditAnywhere, Category="PostHog|Session Replay", meta = (DisplayName = "Capture Logs (Unavailable until SDKP-018)", ToolTip = "Unavailable until SDKP-018 implements session replay. This value remains serialized for future compatibility."))
 	bool bCaptureLogs = false;
 
-	// Minimum log verbosity to include when session replay log capture is enabled.
-	UPROPERTY(EditAnywhere, Category="PostHog|Session Replay", meta = (EditCondition = "bCaptureLogs"))
+	// Future minimum log verbosity to include when session replay log capture is enabled.
+	UPROPERTY(EditAnywhere, Category="PostHog|Session Replay", meta = (EditCondition = "bCaptureLogs", DisplayName = "Minimum Log Level (Unavailable until SDKP-018)", ToolTip = "Unavailable until SDKP-018 implements session replay. This value remains serialized for future compatibility."))
 	EPostHogSessionReplayLogLevel MinLogLevel = EPostHogSessionReplayLogLevel::Error;
 
-	// Scale factor applied to session replay screenshots before upload.
-	UPROPERTY(EditAnywhere, Category="PostHog|Session Replay", meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0"))
+	// Future scale factor applied to session replay screenshots before upload.
+	UPROPERTY(EditAnywhere, Category="PostHog|Session Replay", meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0", DisplayName = "Screenshot Scale (Unavailable until SDKP-018)", ToolTip = "Unavailable until SDKP-018 implements session replay. This value remains serialized for future compatibility."))
 	float ScreenshotScale = 0.75f;
 
-	// Number of session replay events able to be queued before triggering an automatic flush.
-	UPROPERTY(EditAnywhere, Category="PostHog|Session Replay", meta = (ClampMin = 1, UIMin = 1))
+	// Future number of session replay events able to be queued before triggering an automatic flush.
+	UPROPERTY(EditAnywhere, Category="PostHog|Session Replay", meta = (ClampMin = 1, UIMin = 1, DisplayName = "Flush Event Count (Unavailable until SDKP-018)", ToolTip = "Unavailable until SDKP-018 implements session replay. This value remains serialized for future compatibility."))
 	int32 FlushEventCount = 20;
 
-	// How often to attempt to automatically flush session replay events, in seconds.
-	UPROPERTY(EditAnywhere, Category="PostHog|Session Replay", meta = (ClampMin = 1, UIMin = 1))
+	// Future interval for automatically flushing session replay events, in seconds.
+	UPROPERTY(EditAnywhere, Category="PostHog|Session Replay", meta = (ClampMin = 1, UIMin = 1, DisplayName = "Flush Interval Seconds (Unavailable until SDKP-018)", ToolTip = "Unavailable until SDKP-018 implements session replay. This value remains serialized for future compatibility."))
 	int32 FlushIntervalSeconds = 30;
 
-	// Maximum number of session replay events able to be stored in the queue.
-	UPROPERTY(EditAnywhere, Category="PostHog|Session Replay", meta = (ClampMin = 1, UIMin = 1))
+	// Future maximum number of session replay events able to be stored in the queue.
+	UPROPERTY(EditAnywhere, Category="PostHog|Session Replay", meta = (ClampMin = 1, UIMin = 1, DisplayName = "Max Queue Size (Unavailable until SDKP-018)", ToolTip = "Unavailable until SDKP-018 implements session replay. This value remains serialized for future compatibility."))
 	int32 MaxQueueSize = 100;
 };
 
@@ -118,9 +118,9 @@ struct UNREALHOG_API FPostHogSessionReplayConfig
  * @class UPostHogDeveloperSettings
  * @brief Provides project-wide configuration settings for integrating PostHog analytics into Unreal Engine projects.
  *
- * This class allows developers to configure various aspects of the PostHog SDK, such as event delivery settings,
- * logging levels, feature flag behavior, and exception tracking. Settings can be adjusted through the Unreal Editor
- * under the "Project Settings" menu.
+ * This class allows developers to configure the implemented PostHog SDK behavior. Feature-flag and
+ * session-replay settings are serialized for compatibility, but remain unavailable until SDKP-012 and
+ * SDKP-018 implement their runtime subsystems.
  *
  * Inherits from UDeveloperSettings to allow engine and project-level customization.
  */
@@ -173,6 +173,12 @@ public:
 
 	UFUNCTION()
 	EPostHogPersonProfiles GetPersonProfiles() const { return PersonProfiles; }
+
+	UFUNCTION()
+	bool ShouldPreloadFeatureFlags() const { return bPreloadFeatureFlags; }
+
+	UFUNCTION()
+	bool IsSessionReplayEnabled() const { return bSessionReplay; }
 
 	UFUNCTION()
 	bool ShouldFlushOnQuit() const { return bFlushOnQuit; }
@@ -245,20 +251,20 @@ protected:
 	UPROPERTY(Config, EditAnywhere, Category="PostHog|Identity")
 	bool bReuseAnonymousId = false;
 
-	// Whether to fetch feature flags during SDK initialization.
-	UPROPERTY(Config, EditAnywhere, Category="PostHog|Feature Flags")
+	// Serialized compatibility setting for future feature-flag preload support.
+	UPROPERTY(Config, EditAnywhere, Category="PostHog|Feature Flags", meta = (DisplayName = "Preload Feature Flags (Unavailable until SDKP-012)", ToolTip = "Unavailable until SDKP-012 implements feature flags. This value remains serialized for future compatibility."))
 	bool bPreloadFeatureFlags = true;
 
-	// Maximum number of retries for feature flag requests after transient network errors.
-	UPROPERTY(Config, EditAnywhere, Category="PostHog|Feature Flags", meta = (ClampMin = 0, UIMin = 0))
+	// Serialized compatibility setting for future feature-flag request retries.
+	UPROPERTY(Config, EditAnywhere, Category="PostHog|Feature Flags", meta = (ClampMin = 0, UIMin = 0, DisplayName = "Feature Flag Request Max Retries (Unavailable until SDKP-012)", ToolTip = "Unavailable until SDKP-012 implements feature flags. This value remains serialized for future compatibility."))
 	int32 FeatureFlagRequestMaxRetries = 1;
 
-	// Whether to send $feature_flag_called events when feature flags are accessed.
-	UPROPERTY(Config, EditAnywhere, Category="PostHog|Feature Flags")
+	// Serialized compatibility setting for future $feature_flag_called events.
+	UPROPERTY(Config, EditAnywhere, Category="PostHog|Feature Flags", meta = (DisplayName = "Send Feature Flag Event (Unavailable until SDKP-012)", ToolTip = "Unavailable until SDKP-012 implements feature flags. This value remains serialized for future compatibility."))
 	bool bSendFeatureFlagEvent = true;
 
-	// Whether to include default device and app properties in feature flag requests.
-	UPROPERTY(Config, EditAnywhere, Category="PostHog|Feature Flags")
+	// Serialized compatibility setting for future feature-flag request properties.
+	UPROPERTY(Config, EditAnywhere, Category="PostHog|Feature Flags", meta = (DisplayName = "Send Default Person Properties For Flags (Unavailable until SDKP-012)", ToolTip = "Unavailable until SDKP-012 implements feature flags. This value remains serialized for future compatibility."))
 	bool bSendDefaultPersonPropertiesForFlags = true;
 
 	// Whether to flush queued events before the application quits.
@@ -281,11 +287,11 @@ protected:
 	UPROPERTY(Config, EditAnywhere, Category="PostHog|Exception Tracking", meta = (EditCondition = "bCaptureExceptions"))
 	bool bCaptureExceptionsInEditor = true;
 
-	// Whether to enable session replay capture.
-	UPROPERTY(Config, EditAnywhere, Category="PostHog|Session Replay")
+	// Serialized compatibility setting for future session replay capture.
+	UPROPERTY(Config, EditAnywhere, Category="PostHog|Session Replay", meta = (DisplayName = "Session Replay (Unavailable until SDKP-018)", ToolTip = "Unavailable until SDKP-018 implements session replay. This value remains serialized for future compatibility."))
 	bool bSessionReplay = false;
 
-	// Configuration used when session replay is enabled.
-	UPROPERTY(Config, EditAnywhere, Category="PostHog|Session Replay", meta = (EditCondition = "bSessionReplay"))
+	// Serialized compatibility settings used when future session replay is enabled.
+	UPROPERTY(Config, EditAnywhere, Category="PostHog|Session Replay", meta = (EditCondition = "bSessionReplay", DisplayName = "Session Replay Config (Unavailable until SDKP-018)", ToolTip = "Unavailable until SDKP-018 implements session replay. This value remains serialized for future compatibility."))
 	FPostHogSessionReplayConfig SessionReplayConfig;
 };

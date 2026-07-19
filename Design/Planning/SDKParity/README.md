@@ -55,7 +55,7 @@ SDKP-022 is conditional and independent.
 | [SDKP-001](SDKP-001-public-offline-flush-outcome.md) | Public `SkippedOffline` flush result | None | ✅ |
 | [SDKP-002](SDKP-002-normalize-custom-host.md) | One canonical host without trailing slashes | None | ✅ |
 | [SDKP-003](SDKP-003-http-start-failure-contract.md) | Production HTTP start completion is explicit and testable | None | ⏳ |
-| [SDKP-004](SDKP-004-unavailable-capability-settings.md) | Inert settings cannot imply working features | None | ⏳ |
+| [SDKP-004](SDKP-004-unavailable-capability-settings.md) | Inert settings cannot imply working features | None | ✅ |
 | [SDKP-005](SDKP-005-exception-person-url.md) | Exception events include `$exception_personURL` | None | ⏳ |
 | [SDKP-006](SDKP-006-feature-flag-response-models.md) | Lossless v2 flag response models | None | ⏳ |
 | [SDKP-007](SDKP-007-feature-flag-transport.md) | Mockable consent-gated `/flags/?v=2` transport | SDKP-002, SDKP-006 | ❌ |

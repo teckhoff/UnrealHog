@@ -1,16 +1,38 @@
 #include "PostHogSettingsValidation.h"
 
 #include "Http/PostHogEndpointUrls.h"
+#include "Logging/PostHogLogger.h"
 #include "PostHogDeveloperSettings.h"
 
 namespace
 {
 	constexpr const TCHAR* FallbackHost = TEXT("https://us.i.posthog.com");
+	constexpr const TCHAR* FeatureFlagPreloadUnavailableDiagnostic = TEXT("PostHog feature-flag preload is unavailable until SDKP-012; bPreloadFeatureFlags remains serialized but no feature-flag preload request will be made.");
+	constexpr const TCHAR* SessionReplayUnavailableDiagnostic = TEXT("PostHog session replay is unavailable until SDKP-018; bSessionReplay remains serialized but no session replay capture will start.");
+
+	bool bLoggedFeatureFlagPreloadUnavailable = false;
+	bool bLoggedSessionReplayUnavailable = false;
+
+	void PopulateUnavailableCapabilityDiagnostics(const UPostHogDeveloperSettings& Settings, FPostHogSettingsValidationResult& Result)
+	{
+		if (Settings.ShouldPreloadFeatureFlags())
+		{
+			Result.bFeatureFlagPreloadUnavailable = true;
+			Result.UnavailableCapabilityDiagnostics.Add(FeatureFlagPreloadUnavailableDiagnostic);
+		}
+
+		if (Settings.IsSessionReplayEnabled())
+		{
+			Result.bSessionReplayUnavailable = true;
+			Result.UnavailableCapabilityDiagnostics.Add(SessionReplayUnavailableDiagnostic);
+		}
+	}
 }
 
 FPostHogSettingsValidationResult PostHogSettingsValidation::Validate(const UPostHogDeveloperSettings& Settings)
 {
 	FPostHogSettingsValidationResult Result;
+	PopulateUnavailableCapabilityDiagnostics(Settings, Result);
 
 	if (Settings.GetApiKey().TrimStartAndEnd().IsEmpty())
 	{
@@ -60,3 +82,26 @@ FPostHogSettingsValidationResult PostHogSettingsValidation::Validate(const UPost
 
 	return Result;
 }
+
+void PostHogSettingsValidation::LogUnavailableCapabilityDiagnosticsOnce(const FPostHogSettingsValidationResult& Result)
+{
+	if (Result.bFeatureFlagPreloadUnavailable && !bLoggedFeatureFlagPreloadUnavailable)
+	{
+		UE_LOG(LogUnrealHog, Warning, TEXT("%s"), FeatureFlagPreloadUnavailableDiagnostic);
+		bLoggedFeatureFlagPreloadUnavailable = true;
+	}
+
+	if (Result.bSessionReplayUnavailable && !bLoggedSessionReplayUnavailable)
+	{
+		UE_LOG(LogUnrealHog, Warning, TEXT("%s"), SessionReplayUnavailableDiagnostic);
+		bLoggedSessionReplayUnavailable = true;
+	}
+}
+
+#if WITH_DEV_AUTOMATION_TESTS
+void PostHogSettingsValidation::ResetUnavailableCapabilityDiagnosticLogStateForTests()
+{
+	bLoggedFeatureFlagPreloadUnavailable = false;
+	bLoggedSessionReplayUnavailable = false;
+}
+#endif
