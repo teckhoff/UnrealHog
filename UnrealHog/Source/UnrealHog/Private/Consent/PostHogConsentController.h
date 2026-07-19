@@ -125,7 +125,9 @@ public:
 	// exception properties ($exception_list and $exception_* summary fields) layered over
 	// caller-supplied Properties (SDK-owned keys always win on collision) and emits via
 	// CaptureEvent(TEXT("$exception"), ...), so consent, session, before-send, persistence, and
-	// retry behavior are inherited rather than reimplemented.
+	// retry behavior are inherited rather than reimplemented. $exception_personURL is attached
+	// using the effective current distinct id only when one already exists (IdentityManager is
+	// null pre-consent); an identity is never generated solely to build this URL.
 	EPostHogCaptureResult CaptureException(const FPostHogExceptionInput& Exception, UPostHogEventProperties* Properties);
 
 	// Registers Key=Value as a persisted super property applied to every future event ahead of
@@ -212,6 +214,11 @@ private:
 	bool bIsOptedIn = false;
 
 	EPostHogPersonProfiles PersonProfilesPolicy = EPostHogPersonProfiles::IdentifiedOnly;
+
+	// Canonical ingest host and API key snapshot captured at EnableCollection time; used to build
+	// $exception_personURL without re-reading UPostHogDeveloperSettings on every CaptureException.
+	FString ResolvedIngestHost;
+	FString ApiKey;
 
 	TUniquePtr<IPostHogStorageProvider> StorageProvider;
 	TUniquePtr<IPostHogBatchTransport> Transport;

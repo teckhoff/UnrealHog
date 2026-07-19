@@ -7,6 +7,7 @@
 #include "Events/PostHogEventQueue.h"
 #include "Events/PostHogExceptionPropertiesBuilder.h"
 #include "Http/PostHogBatchTransport.h"
+#include "Http/PostHogEndpointUrls.h"
 #include "Lifecycle/PostHogApplicationLifecycleHandler.h"
 #include "Identity/PostHogIdentityManager.h"
 #include "Logging/PostHogLogger.h"
@@ -330,7 +331,18 @@ EPostHogCaptureResult FPostHogConsentController::CaptureException(const FPostHog
 
 	UPostHogEventProperties* Props = NewObject<UPostHogEventProperties>();
 	Props->AppendFrom(Properties);
-	PostHogExceptionPropertiesBuilder::Build(*Props, Exception);
+
+	FString PersonUrl;
+	if (IdentityManager.IsValid())
+	{
+		const FString DistinctId = IdentityManager->GetEffectiveDistinctId();
+		if (!DistinctId.IsEmpty())
+		{
+			PersonUrl = PostHogEndpointUrls::BuildPersonUrl(ResolvedIngestHost, ApiKey, DistinctId);
+		}
+	}
+
+	PostHogExceptionPropertiesBuilder::Build(*Props, Exception, PersonUrl);
 
 	return CaptureEvent(TEXT("$exception"), Props);
 }
@@ -512,6 +524,8 @@ bool FPostHogConsentController::EnableCollection(const UPostHogDeveloperSettings
 	}
 
 	PersonProfilesPolicy = ValidationResult.PersonProfiles;
+	ResolvedIngestHost = ValidationResult.ResolvedHost;
+	ApiKey = Settings.GetApiKey();
 
 	if (!StorageProvider.IsValid())
 	{

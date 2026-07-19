@@ -3,7 +3,7 @@
 #include "Events/PostHogEventProperties.h"
 #include "Events/PostHogExceptionInput.h"
 
-void PostHogExceptionPropertiesBuilder::Build(UPostHogEventProperties& Props, const FPostHogExceptionInput& Exception)
+void PostHogExceptionPropertiesBuilder::Build(UPostHogEventProperties& Props, const FPostHogExceptionInput& Exception, const FString& PersonUrl)
 {
 	UPostHogEventPropertyArray* Frames = NewObject<UPostHogEventPropertyArray>();
 
@@ -50,4 +50,9 @@ void PostHogExceptionPropertiesBuilder::Build(UPostHogEventProperties& Props, co
 	Props.AddString(TEXT("$exception_level"), TEXT("error"));
 	Props.AddString(TEXT("$exception_source"), TEXT("unreal_sdk"));
 	Props.AddBoolean(TEXT("$exception_handled"), Exception.bHandled);
+
+	if (!PersonUrl.IsEmpty())
+	{
+		Props.AddString(TEXT("$exception_personURL"), PersonUrl);
+	}
 }

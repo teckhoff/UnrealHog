@@ -50,6 +50,19 @@ namespace
 		return Settings;
 	}
 
+	// Same as MakeExceptionTestSettings but with an explicit host type (and optional custom host
+	// string), for exercising $exception_personURL host derivation across US/EU/Custom.
+	UPostHogDeveloperSettings* MakeExceptionTestSettingsWithHost(EPostHogHost HostType, const FString& CustomHost = FString())
+	{
+		UPostHogDeveloperSettings* Settings = MakeExceptionTestSettings();
+		UnrealHogTests::SetPropertyValue<EPostHogHost>(Settings, TEXT("HostType"), HostType);
+		if (HostType == EPostHogHost::Custom)
+		{
+			UnrealHogTests::SetPropertyValue<FString>(Settings, TEXT("Host"), CustomHost);
+		}
+		return Settings;
+	}
+
 	FPostHogConsentController::FStorageProviderFactory MakeExceptionStorageFactory(const FString& RootPath)
 	{
 		return [RootPath]() -> TUniquePtr<IPostHogStorageProvider>
@@ -484,6 +497,328 @@ bool FPostHogConsentControllerCaptureExceptionDistinctIdAttachedOnceTest::RunTes
 	FString DistinctId;
 	TestTrue(TEXT("Event has distinct_id"), Events[0]->TryGetStringField(TEXT("distinct_id"), DistinctId));
 	TestEqual(TEXT("distinct_id matches identified user"), DistinctId, FString(TEXT("user-1")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerCaptureExceptionPersonUrlUsHostTest, "UnrealHog.Consent.ConsentController.CaptureException.PersonUrlUsHostFixture", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogConsentControllerCaptureExceptionPersonUrlUsHostTest::RunTest(const FString& Parameters)
+{
+	FScopedExceptionTestStorageDirectory Fixture;
+	FPostHogFakeBatchTransport* LastTransport = nullptr;
+	int32 UuidCounter = 0;
+
+	FPostHogConsentController Controller(MakeExceptionStorageFactory(Fixture.GetRootPath()), MakeExceptionTransportFactory(LastTransport), MakeExceptionUuidGenerator(UuidCounter));
+	UPostHogDeveloperSettings* Settings = MakeExceptionTestSettingsWithHost(EPostHogHost::US);
+
+	Controller.Initialize(*Settings);
+	Controller.SetOptIn(true, *Settings);
+	Controller.Identify(TEXT("user-1"), nullptr, nullptr);
+	Controller.Flush();
+	if (TestNotNull(TEXT("Transport created after identify"), LastTransport))
+	{
+		LastTransport->CompleteLast(true, 200, TEXT(""));
+	}
+
+	FPostHogExceptionInput Exception;
+	Exception.Message = TEXT("Something broke");
+	Exception.Type = TEXT("EBreakageError");
+
+	TestEqual(TEXT("CaptureException succeeds"), Controller.CaptureException(Exception, nullptr), EPostHogCaptureResult::Success);
+
+	Controller.Flush();
+	if (!TestNotNull(TEXT("Transport created"), LastTransport))
+	{
+		return false;
+	}
+
+	TArray<TSharedPtr<FJsonObject>> Events;
+	TestTrue(TEXT("Payload parsed"), TryGetExceptionPayloadEvents(LastTransport->GetLastPayload(), Events));
+	LastTransport->CompleteLast(true, 200, TEXT(""));
+
+	if (!TestEqual(TEXT("One event queued"), Events.Num(), 1))
+	{
+		return false;
+	}
+
+	const TSharedPtr<FJsonObject>* PropertiesObject = nullptr;
+	TestTrue(TEXT("Event has properties"), Events[0]->TryGetObjectField(TEXT("properties"), PropertiesObject));
+
+	FString PersonUrl;
+	TestTrue(TEXT("properties has $exception_personURL"), (*PropertiesObject)->TryGetStringField(TEXT("$exception_personURL"), PersonUrl));
+	TestEqual(TEXT("Person URL matches US host"), PersonUrl, FString(TEXT("https://us.posthog.com/project/phc_valid_key/person/user-1")));
+	TestFalse(TEXT("No duplicate slash after scheme"), PersonUrl.RightChop(8).Contains(TEXT("//")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerCaptureExceptionPersonUrlEuHostTest, "UnrealHog.Consent.ConsentController.CaptureException.PersonUrlEuHostFixture", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogConsentControllerCaptureExceptionPersonUrlEuHostTest::RunTest(const FString& Parameters)
+{
+	FScopedExceptionTestStorageDirectory Fixture;
+	FPostHogFakeBatchTransport* LastTransport = nullptr;
+	int32 UuidCounter = 0;
+
+	FPostHogConsentController Controller(MakeExceptionStorageFactory(Fixture.GetRootPath()), MakeExceptionTransportFactory(LastTransport), MakeExceptionUuidGenerator(UuidCounter));
+	UPostHogDeveloperSettings* Settings = MakeExceptionTestSettingsWithHost(EPostHogHost::EU);
+
+	Controller.Initialize(*Settings);
+	Controller.SetOptIn(true, *Settings);
+	Controller.Identify(TEXT("user-1"), nullptr, nullptr);
+	Controller.Flush();
+	if (TestNotNull(TEXT("Transport created after identify"), LastTransport))
+	{
+		LastTransport->CompleteLast(true, 200, TEXT(""));
+	}
+
+	FPostHogExceptionInput Exception;
+	Exception.Message = TEXT("Something broke");
+	Exception.Type = TEXT("EBreakageError");
+
+	TestEqual(TEXT("CaptureException succeeds"), Controller.CaptureException(Exception, nullptr), EPostHogCaptureResult::Success);
+
+	Controller.Flush();
+	if (!TestNotNull(TEXT("Transport created"), LastTransport))
+	{
+		return false;
+	}
+
+	TArray<TSharedPtr<FJsonObject>> Events;
+	TestTrue(TEXT("Payload parsed"), TryGetExceptionPayloadEvents(LastTransport->GetLastPayload(), Events));
+	LastTransport->CompleteLast(true, 200, TEXT(""));
+
+	if (!TestEqual(TEXT("One event queued"), Events.Num(), 1))
+	{
+		return false;
+	}
+
+	const TSharedPtr<FJsonObject>* PropertiesObject = nullptr;
+	TestTrue(TEXT("Event has properties"), Events[0]->TryGetObjectField(TEXT("properties"), PropertiesObject));
+
+	FString PersonUrl;
+	TestTrue(TEXT("properties has $exception_personURL"), (*PropertiesObject)->TryGetStringField(TEXT("$exception_personURL"), PersonUrl));
+	TestEqual(TEXT("Person URL matches EU host"), PersonUrl, FString(TEXT("https://eu.posthog.com/project/phc_valid_key/person/user-1")));
+	TestFalse(TEXT("No duplicate slash after scheme"), PersonUrl.RightChop(8).Contains(TEXT("//")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerCaptureExceptionPersonUrlCustomHostTest, "UnrealHog.Consent.ConsentController.CaptureException.PersonUrlCustomHostFixture", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogConsentControllerCaptureExceptionPersonUrlCustomHostTest::RunTest(const FString& Parameters)
+{
+	FScopedExceptionTestStorageDirectory Fixture;
+	FPostHogFakeBatchTransport* LastTransport = nullptr;
+	int32 UuidCounter = 0;
+
+	FPostHogConsentController Controller(MakeExceptionStorageFactory(Fixture.GetRootPath()), MakeExceptionTransportFactory(LastTransport), MakeExceptionUuidGenerator(UuidCounter));
+	UPostHogDeveloperSettings* Settings = MakeExceptionTestSettingsWithHost(EPostHogHost::Custom, TEXT("https://my.i.posthog.com/"));
+
+	Controller.Initialize(*Settings);
+	Controller.SetOptIn(true, *Settings);
+	Controller.Identify(TEXT("user-1"), nullptr, nullptr);
+	Controller.Flush();
+	if (TestNotNull(TEXT("Transport created after identify"), LastTransport))
+	{
+		LastTransport->CompleteLast(true, 200, TEXT(""));
+	}
+
+	FPostHogExceptionInput Exception;
+	Exception.Message = TEXT("Something broke");
+	Exception.Type = TEXT("EBreakageError");
+
+	TestEqual(TEXT("CaptureException succeeds"), Controller.CaptureException(Exception, nullptr), EPostHogCaptureResult::Success);
+
+	Controller.Flush();
+	if (!TestNotNull(TEXT("Transport created"), LastTransport))
+	{
+		return false;
+	}
+
+	TArray<TSharedPtr<FJsonObject>> Events;
+	TestTrue(TEXT("Payload parsed"), TryGetExceptionPayloadEvents(LastTransport->GetLastPayload(), Events));
+	LastTransport->CompleteLast(true, 200, TEXT(""));
+
+	if (!TestEqual(TEXT("One event queued"), Events.Num(), 1))
+	{
+		return false;
+	}
+
+	const TSharedPtr<FJsonObject>* PropertiesObject = nullptr;
+	TestTrue(TEXT("Event has properties"), Events[0]->TryGetObjectField(TEXT("properties"), PropertiesObject));
+
+	FString PersonUrl;
+	TestTrue(TEXT("properties has $exception_personURL"), (*PropertiesObject)->TryGetStringField(TEXT("$exception_personURL"), PersonUrl));
+	TestEqual(TEXT("Person URL replaces .i. and does not duplicate trailing slash"), PersonUrl, FString(TEXT("https://my.posthog.com/project/phc_valid_key/person/user-1")));
+	TestFalse(TEXT("No duplicate slash after scheme"), PersonUrl.RightChop(8).Contains(TEXT("//")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerCaptureExceptionPersonUrlAnonymousDistinctIdTest, "UnrealHog.Consent.ConsentController.CaptureException.PersonUrlAnonymousDistinctIdUsed", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogConsentControllerCaptureExceptionPersonUrlAnonymousDistinctIdTest::RunTest(const FString& Parameters)
+{
+	FScopedExceptionTestStorageDirectory Fixture;
+	FPostHogFakeBatchTransport* LastTransport = nullptr;
+	int32 UuidCounter = 0;
+
+	FPostHogConsentController Controller(MakeExceptionStorageFactory(Fixture.GetRootPath()), MakeExceptionTransportFactory(LastTransport), MakeExceptionUuidGenerator(UuidCounter));
+	UPostHogDeveloperSettings* Settings = MakeExceptionTestSettings();
+
+	Controller.Initialize(*Settings);
+	Controller.SetOptIn(true, *Settings);
+
+	const FString AnonymousDistinctId = Controller.GetDistinctId();
+	TestFalse(TEXT("Anonymous distinct id is assigned"), AnonymousDistinctId.IsEmpty());
+
+	FPostHogExceptionInput Exception;
+	Exception.Message = TEXT("Something broke");
+	Exception.Type = TEXT("EBreakageError");
+
+	TestEqual(TEXT("CaptureException succeeds"), Controller.CaptureException(Exception, nullptr), EPostHogCaptureResult::Success);
+
+	Controller.Flush();
+	if (!TestNotNull(TEXT("Transport created"), LastTransport))
+	{
+		return false;
+	}
+
+	TArray<TSharedPtr<FJsonObject>> Events;
+	TestTrue(TEXT("Payload parsed"), TryGetExceptionPayloadEvents(LastTransport->GetLastPayload(), Events));
+	LastTransport->CompleteLast(true, 200, TEXT(""));
+
+	if (!TestEqual(TEXT("One event queued"), Events.Num(), 1))
+	{
+		return false;
+	}
+
+	const TSharedPtr<FJsonObject>* PropertiesObject = nullptr;
+	TestTrue(TEXT("Event has properties"), Events[0]->TryGetObjectField(TEXT("properties"), PropertiesObject));
+
+	FString PersonUrl;
+	TestTrue(TEXT("properties has $exception_personURL"), (*PropertiesObject)->TryGetStringField(TEXT("$exception_personURL"), PersonUrl));
+	TestTrue(TEXT("Person URL ends with anonymous distinct id"), PersonUrl.EndsWith(AnonymousDistinctId));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerCaptureExceptionPersonUrlNonAsciiDistinctIdTest, "UnrealHog.Consent.ConsentController.CaptureException.PersonUrlNonAsciiDistinctIdEncoded", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogConsentControllerCaptureExceptionPersonUrlNonAsciiDistinctIdTest::RunTest(const FString& Parameters)
+{
+	FScopedExceptionTestStorageDirectory Fixture;
+	FPostHogFakeBatchTransport* LastTransport = nullptr;
+	int32 UuidCounter = 0;
+
+	FPostHogConsentController Controller(MakeExceptionStorageFactory(Fixture.GetRootPath()), MakeExceptionTransportFactory(LastTransport), MakeExceptionUuidGenerator(UuidCounter));
+	UPostHogDeveloperSettings* Settings = MakeExceptionTestSettings();
+
+	Controller.Initialize(*Settings);
+	Controller.SetOptIn(true, *Settings);
+	Controller.Identify(TEXT("user café/日本語"), nullptr, nullptr);
+	Controller.Flush();
+	if (TestNotNull(TEXT("Transport created after identify"), LastTransport))
+	{
+		LastTransport->CompleteLast(true, 200, TEXT(""));
+	}
+
+	FPostHogExceptionInput Exception;
+	Exception.Message = TEXT("Something broke");
+	Exception.Type = TEXT("EBreakageError");
+
+	TestEqual(TEXT("CaptureException succeeds"), Controller.CaptureException(Exception, nullptr), EPostHogCaptureResult::Success);
+
+	Controller.Flush();
+	if (!TestNotNull(TEXT("Transport created"), LastTransport))
+	{
+		return false;
+	}
+
+	TArray<TSharedPtr<FJsonObject>> Events;
+	TestTrue(TEXT("Payload parsed"), TryGetExceptionPayloadEvents(LastTransport->GetLastPayload(), Events));
+	LastTransport->CompleteLast(true, 200, TEXT(""));
+
+	if (!TestEqual(TEXT("One event queued"), Events.Num(), 1))
+	{
+		return false;
+	}
+
+	const TSharedPtr<FJsonObject>* PropertiesObject = nullptr;
+	TestTrue(TEXT("Event has properties"), Events[0]->TryGetObjectField(TEXT("properties"), PropertiesObject));
+
+	FString PersonUrl;
+	TestTrue(TEXT("properties has $exception_personURL"), (*PropertiesObject)->TryGetStringField(TEXT("$exception_personURL"), PersonUrl));
+
+	TestTrue(TEXT("Raw slash from distinct id is percent-encoded, not literal"), PersonUrl.Contains(TEXT("%2F")));
+	TestFalse(TEXT("Non-ASCII characters are not present raw"), PersonUrl.Contains(TEXT("café")));
+
+	int32 SegmentCount = 0;
+	for (int32 Index = 0; Index < PersonUrl.Len(); ++Index)
+	{
+		if (PersonUrl[Index] == TEXT('/'))
+		{
+			++SegmentCount;
+		}
+	}
+	// scheme "https://" contributes 2 slashes; host/project/<key>/person/<id> contributes 4 more = 6 total.
+	TestEqual(TEXT("Encoded distinct id does not introduce an extra path segment"), SegmentCount, 6);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerCaptureExceptionPersonUrlCallerCannotOverrideTest, "UnrealHog.Consent.ConsentController.CaptureException.PersonUrlCallerCannotOverride", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogConsentControllerCaptureExceptionPersonUrlCallerCannotOverrideTest::RunTest(const FString& Parameters)
+{
+	FScopedExceptionTestStorageDirectory Fixture;
+	FPostHogFakeBatchTransport* LastTransport = nullptr;
+	int32 UuidCounter = 0;
+
+	FPostHogConsentController Controller(MakeExceptionStorageFactory(Fixture.GetRootPath()), MakeExceptionTransportFactory(LastTransport), MakeExceptionUuidGenerator(UuidCounter));
+	UPostHogDeveloperSettings* Settings = MakeExceptionTestSettings();
+
+	Controller.Initialize(*Settings);
+	Controller.SetOptIn(true, *Settings);
+	Controller.Identify(TEXT("user-1"), nullptr, nullptr);
+	Controller.Flush();
+	if (TestNotNull(TEXT("Transport created after identify"), LastTransport))
+	{
+		LastTransport->CompleteLast(true, 200, TEXT(""));
+	}
+
+	FPostHogExceptionInput Exception;
+	Exception.Message = TEXT("Something broke");
+	Exception.Type = TEXT("EBreakageError");
+
+	UPostHogEventProperties* CallerProperties = NewObject<UPostHogEventProperties>();
+	CallerProperties->AddString(TEXT("$exception_personURL"), TEXT("https://evil.example/x"));
+
+	TestEqual(TEXT("CaptureException succeeds"), Controller.CaptureException(Exception, CallerProperties), EPostHogCaptureResult::Success);
+
+	Controller.Flush();
+	if (!TestNotNull(TEXT("Transport created"), LastTransport))
+	{
+		return false;
+	}
+
+	TArray<TSharedPtr<FJsonObject>> Events;
+	TestTrue(TEXT("Payload parsed"), TryGetExceptionPayloadEvents(LastTransport->GetLastPayload(), Events));
+	LastTransport->CompleteLast(true, 200, TEXT(""));
+
+	if (!TestEqual(TEXT("One event queued"), Events.Num(), 1))
+	{
+		return false;
+	}
+
+	const TSharedPtr<FJsonObject>* PropertiesObject = nullptr;
+	TestTrue(TEXT("Event has properties"), Events[0]->TryGetObjectField(TEXT("properties"), PropertiesObject));
+
+	FString PersonUrl;
+	TestTrue(TEXT("properties has $exception_personURL"), (*PropertiesObject)->TryGetStringField(TEXT("$exception_personURL"), PersonUrl));
+	TestEqual(TEXT("Person URL is the SDK-computed value, not the spoofed one"), PersonUrl, FString(TEXT("https://us.posthog.com/project/phc_valid_key/person/user-1")));
 
 	return true;
 }

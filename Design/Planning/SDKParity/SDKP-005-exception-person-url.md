@@ -2,7 +2,7 @@
 
 ## Status and dependencies
 
-- **State:** Ready
+- **State:** Completed
 - **Blocked by:** None
 - **Blocks:** SDKP-021
 - **Parity row:** `$exception_personURL` on manual and automatic exception events

@@ -15,6 +15,9 @@ struct FPostHogExceptionInput;
 namespace PostHogExceptionPropertiesBuilder
 {
 	// Appends the exception properties to Props. Assumes Exception.Message and Exception.Type
-	// have already been validated as non-blank by the caller.
-	void Build(UPostHogEventProperties& Props, const FPostHogExceptionInput& Exception);
+	// have already been validated as non-blank by the caller. PersonUrl is precomputed by the
+	// caller from the effective current distinct id (empty when no effective distinct id exists
+	// yet, e.g. pre-consent); when non-empty it is attached as the SDK-owned $exception_personURL,
+	// appended after caller-supplied properties so it always wins on key collision.
+	void Build(UPostHogEventProperties& Props, const FPostHogExceptionInput& Exception, const FString& PersonUrl);
 }

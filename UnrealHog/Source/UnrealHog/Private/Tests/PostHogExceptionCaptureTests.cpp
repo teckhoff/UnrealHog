@@ -95,6 +95,28 @@ namespace
 		return Count;
 	}
 
+	// Flushes and returns the last (and expected-only) queued event's JSON object, or nullptr when
+	// no batch was sent. Completes the transport so the queue is left in a clean state.
+	TSharedPtr<FJsonObject> GetLastQueuedExceptionEvent(FPostHogConsentController& Controller, FPostHogFakeBatchTransport*& LastTransport)
+	{
+		Controller.Flush();
+		if (!LastTransport)
+		{
+			return nullptr;
+		}
+
+		const TSharedRef<FJsonObject> PayloadJson = LastTransport->GetLastPayload().ToJsonObject();
+		const TArray<TSharedPtr<FJsonValue>>* BatchArray = nullptr;
+		TSharedPtr<FJsonObject> LastEvent;
+		if (PayloadJson->TryGetArrayField(TEXT("batch"), BatchArray) && BatchArray->Num() > 0)
+		{
+			LastEvent = (*BatchArray)[BatchArray->Num() - 1]->AsObject();
+		}
+
+		LastTransport->CompleteLast(true, 200, TEXT(""));
+		return LastEvent;
+	}
+
 	// Fixture bundling a real opted-in FPostHogConsentController with a fake transport, matching
 	// the pattern used by PostHogConsentControllerExceptionTests.cpp.
 	struct FExceptionCaptureFixture
@@ -229,6 +251,37 @@ bool FPostHogExceptionCaptureHandlerRemovalProvenTest::RunTest(const FString& Pa
 	Capture.UnregisterHandlers();
 	TestFalse(TEXT("Still not registered after repeated UnregisterHandlers"), Capture.IsRegistered());
 
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogExceptionCaptureAttachesPersonUrlOnceTest, "UnrealHog.ErrorTracking.ExceptionCapture.AttachesPersonUrlOnce", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogExceptionCaptureAttachesPersonUrlOnceTest::RunTest(const FString& Parameters)
+{
+	FExceptionCaptureFixture Fixture;
+	Fixture.Controller->Identify(TEXT("user-1"), nullptr, nullptr);
+	GetLastQueuedExceptionEvent(*Fixture.Controller, Fixture.LastTransport);
+
+	FPostHogExceptionCapture Capture(*Fixture.Controller);
+	Capture.RegisterHandlers(true, 0);
+
+	Capture.SimulateEnsureFailed("false", "SomeFile.cpp", 42, TEXT("A message"), TEXT("Ensure failed: false"));
+
+	const TSharedPtr<FJsonObject> Event = GetLastQueuedExceptionEvent(*Fixture.Controller, Fixture.LastTransport);
+	if (!TestTrue(TEXT("Exception event queued"), Event.IsValid()))
+	{
+		Capture.UnregisterHandlers();
+		return false;
+	}
+
+	const TSharedPtr<FJsonObject>* PropertiesObject = nullptr;
+	TestTrue(TEXT("Event has properties"), Event->TryGetObjectField(TEXT("properties"), PropertiesObject));
+
+	FString PersonUrl;
+	TestTrue(TEXT("properties has $exception_personURL exactly once"), (*PropertiesObject)->TryGetStringField(TEXT("$exception_personURL"), PersonUrl));
+	TestEqual(TEXT("Person URL matches identified user"), PersonUrl, FString(TEXT("https://us.posthog.com/project/phc_valid_key/person/user-1")));
+
+	Capture.UnregisterHandlers();
 	return true;
 }
 
