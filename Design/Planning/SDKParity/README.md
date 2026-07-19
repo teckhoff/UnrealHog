@@ -52,7 +52,7 @@ SDKP-022 is conditional and independent.
 
 | Task | Outcome | Blocked by | Status |
 |-|-|-|-|
-| [SDKP-001](SDKP-001-public-offline-flush-outcome.md) | Public `SkippedOffline` flush result | None | ⏳ |
+| [SDKP-001](SDKP-001-public-offline-flush-outcome.md) | Public `SkippedOffline` flush result | None | ✅ |
 | [SDKP-002](SDKP-002-normalize-custom-host.md) | One canonical host without trailing slashes | None | ⏳ |
 | [SDKP-003](SDKP-003-http-start-failure-contract.md) | Production HTTP start completion is explicit and testable | None | ⏳ |
 | [SDKP-004](SDKP-004-unavailable-capability-settings.md) | Inert settings cannot imply working features | None | ⏳ |
