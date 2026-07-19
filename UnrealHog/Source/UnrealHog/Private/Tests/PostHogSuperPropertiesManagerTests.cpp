@@ -105,6 +105,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogSuperPropertiesManagerReservedKeyReject
 
 bool FPostHogSuperPropertiesManagerReservedKeyRejectedTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("register protected PostHog property \"$session_id\" as a super property"), EAutomationExpectedErrorFlags::Contains, 1, false);
+
 	FPostHogInMemoryStorageProvider Storage;
 	FPostHogSuperPropertiesManager Manager;
 	Manager.LoadOrCreate(Storage);

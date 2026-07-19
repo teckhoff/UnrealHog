@@ -304,6 +304,13 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogFileStorageEmptyKeysFailTest, "UnrealHo
 
 bool FPostHogFileStorageEmptyKeysFailTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("Cannot save PostHog event with empty event ID"), EAutomationExpectedErrorFlags::Contains, 1, false);
+	AddExpectedError(TEXT("Cannot load PostHog event with empty event ID"), EAutomationExpectedErrorFlags::Contains, 1, false);
+	AddExpectedError(TEXT("Cannot delete PostHog event with empty event ID"), EAutomationExpectedErrorFlags::Contains, 1, false);
+	AddExpectedError(TEXT("Cannot save PostHog state with empty state key"), EAutomationExpectedErrorFlags::Contains, 1, false);
+	AddExpectedError(TEXT("Cannot load PostHog state with empty state key"), EAutomationExpectedErrorFlags::Contains, 1, false);
+	AddExpectedError(TEXT("Cannot delete PostHog state with empty state key"), EAutomationExpectedErrorFlags::Contains, 1, false);
+
 	FScopedTestStorageDirectory Fixture;
 	FPostHogFileStorageProvider Provider(Fixture.GetRootPath());
 

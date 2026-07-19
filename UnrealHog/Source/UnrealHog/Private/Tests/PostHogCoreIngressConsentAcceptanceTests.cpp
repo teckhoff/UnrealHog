@@ -88,6 +88,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogCoreIngressDeniedConsentProducesNoIdent
 
 bool FPostHogCoreIngressDeniedConsentProducesNoIdentifiersRecordsOrRequestsTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("dropping event pre-consent-event"), EAutomationExpectedErrorFlags::Contains, 1, false);
+	AddExpectedError(TEXT("dropping Identify for pre-consent-user"), EAutomationExpectedErrorFlags::Contains, 1, false);
+	AddExpectedError(TEXT("dropping Group for company"), EAutomationExpectedErrorFlags::Contains, 1, false);
+	AddExpectedError(TEXT("dropping event $screen"), EAutomationExpectedErrorFlags::Contains, 1, false);
+	AddExpectedError(TEXT("dropping event $exception"), EAutomationExpectedErrorFlags::Contains, 1, false);
+
 	FPostHogAcceptanceFixture Fixture;
 	TUniquePtr<FPostHogConsentController> Controller = Fixture.MakeController();
 	// bCaptureApplicationLifecycleEvents=true proves lifecycle producers stay silent too.
@@ -123,6 +129,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogCoreIngressOptInEnablesFullPathAllProdu
 
 bool FPostHogCoreIngressOptInEnablesFullPathAllProducersInOneFlowTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("protected PostHog property \"$lib\""), EAutomationExpectedErrorFlags::Contains, 1, false);
+
 	FPostHogAcceptanceFixture Fixture;
 	TUniquePtr<FPostHogConsentController> Controller = Fixture.MakeController();
 	UPostHogDeveloperSettings* Settings = FPostHogAcceptanceFixture::MakeSettings(true, true, false, /*bCaptureApplicationLifecycleEvents*/ true);
@@ -256,6 +264,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogCoreIngressOptOutClearsQueueAndBlocksFu
 
 bool FPostHogCoreIngressOptOutClearsQueueAndBlocksFurtherCaptureAcrossProducersTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("dropping event post-optout-event"), EAutomationExpectedErrorFlags::Contains, 1, false);
+	AddExpectedError(TEXT("dropping Identify for post-optout-user"), EAutomationExpectedErrorFlags::Contains, 1, false);
+	AddExpectedError(TEXT("dropping Group for company"), EAutomationExpectedErrorFlags::Contains, 1, false);
+	AddExpectedError(TEXT("dropping event $screen"), EAutomationExpectedErrorFlags::Contains, 1, false);
+	AddExpectedError(TEXT("dropping event $exception"), EAutomationExpectedErrorFlags::Contains, 1, false);
+
 	FPostHogAcceptanceFixture Fixture;
 	TUniquePtr<FPostHogConsentController> Controller = Fixture.MakeController();
 	UPostHogDeveloperSettings* Settings = FPostHogAcceptanceFixture::MakeSettings(true, true, false, false);
