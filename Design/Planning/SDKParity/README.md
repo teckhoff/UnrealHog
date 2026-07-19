@@ -48,15 +48,19 @@ SDKP-022 is conditional and independent.
 
 ## Tasks
 
-✅ means completed, ⏳ means ready, ❌ means blocked, and ◇ means conditional.
+✅ means the task is completed.
+⏳ means the task is currently able to be completed.
+❌ means the task is currently blocked from completion by another task.
+💀 means the task has been cancelled.
+⚙️ means the task only affects certain conditions that may not completely block completion.
 
 | Task | Outcome | Blocked by | Status |
 |-|-|-|-|
 | [SDKP-001](SDKP-001-public-offline-flush-outcome.md) | Public `SkippedOffline` flush result | None | ✅ |
 | [SDKP-002](SDKP-002-normalize-custom-host.md) | One canonical host without trailing slashes | None | ✅ |
-| [SDKP-003](SDKP-003-http-start-failure-contract.md) | Production HTTP start completion is explicit and testable | None | ⏳ |
+| [SDKP-003](SDKP-003-http-start-failure-contract.md) | Production HTTP start completion is explicit and testable | None | ✅ |
 | [SDKP-004](SDKP-004-unavailable-capability-settings.md) | Inert settings cannot imply working features | None | ✅ |
-| [SDKP-005](SDKP-005-exception-person-url.md) | Exception events include `$exception_personURL` | None | ⏳ |
+| [SDKP-005](SDKP-005-exception-person-url.md) | Exception events include `$exception_personURL` | None | 💀 |
 | [SDKP-006](SDKP-006-feature-flag-response-models.md) | Lossless v2 flag response models | None | ⏳ |
 | [SDKP-007](SDKP-007-feature-flag-transport.md) | Mockable consent-gated `/flags/?v=2` transport | SDKP-002, SDKP-006 | ❌ |
 | [SDKP-008](SDKP-008-feature-flag-cache.md) | Consent-safe memory and disk flag cache | SDKP-006, EP-002 | ❌ |
@@ -73,10 +77,12 @@ SDKP-022 is conditional and independent.
 | [SDKP-019](SDKP-019-rich-exception-list.md) | Bounded exception chains and structured frames | EP-014 (complete) | ⏳ |
 | [SDKP-020](SDKP-020-automatic-exception-signal-policy.md) | Deliberate Unreal-native nonfatal signal coverage | SDKP-019, EP-015 | ❌ |
 | [SDKP-021](SDKP-021-error-tracking-acceptance-suite.md) | Error-tracking phase-two parity proof | SDKP-005, SDKP-019, SDKP-020 | ❌ |
-| [SDKP-022](SDKP-022-restricted-platform-storage-validation.md) | Evidence-backed storage support per target platform | None | ◇ |
+| [SDKP-022](SDKP-022-restricted-platform-storage-validation.md) | Evidence-backed storage support per target platform | None | ⚙️ |
 
 ## Completion boundary
 
-The core review follow-ups are complete when SDKP-001 through SDKP-005 pass. Feature-flag parity additionally requires SDKP-006 through SDKP-012 and completion of EP-017. Session-replay parity requires SDKP-013 through SDKP-018. Broader nonfatal error-tracking parity requires SDKP-005 and SDKP-019 through SDKP-021.
+Tasks that are cancelled are no longer considered as a blocker for completion.
+
+The core review follow-ups are complete when SDKP-001 through SDKP-004 pass. Feature-flag parity additionally requires SDKP-006 through SDKP-012 and completion of EP-017. Session-replay parity requires SDKP-013 through SDKP-018. Broader nonfatal error-tracking parity requires SDKP-019 through SDKP-021.
 
 Do not describe total Unity SDK parity as complete while any required family above remains incomplete. SDKP-022 becomes required before claiming support on a restricted target platform.
