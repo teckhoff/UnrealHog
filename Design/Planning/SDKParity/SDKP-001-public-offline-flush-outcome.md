@@ -2,7 +2,7 @@
 
 ## Status and dependencies
 
-- **State:** Ready
+- **State:** Completed
 - **Blocked by:** None
 - **Blocks:** Honest public manual-flush reporting
 - **Parity row:** Public manual flush while reachability is known offline
@@ -35,3 +35,10 @@ Let callers distinguish an empty queue from a queue deliberately preserved becau
 ## Unity references
 
 - `Design/Reference/posthog-unity/com.posthog.unity/Runtime/Core/EventQueue.cs`
+
+## Validation
+
+- Status recorded as `State: Completed`; index row uses `✅`.
+- `rg -n "EPostHogEventQueueFlushResult|FPostHogEventQueue" UnrealHog/Source/UnrealHog/Public`: no matches.
+- `[ -L CI/UnrealEngine ] || Scripts/ci-paths.sh`: passed.
+- `Scripts/run-windows-tests.sh`: `BUILD RESULT: PASS`; `AUTOMATION RESULT: 247 passed, 0 passed-with-warnings, 0 failed, 0 not run`; `AUTOMATION RESULT: PASS`.

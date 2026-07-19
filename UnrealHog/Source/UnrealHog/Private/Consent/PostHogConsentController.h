@@ -10,6 +10,7 @@
 
 class IPostHogStorageProvider;
 class IPostHogBatchTransport;
+class IPostHogReachabilityProvider;
 class FPostHogApplicationLifecycleHandler;
 class FPostHogIdentityManager;
 class FPostHogSessionManager;
@@ -52,13 +53,15 @@ class FPostHogConsentController
 public:
 	using FStorageProviderFactory = TFunction<TUniquePtr<IPostHogStorageProvider>()>;
 	using FTransportFactory = TFunction<TUniquePtr<IPostHogBatchTransport>(const FString& ResolvedHost)>;
+	using FReachabilityProviderFactory = TFunction<TUniquePtr<IPostHogReachabilityProvider>()>;
 	using FUuidGenerator = TFunction<FString()>;
 	using FLifecycleMetadataProvider = FPostHogApplicationLifecycleHandler::FMetadataProvider;
 
 	FPostHogConsentController(FStorageProviderFactory InStorageProviderFactory,
 		FTransportFactory InTransportFactory,
 		FUuidGenerator InUuidGenerator,
-		FLifecycleMetadataProvider InLifecycleMetadataProvider = nullptr);
+		FLifecycleMetadataProvider InLifecycleMetadataProvider = nullptr,
+		FReachabilityProviderFactory InReachabilityProviderFactory = nullptr);
 	~FPostHogConsentController();
 
 	// Loads persisted opt-in state (falling back to the settings default) and, if opted in,
@@ -201,6 +204,7 @@ private:
 
 	FStorageProviderFactory StorageProviderFactory;
 	FTransportFactory TransportFactory;
+	FReachabilityProviderFactory ReachabilityProviderFactory;
 	FUuidGenerator UuidGenerator;
 	FLifecycleMetadataProvider LifecycleMetadataProvider;
 	FPostHogBeforeSendDelegate BeforeSend;
@@ -211,6 +215,7 @@ private:
 
 	TUniquePtr<IPostHogStorageProvider> StorageProvider;
 	TUniquePtr<IPostHogBatchTransport> Transport;
+	TUniquePtr<IPostHogReachabilityProvider> ReachabilityProvider;
 	TUniquePtr<FPostHogEventQueue> EventQueue;
 	TUniquePtr<FPostHogIdentityManager> IdentityManager;
 	TUniquePtr<FPostHogSuperPropertiesManager> SuperPropertiesManager;

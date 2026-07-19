@@ -14,6 +14,7 @@
 #include "Misc/CoreDelegates.h"
 #include "PostHogDeveloperSettings.h"
 #include "PostHogSettingsValidation.h"
+#include "Reachability/PostHogReachabilityProvider.h"
 #include "Serialization/JsonSerializer.h"
 #include "Session/PostHogSessionManager.h"
 #include "Storage/PostHogStorageProvider.h"
@@ -28,9 +29,11 @@ namespace
 FPostHogConsentController::FPostHogConsentController(FStorageProviderFactory InStorageProviderFactory,
 	FTransportFactory InTransportFactory,
 	FUuidGenerator InUuidGenerator,
-	FLifecycleMetadataProvider InLifecycleMetadataProvider) :
+	FLifecycleMetadataProvider InLifecycleMetadataProvider,
+	FReachabilityProviderFactory InReachabilityProviderFactory) :
 	StorageProviderFactory(MoveTemp(InStorageProviderFactory)),
 	TransportFactory(MoveTemp(InTransportFactory)),
+	ReachabilityProviderFactory(MoveTemp(InReachabilityProviderFactory)),
 	UuidGenerator(MoveTemp(InUuidGenerator)),
 	LifecycleMetadataProvider(MoveTemp(InLifecycleMetadataProvider))
 {
@@ -535,8 +538,10 @@ bool FPostHogConsentController::EnableCollection(const UPostHogDeveloperSettings
 	Transport = TransportFactory(ValidationResult.ResolvedHost);
 	++TransportCreationCount;
 
+	ReachabilityProvider = ReachabilityProviderFactory ? ReachabilityProviderFactory() : nullptr;
+
 	EventQueue = MakeUnique<FPostHogEventQueue>(*StorageProvider, *Transport, Settings.GetApiKey(),
-		Settings.GetMaxQueueSize(), Settings.GetMaxBatchSize(), Settings.GetFlushEventCount());
+		Settings.GetMaxQueueSize(), Settings.GetMaxBatchSize(), Settings.GetFlushEventCount(), nullptr, ReachabilityProvider.Get());
 
 	bIsOptedIn = true;
 	PersistOptIn(true);
@@ -594,6 +599,7 @@ void FPostHogConsentController::DisableCollection()
 	PersistOptIn(false);
 
 	EventQueue.Reset();
+	ReachabilityProvider.Reset();
 	Transport.Reset();
 	StorageProvider.Reset();
 	IdentityManager.Reset();

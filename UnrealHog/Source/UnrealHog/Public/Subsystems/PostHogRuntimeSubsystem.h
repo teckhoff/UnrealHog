@@ -35,7 +35,8 @@ enum class EPostHogFlushOutcome : uint8
 	Failed,
 	Cancelled,
 	ProgressBlocked,
-	Paused
+	Paused,
+	SkippedOffline
 };
 
 // C++-only completion notification for a manual Flush() call; not Blueprint-exposed since
@@ -82,6 +83,12 @@ public:
 	// invoked exactly once (synchronously for a Skipped result, otherwise when the shared
 	// drain completes).
 	EPostHogFlushRequestResult Flush(FPostHogFlushCompletedDelegate OnComplete);
+
+#if WITH_DEV_AUTOMATION_TESTS
+	void SetConsentControllerForTests(TUniquePtr<FPostHogConsentController> InConsentController);
+	void ResetConsentControllerForTests();
+	int32 GetQueuedEventCountForTests() const;
+#endif
 
 	UFUNCTION(BlueprintCallable, Category="PostHog|Consent")
 	void SetAnalyticsOptIn(bool bOptIn);

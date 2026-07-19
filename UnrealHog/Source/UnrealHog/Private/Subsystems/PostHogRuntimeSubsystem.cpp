@@ -13,32 +13,13 @@
 #include "Misc/CoreDelegates.h"
 #include "SDK/PostHogSdkInfo.h"
 #include "Storage/PostHogStorageProvider.h"
+#include "Subsystems/PostHogRuntimeSubsystemFlushOutcome.h"
 #include "Events/PostHogEventProperties.h"
 #include "TimerManager.h"
 #include "Utilities/PostHogUuidV7.h"
 
 namespace
 {
-	EPostHogFlushOutcome TranslateFlushOutcome(EPostHogEventQueueFlushResult Result)
-	{
-		switch (Result)
-		{
-		case EPostHogEventQueueFlushResult::Drained:
-			return EPostHogFlushOutcome::Drained;
-		case EPostHogEventQueueFlushResult::Failed:
-			return EPostHogFlushOutcome::Failed;
-		case EPostHogEventQueueFlushResult::Cancelled:
-			return EPostHogFlushOutcome::Cancelled;
-		case EPostHogEventQueueFlushResult::ProgressBlocked:
-			return EPostHogFlushOutcome::ProgressBlocked;
-		case EPostHogEventQueueFlushResult::Paused:
-			return EPostHogFlushOutcome::Paused;
-		case EPostHogEventQueueFlushResult::Empty:
-		default:
-			return EPostHogFlushOutcome::Empty;
-		}
-	}
-
 	EPostHogFlushRequestResult TranslateFlushRequestResult(EPostHogConsentFlushRequestResult Result)
 	{
 		switch (Result)
@@ -272,6 +253,23 @@ EPostHogFlushRequestResult UPostHogRuntimeSubsystem::Flush(FPostHogFlushComplete
 {
 	return RequestFlushInternal(MoveTemp(OnComplete));
 }
+
+#if WITH_DEV_AUTOMATION_TESTS
+void UPostHogRuntimeSubsystem::SetConsentControllerForTests(TUniquePtr<FPostHogConsentController> InConsentController)
+{
+	ConsentController = MoveTemp(InConsentController);
+}
+
+void UPostHogRuntimeSubsystem::ResetConsentControllerForTests()
+{
+	ConsentController.Reset();
+}
+
+int32 UPostHogRuntimeSubsystem::GetQueuedEventCountForTests() const
+{
+	return ConsentController ? ConsentController->GetQueuedEventCount() : 0;
+}
+#endif
 
 void UPostHogRuntimeSubsystem::SetAnalyticsOptIn(bool bOptIn)
 {

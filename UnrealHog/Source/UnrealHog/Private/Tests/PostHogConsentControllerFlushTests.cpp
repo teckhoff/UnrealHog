@@ -15,15 +15,9 @@
 #include "Tests/PostHogTestPropertyHelpers.h"
 #include "UObject/Package.h"
 
-// EP-026: the public manual-flush API (UPostHogRuntimeSubsystem::Flush and the shared timer
-// callback) is a thin wrapper around FPostHogConsentController::RequestFlush, which is where
-// the acceptance/coalescing/skip state machine actually lives. UPostHogRuntimeSubsystem cannot
-// be instantiated directly in Automation tests: it declares UCLASS(Within=GameInstance), so
-// NewObject requires a live UGameInstance, and a bare NewObject<UGameInstance>() never has
-// Init() called (see PostHogRuntimeSubsystemGatingTests.cpp), leaving GetSubsystem<>() null.
-// These tests therefore exercise the shared state machine directly on the controller, matching
-// this file's sibling PostHogConsentController*Tests.cpp files, which test every other
-// controller-owned behavior the same way.
+// EP-026: these controller tests cover the shared manual-flush acceptance/coalescing/skip
+// state machine directly. SDKP-001 adds a narrow UPostHogRuntimeSubsystem harness for public
+// outcome translation and the offline completion contract without duplicating this matrix.
 
 namespace
 {
