@@ -43,6 +43,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogCapturePolicyEnrichmentKeysNotOverridab
 
 bool FPostHogCapturePolicyEnrichmentKeysNotOverridableTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("protected PostHog property \"$os\""), EAutomationExpectedErrorFlags::Contains, 1, false);
+	AddExpectedError(TEXT("protected PostHog property \"$device_type\""), EAutomationExpectedErrorFlags::Contains, 1, false);
+	AddExpectedError(TEXT("protected PostHog property \"$device_manufacturer\""), EAutomationExpectedErrorFlags::Contains, 1, false);
+	AddExpectedError(TEXT("protected PostHog property \"$app_build\""), EAutomationExpectedErrorFlags::Contains, 1, false);
+
 	// Apply caller-supplied values for the four new reserved keys with no prior SDK enrichment.
 	// If ApplyToEvent stripped them as required, none of these keys will exist on the event at all.
 	FPostHogEvent Event(TEXT("test-event"), TEXT("distinct-1"));

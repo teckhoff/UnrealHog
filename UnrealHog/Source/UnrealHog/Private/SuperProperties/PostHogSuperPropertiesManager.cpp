@@ -51,22 +51,20 @@ void FPostHogSuperPropertiesManager::LoadOrCreate(IPostHogStorageProvider& Stora
 		return;
 	}
 
-	UE_LOGFMT(LogPostHog, Warning, "PostHog Super Properties Manager found missing, malformed, or unsupported-version super property state; starting with no registered super properties.");
+	UE_LOGFMT(LogUnrealHog, Warning, "PostHog Super Properties Manager found missing, malformed, or unsupported-version super property state; starting with no registered super properties.");
 }
 
 void FPostHogSuperPropertiesManager::Register(const FString& Key, const FPostHogEventProperty& Value, IPostHogStorageProvider& Storage)
 {
 	if (Key.TrimStartAndEnd().IsEmpty())
 	{
-		UE_LOGFMT(LogPostHog, Warning, "PostHog Super Properties Manager rejected Register with an empty or whitespace-only key.");
+		UE_LOGFMT(LogUnrealHog, Warning, "PostHog Super Properties Manager rejected Register with an empty or whitespace-only key.");
 		return;
 	}
 
 	if (PostHogCapturePolicy::GetReservedPropertyKeys().Contains(Key))
 	{
-#if !WITH_DEV_AUTOMATION_TESTS
-		UE_LOGFMT(LogPostHog, Warning, "Ignoring attempt to register protected PostHog property \"{Key}\" as a super property; reserved properties are SDK-owned and cannot be overwritten.", Key);
-#endif
+		UE_LOGFMT(LogUnrealHog, Warning, "Ignoring attempt to register protected PostHog property \"{Key}\" as a super property; reserved properties are SDK-owned and cannot be overwritten.", Key);
 		return;
 	}
 

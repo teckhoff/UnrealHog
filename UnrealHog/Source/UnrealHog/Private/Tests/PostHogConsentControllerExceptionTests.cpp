@@ -214,6 +214,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerCaptureExceptionMissin
 
 bool FPostHogConsentControllerCaptureExceptionMissingMessageIsSafeNoOpTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("rejected CaptureException with an empty or whitespace-only message or type"), EAutomationExpectedErrorFlags::Contains, 1, false);
+
 	FScopedExceptionTestStorageDirectory Fixture;
 	FPostHogFakeBatchTransport* LastTransport = nullptr;
 	int32 UuidCounter = 0;
@@ -243,6 +245,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerCaptureExceptionMissin
 
 bool FPostHogConsentControllerCaptureExceptionMissingTypeIsSafeNoOpTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("rejected CaptureException with an empty or whitespace-only message or type"), EAutomationExpectedErrorFlags::Contains, 1, false);
+
 	FScopedExceptionTestStorageDirectory Fixture;
 	FPostHogFakeBatchTransport* LastTransport = nullptr;
 	int32 UuidCounter = 0;
@@ -272,6 +276,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerCaptureExceptionNotOpt
 
 bool FPostHogConsentControllerCaptureExceptionNotOptedInIsSafeNoOpTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("dropping event $exception"), EAutomationExpectedErrorFlags::Contains, 1, false);
+
 	FScopedExceptionTestStorageDirectory Fixture;
 	FPostHogFakeBatchTransport* LastTransport = nullptr;
 	int32 UuidCounter = 0;

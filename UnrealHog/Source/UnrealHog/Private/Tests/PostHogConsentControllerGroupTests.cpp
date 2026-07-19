@@ -103,6 +103,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerGroupBlankNoOpTest, "U
 
 bool FPostHogConsentControllerGroupBlankNoOpTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("rejected Group with an empty or whitespace-only group type or key"), EAutomationExpectedErrorFlags::Contains, 2, false);
+
 	FScopedGroupTestStorageDirectory Fixture;
 	FPostHogFakeBatchTransport* LastTransport = nullptr;
 	int32 UuidCounter = 0;
@@ -127,6 +129,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerGroupRequiresConsentTe
 
 bool FPostHogConsentControllerGroupRequiresConsentTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("dropping Group for company"), EAutomationExpectedErrorFlags::Contains, 1, false);
+
 	FScopedGroupTestStorageDirectory Fixture;
 	FPostHogFakeBatchTransport* LastTransport = nullptr;
 	int32 UuidCounter = 0;
@@ -419,6 +423,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerCallerCannotOverrideGr
 
 bool FPostHogConsentControllerCallerCannotOverrideGroupsTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("protected PostHog property \"$groups\""), EAutomationExpectedErrorFlags::Contains, 1, false);
+
 	FScopedGroupTestStorageDirectory Fixture;
 	FPostHogFakeBatchTransport* LastTransport = nullptr;
 	int32 UuidCounter = 0;

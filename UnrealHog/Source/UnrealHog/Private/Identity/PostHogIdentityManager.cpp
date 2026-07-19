@@ -62,7 +62,7 @@ void FPostHogIdentityManager::LoadOrCreate(IPostHogStorageProvider& Storage)
 			return;
 		}
 
-		UE_LOGFMT(LogPostHog, Warning, "PostHog Identity Manager found missing, malformed, or unsupported-version identity state; generating a fresh anonymous identity.");
+		UE_LOGFMT(LogUnrealHog, Warning, "PostHog Identity Manager found missing, malformed, or unsupported-version identity state; generating a fresh anonymous identity.");
 	}
 
 	AnonymousId = UuidGenerator ? UuidGenerator() : PostHogUuidV7::New();

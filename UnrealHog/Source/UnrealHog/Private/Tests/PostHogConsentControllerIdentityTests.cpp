@@ -103,6 +103,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerIdentifyBlankNoOpTest,
 
 bool FPostHogConsentControllerIdentifyBlankNoOpTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("rejected Identify with an empty or whitespace-only distinct id"), EAutomationExpectedErrorFlags::Contains, 1, false);
+
 	FScopedIdentityTestStorageDirectory Fixture;
 	FPostHogFakeBatchTransport* LastTransport = nullptr;
 	int32 UuidCounter = 0;
@@ -127,6 +129,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerAliasBlankNoOpTest, "U
 
 bool FPostHogConsentControllerAliasBlankNoOpTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("rejected Alias with an empty or whitespace-only alias"), EAutomationExpectedErrorFlags::Contains, 1, false);
+
 	FScopedIdentityTestStorageDirectory Fixture;
 	FPostHogFakeBatchTransport* LastTransport = nullptr;
 	int32 UuidCounter = 0;
@@ -149,6 +153,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerIdentifyRequiresConsen
 
 bool FPostHogConsentControllerIdentifyRequiresConsentTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("dropping Identify for user-1"), EAutomationExpectedErrorFlags::Contains, 1, false);
+
 	FScopedIdentityTestStorageDirectory Fixture;
 	FPostHogFakeBatchTransport* LastTransport = nullptr;
 	int32 UuidCounter = 0;

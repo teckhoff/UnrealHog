@@ -355,6 +355,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerInvalidConfigRejectsTe
 
 bool FPostHogConsentControllerInvalidConfigRejectsTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("rejected opt-in (API key is missing or whitespace.)"), EAutomationExpectedErrorFlags::Contains, 1, false);
+
 	FScopedConsentTestStorageDirectory Fixture;
 	FPostHogFakeBatchTransport* LastTransport = nullptr;
 	int32 UuidCounter = 0;
@@ -375,6 +377,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerKillSwitchBlocksTest, 
 
 bool FPostHogConsentControllerKillSwitchBlocksTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("rejected opt-in (analytics disabled by developer setting)"), EAutomationExpectedErrorFlags::Contains, 1, false);
+
 	FScopedConsentTestStorageDirectory Fixture;
 	FPostHogFakeBatchTransport* LastTransport = nullptr;
 	int32 UuidCounter = 0;
@@ -474,6 +478,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerCaptureEventRejectsInv
 
 bool FPostHogConsentControllerCaptureEventRejectsInvalidNameTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("rejected capture with an empty or whitespace-only event name"), EAutomationExpectedErrorFlags::Contains, 1, false);
+
 	FScopedConsentTestStorageDirectory Fixture;
 	FPostHogFakeBatchTransport* LastTransport = nullptr;
 	int32 UuidCounter = 0;
@@ -496,6 +502,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerCaptureEventRejectsWit
 
 bool FPostHogConsentControllerCaptureEventRejectsWithoutConsentTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("dropping event ev"), EAutomationExpectedErrorFlags::Contains, 1, false);
+
 	FScopedConsentTestStorageDirectory Fixture;
 	FPostHogFakeBatchTransport* LastTransport = nullptr;
 	int32 UuidCounter = 0;
@@ -557,6 +565,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerCaptureEventEnforcesRe
 
 bool FPostHogConsentControllerCaptureEventEnforcesReservedPropertyPrecedenceTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("protected PostHog property \"$lib\""), EAutomationExpectedErrorFlags::Contains, 1, false);
+	AddExpectedError(TEXT("protected PostHog property \"$lib_version\""), EAutomationExpectedErrorFlags::Contains, 1, false);
+	AddExpectedError(TEXT("protected PostHog property \"$process_person_profile\""), EAutomationExpectedErrorFlags::Contains, 1, false);
+	AddExpectedError(TEXT("protected PostHog property \"$session_id\""), EAutomationExpectedErrorFlags::Contains, 1, false);
+	AddExpectedError(TEXT("protected PostHog property \"$groups\""), EAutomationExpectedErrorFlags::Contains, 1, false);
+
 	FScopedConsentTestStorageDirectory Fixture;
 	FPostHogFakeBatchTransport* LastTransport = nullptr;
 	int32 UuidCounter = 0;
@@ -710,6 +724,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerCaptureScreenPropertie
 
 bool FPostHogConsentControllerCaptureScreenPropertiesCannotOverrideScreenNameTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("protected PostHog property \"$screen_name\""), EAutomationExpectedErrorFlags::Contains, 1, false);
+
 	FScopedConsentTestStorageDirectory Fixture;
 	FPostHogFakeBatchTransport* LastTransport = nullptr;
 	int32 UuidCounter = 0;
@@ -786,6 +802,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerCaptureScreenRejectsBl
 
 bool FPostHogConsentControllerCaptureScreenRejectsBlankNameTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("rejected screen capture with an empty or whitespace-only screen name"), EAutomationExpectedErrorFlags::Contains, 1, false);
+
 	FScopedConsentTestStorageDirectory Fixture;
 	FPostHogFakeBatchTransport* LastTransport = nullptr;
 	int32 UuidCounter = 0;
@@ -814,6 +832,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerCaptureScreenHonorsCon
 
 bool FPostHogConsentControllerCaptureScreenHonorsConsentGatesTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("dropping event $screen"), EAutomationExpectedErrorFlags::Contains, 2, false);
+
 	FScopedConsentTestStorageDirectory Fixture;
 	FPostHogFakeBatchTransport* LastTransport = nullptr;
 	int32 UuidCounter = 0;

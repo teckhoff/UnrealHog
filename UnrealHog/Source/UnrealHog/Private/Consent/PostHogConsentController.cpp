@@ -63,7 +63,7 @@ void FPostHogConsentController::Initialize(const UPostHogDeveloperSettings& Sett
 	FString FailureReason;
 	if (!EnableCollection(Settings, FailureReason))
 	{
-		UE_LOGFMT(LogPostHog, Warning, "PostHog Consent Controller could not restore opt-in state ({Reason}); remaining opted out.", FailureReason);
+		UE_LOGFMT(LogUnrealHog, Warning, "PostHog Consent Controller could not restore opt-in state ({Reason}); remaining opted out.", FailureReason);
 		StorageProvider.Reset();
 	}
 }
@@ -120,9 +120,7 @@ bool FPostHogConsentController::SetOptIn(bool bOptIn, const UPostHogDeveloperSet
 	const bool bOk = EnableCollection(Settings, FailureReason);
 	if (!bOk)
 	{
-#if !WITH_DEV_AUTOMATION_TESTS
-		UE_LOGFMT(LogPostHog, Warning, "PostHog Consent Controller rejected opt-in ({Reason}).", FailureReason);
-#endif
+		UE_LOGFMT(LogUnrealHog, Warning, "PostHog Consent Controller rejected opt-in ({Reason}).", FailureReason);
 	}
 	return bOk;
 }
@@ -156,9 +154,7 @@ EPostHogCaptureResult FPostHogConsentController::CaptureScreen(const FString& Sc
 {
 	if (!PostHogCapturePolicy::IsValidEventName(ScreenName))
 	{
-#if !WITH_DEV_AUTOMATION_TESTS
-		UE_LOGFMT(LogPostHog, Warning, "PostHog Consent Controller rejected screen capture with an empty or whitespace-only screen name.");
-#endif
+		UE_LOGFMT(LogUnrealHog, Warning, "PostHog Consent Controller rejected screen capture with an empty or whitespace-only screen name.");
 		return EPostHogCaptureResult::InvalidEventName;
 	}
 
@@ -174,17 +170,13 @@ EPostHogCaptureResult FPostHogConsentController::CaptureEventWithProducerPropert
 {
 	if (!PostHogCapturePolicy::IsValidEventName(EventName))
 	{
-#if !WITH_DEV_AUTOMATION_TESTS
-		UE_LOGFMT(LogPostHog, Warning, "PostHog Consent Controller rejected capture with an empty or whitespace-only event name.");
-#endif
+		UE_LOGFMT(LogUnrealHog, Warning, "PostHog Consent Controller rejected capture with an empty or whitespace-only event name.");
 		return EPostHogCaptureResult::InvalidEventName;
 	}
 
 	if (!bIsOptedIn || !EventQueue.IsValid())
 	{
-#if !WITH_DEV_AUTOMATION_TESTS
-		UE_LOGFMT(LogPostHog, Warning, "PostHog Consent Controller has no analytics consent; dropping event {EventName}.", EventName);
-#endif
+		UE_LOGFMT(LogUnrealHog, Warning, "PostHog Consent Controller has no analytics consent; dropping event {EventName}.", EventName);
 		return EPostHogCaptureResult::NotOptedIn;
 	}
 
@@ -218,13 +210,13 @@ EPostHogCaptureResult FPostHogConsentController::CaptureEventWithProducerPropert
 
 	if (BeforeSendResult == EPostHogBeforeSendResult::Failure)
 	{
-		UE_LOGFMT(LogPostHog, Error, "PostHog before-send callback reported failure for event {EventName}; dropping event before persistence.", EventName);
+		UE_LOGFMT(LogUnrealHog, Error, "PostHog before-send callback reported failure for event {EventName}; dropping event before persistence.", EventName);
 		return EPostHogCaptureResult::BeforeSendFailed;
 	}
 
 	if (!Capture(GeneratedEvent))
 	{
-		UE_LOGFMT(LogPostHog, Error, "PostHog Consent Controller failed to enqueue event {EventName}.", EventName);
+		UE_LOGFMT(LogUnrealHog, Error, "PostHog Consent Controller failed to enqueue event {EventName}.", EventName);
 		return EPostHogCaptureResult::EnqueueFailed;
 	}
 
@@ -237,17 +229,13 @@ EPostHogCaptureResult FPostHogConsentController::Identify(const FString& Distinc
 {
 	if (DistinctId.TrimStartAndEnd().IsEmpty())
 	{
-#if !WITH_DEV_AUTOMATION_TESTS
-		UE_LOGFMT(LogPostHog, Warning, "PostHog Consent Controller rejected Identify with an empty or whitespace-only distinct id.");
-#endif
+		UE_LOGFMT(LogUnrealHog, Warning, "PostHog Consent Controller rejected Identify with an empty or whitespace-only distinct id.");
 		return EPostHogCaptureResult::InvalidEventName;
 	}
 
 	if (!bIsOptedIn || !IdentityManager.IsValid() || !StorageProvider.IsValid())
 	{
-#if !WITH_DEV_AUTOMATION_TESTS
-		UE_LOGFMT(LogPostHog, Warning, "PostHog Consent Controller has no analytics consent; dropping Identify for {DistinctId}.", DistinctId);
-#endif
+		UE_LOGFMT(LogUnrealHog, Warning, "PostHog Consent Controller has no analytics consent; dropping Identify for {DistinctId}.", DistinctId);
 		return EPostHogCaptureResult::NotOptedIn;
 	}
 
@@ -289,9 +277,7 @@ EPostHogCaptureResult FPostHogConsentController::Alias(const FString& Alias)
 {
 	if (Alias.TrimStartAndEnd().IsEmpty())
 	{
-#if !WITH_DEV_AUTOMATION_TESTS
-		UE_LOGFMT(LogPostHog, Warning, "PostHog Consent Controller rejected Alias with an empty or whitespace-only alias.");
-#endif
+		UE_LOGFMT(LogUnrealHog, Warning, "PostHog Consent Controller rejected Alias with an empty or whitespace-only alias.");
 		return EPostHogCaptureResult::InvalidEventName;
 	}
 
@@ -308,17 +294,13 @@ EPostHogCaptureResult FPostHogConsentController::Group(const FString& GroupType,
 
 	if (TrimmedType.IsEmpty() || TrimmedKey.IsEmpty())
 	{
-#if !WITH_DEV_AUTOMATION_TESTS
-		UE_LOGFMT(LogPostHog, Warning, "PostHog Consent Controller rejected Group with an empty or whitespace-only group type or key.");
-#endif
+		UE_LOGFMT(LogUnrealHog, Warning, "PostHog Consent Controller rejected Group with an empty or whitespace-only group type or key.");
 		return EPostHogCaptureResult::InvalidEventName;
 	}
 
 	if (!bIsOptedIn || !IdentityManager.IsValid() || !StorageProvider.IsValid())
 	{
-#if !WITH_DEV_AUTOMATION_TESTS
-		UE_LOGFMT(LogPostHog, Warning, "PostHog Consent Controller has no analytics consent; dropping Group for {GroupType}.", TrimmedType);
-#endif
+		UE_LOGFMT(LogUnrealHog, Warning, "PostHog Consent Controller has no analytics consent; dropping Group for {GroupType}.", TrimmedType);
 		return EPostHogCaptureResult::NotOptedIn;
 	}
 
@@ -339,9 +321,7 @@ EPostHogCaptureResult FPostHogConsentController::CaptureException(const FPostHog
 {
 	if (Exception.Message.TrimStartAndEnd().IsEmpty() || Exception.Type.TrimStartAndEnd().IsEmpty())
 	{
-#if !WITH_DEV_AUTOMATION_TESTS
-		UE_LOGFMT(LogPostHog, Warning, "PostHog Consent Controller rejected CaptureException with an empty or whitespace-only message or type.");
-#endif
+		UE_LOGFMT(LogUnrealHog, Warning, "PostHog Consent Controller rejected CaptureException with an empty or whitespace-only message or type.");
 		return EPostHogCaptureResult::InvalidEventName;
 	}
 
@@ -366,9 +346,7 @@ bool FPostHogConsentController::RegisterSuperProperty(const FString& Key, const 
 {
 	if (!bIsOptedIn || !SuperPropertiesManager.IsValid() || !StorageProvider.IsValid())
 	{
-#if !WITH_DEV_AUTOMATION_TESTS
-		UE_LOGFMT(LogPostHog, Warning, "PostHog Consent Controller has no analytics consent; dropping RegisterSuperProperty for {Key}.", Key);
-#endif
+		UE_LOGFMT(LogUnrealHog, Warning, "PostHog Consent Controller has no analytics consent; dropping RegisterSuperProperty for {Key}.", Key);
 		return false;
 	}
 
@@ -380,9 +358,7 @@ void FPostHogConsentController::UnregisterSuperProperty(const FString& Key)
 {
 	if (!bIsOptedIn || !SuperPropertiesManager.IsValid() || !StorageProvider.IsValid())
 	{
-#if !WITH_DEV_AUTOMATION_TESTS
-		UE_LOGFMT(LogPostHog, Warning, "PostHog Consent Controller has no analytics consent; dropping UnregisterSuperProperty for {Key}.", Key);
-#endif
+		UE_LOGFMT(LogUnrealHog, Warning, "PostHog Consent Controller has no analytics consent; dropping UnregisterSuperProperty for {Key}.", Key);
 		return;
 	}
 
@@ -393,9 +369,7 @@ void FPostHogConsentController::ClearSuperProperties()
 {
 	if (!bIsOptedIn || !SuperPropertiesManager.IsValid() || !StorageProvider.IsValid())
 	{
-#if !WITH_DEV_AUTOMATION_TESTS
-		UE_LOGFMT(LogPostHog, Warning, "PostHog Consent Controller has no analytics consent; dropping ClearSuperProperties.");
-#endif
+		UE_LOGFMT(LogUnrealHog, Warning, "PostHog Consent Controller has no analytics consent; dropping ClearSuperProperties.");
 		return;
 	}
 
