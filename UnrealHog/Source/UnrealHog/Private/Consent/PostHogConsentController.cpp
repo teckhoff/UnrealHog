@@ -517,6 +517,7 @@ bool FPostHogConsentController::EnableCollection(const UPostHogDeveloperSettings
 	}
 
 	const FPostHogSettingsValidationResult ValidationResult = PostHogSettingsValidation::Validate(Settings);
+	PostHogSettingsValidation::LogUnavailableCapabilityDiagnosticsOnce(ValidationResult);
 	if (!ValidationResult.bIsValid)
 	{
 		OutFailureReason = ValidationResult.FailureReason;

@@ -24,6 +24,8 @@ namespace
 		UnrealHogTests::SetPropertyValue<bool>(Settings, TEXT("bAnalyticsEnabled"), true);
 		UnrealHogTests::SetPropertyValue<bool>(Settings, TEXT("bDefaultUserOptIn"), false);
 		UnrealHogTests::SetPropertyValue<bool>(Settings, TEXT("bCaptureApplicationLifecycleEvents"), false);
+		UnrealHogTests::SetPropertyValue<bool>(Settings, TEXT("bPreloadFeatureFlags"), false);
+		UnrealHogTests::SetPropertyValue<bool>(Settings, TEXT("bSessionReplay"), false);
 		UnrealHogTests::SetPropertyValue<int32>(Settings, TEXT("MaxQueueSize"), 50);
 		UnrealHogTests::SetPropertyValue<int32>(Settings, TEXT("MaxBatchSize"), 10);
 		UnrealHogTests::SetPropertyValue<int32>(Settings, TEXT("FlushEventCount"), 100);
