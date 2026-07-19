@@ -5,6 +5,7 @@
 
 #include "Dom/JsonObject.h"
 #include "Events/PostHogBatchPayload.h"
+#include "Http/PostHogEndpointUrls.h"
 #include "HttpModule.h"
 #include "Interfaces/IHttpResponse.h"
 #include "Logging/PostHogLogger.h"
@@ -32,6 +33,11 @@ namespace
 			State->OnComplete(bSuccess, StatusCode, ResponseBody);
 		}
 	}
+}
+
+FPostHogHttpClient::FPostHogHttpClient(const FString& InHost)
+	: Host(PostHogEndpointUrls::NormalizeHost(InHost))
+{
 }
 
 FPostHogHttpClient::FPostHogHttpClient(const FString& InHost)
@@ -112,15 +118,7 @@ TSharedPtr<IPostHogBatchRequestHandle> FPostHogHttpClient::SendBatch(const FPost
 
 FString FPostHogHttpClient::GetBatchUrl() const
 {
-	return FString::Printf(TEXT("%s/batch"), *Host);
-}
-
-FString FPostHogHttpClient::NormalizeHost(const FString& InHost)
-{
-	FString NormalizedHost = InHost.TrimStartAndEnd();
-	NormalizedHost.RemoveFromEnd(TEXT("/"));
-	
-	return NormalizedHost;
+	return PostHogEndpointUrls::BuildBatchUrl(Host);
 }
 
 bool FPostHogHttpClient::SerializeJsonObject(const TSharedRef<FJsonObject>& JsonObject, FString& OutJson)

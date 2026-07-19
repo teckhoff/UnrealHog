@@ -106,18 +106,50 @@ bool FPostHogSettingsBlankCustomHostNormalizesTest::RunTest(const FString& Param
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogSettingsCustomHostUnchangedTest, "UnrealHog.Configuration.DeveloperSettings.NonEmptyCustomHostPasses", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogSettingsCustomHostCanonicalizesTest, "UnrealHog.Configuration.DeveloperSettings.CustomHostCanonicalizesTrailingSlashes", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 
-bool FPostHogSettingsCustomHostUnchangedTest::RunTest(const FString& Parameters)
+bool FPostHogSettingsCustomHostCanonicalizesTest::RunTest(const FString& Parameters)
+{
+	struct FHostCase
+	{
+		const TCHAR* InputHost;
+		const TCHAR* ExpectedHost;
+	};
+
+	const FHostCase Cases[] = {
+		{ TEXT("https://example.com"), TEXT("https://example.com") },
+		{ TEXT("https://example.com/"), TEXT("https://example.com") },
+		{ TEXT("https://example.com///"), TEXT("https://example.com") },
+		{ TEXT("  https://example.com///  "), TEXT("https://example.com") }
+	};
+
+	for (const FHostCase& Case : Cases)
+	{
+		UPostHogDeveloperSettings* Settings = MakeTransientSettings();
+		UnrealHogTests::SetPropertyValue<FString>(Settings, TEXT("ApiKey"), TEXT("phc_valid_key"));
+		UnrealHogTests::SetPropertyValue<EPostHogHost>(Settings, TEXT("HostType"), EPostHogHost::Custom);
+		UnrealHogTests::SetPropertyValue<FString>(Settings, TEXT("Host"), Case.InputHost);
+
+		const FPostHogSettingsValidationResult Result = PostHogSettingsValidation::Validate(*Settings);
+		TestTrue(*FString::Printf(TEXT("%s validates"), Case.InputHost), Result.bIsValid);
+		TestEqual(*FString::Printf(TEXT("%s canonicalizes"), Case.InputHost), Result.ResolvedHost, Case.ExpectedHost);
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogSettingsCustomHostInternalWhitespaceTest, "UnrealHog.Configuration.DeveloperSettings.CustomHostPreservesInternalWhitespace", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogSettingsCustomHostInternalWhitespaceTest::RunTest(const FString& Parameters)
 {
 	UPostHogDeveloperSettings* Settings = MakeTransientSettings();
 	UnrealHogTests::SetPropertyValue<FString>(Settings, TEXT("ApiKey"), TEXT("phc_valid_key"));
 	UnrealHogTests::SetPropertyValue<EPostHogHost>(Settings, TEXT("HostType"), EPostHogHost::Custom);
-	UnrealHogTests::SetPropertyValue<FString>(Settings, TEXT("Host"), TEXT("  https://custom.example.com/  "));
+	UnrealHogTests::SetPropertyValue<FString>(Settings, TEXT("Host"), TEXT("https://exa mple.com///"));
 
 	const FPostHogSettingsValidationResult Result = PostHogSettingsValidation::Validate(*Settings);
 	TestTrue(TEXT("Custom host validates"), Result.bIsValid);
-	TestEqual(TEXT("Custom host trimmed of whitespace and trailing slash"), Result.ResolvedHost, TEXT("https://custom.example.com"));
+	TestEqual(TEXT("Custom host preserves internal whitespace"), Result.ResolvedHost, TEXT("https://exa mple.com"));
 
 	return true;
 }

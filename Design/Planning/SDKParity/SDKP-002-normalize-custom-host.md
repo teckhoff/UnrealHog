@@ -2,7 +2,7 @@
 
 ## Status and dependencies
 
-- **State:** Ready
+- **State:** Completed
 - **Blocked by:** None
 - **Blocks:** SDKP-007, SDKP-014
 - **Parity row:** Canonical host resolution for every HTTP endpoint

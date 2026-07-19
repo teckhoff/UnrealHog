@@ -39,7 +39,6 @@ private:
 	FRequestFactory RequestFactory;
 
 	FString GetBatchUrl() const;
-	static FString NormalizeHost(const FString& InHost);
 	static bool SerializeJsonObject(const TSharedRef<FJsonObject>& JsonObject, FString& OutJson);
 	static bool IsSuccessfulResponse(FHttpResponsePtr Response, bool bRequestSucceeded);
 };
