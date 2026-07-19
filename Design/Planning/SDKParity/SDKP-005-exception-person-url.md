@@ -2,10 +2,13 @@
 
 ## Status and dependencies
 
-- **State:** Ready
+- **State:** Cancelled
 - **Blocked by:** None
 - **Blocks:** SDKP-021
 - **Parity row:** `$exception_personURL` on manual and automatic exception events
+
+## Cancellation Reason
+PostHog has deprecated, and eventually completed removed, the `$exception_personURL` property from their javascript SDKs in late 2025. It still exists in the Unity and DotNet SDKs, but chasing exact feature parity for no reason is silly. See the pull request for reasoning [here](https://github.com/teckhoff/UnrealHog/pull/51).
 
 ## Goal
 

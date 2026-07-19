@@ -2,7 +2,7 @@
 
 ## Status and dependencies
 
-- **State:** Ready
+- **State:** Completed
 - **Blocked by:** None
 - **Blocks:** Production-boundary `/batch` confidence
 - **Parity row:** EP-001 synchronous send-start completion in the real Unreal adapter
