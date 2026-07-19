@@ -2,7 +2,7 @@
 
 ## Status and dependencies
 
-- **State:** Ready
+- **State:** Completed
 - **Blocked by:** None
 - **Blocks:** SDKP-007, SDKP-008, SDKP-012
 - **Parity row:** `/flags/?v=2` response parsing and cached representation
