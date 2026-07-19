@@ -1,5 +1,3 @@
-// Trevor Eckhoff, 2026. All rights reserved.
-
 #include "Storage/PostHogFileStorageProvider.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -37,12 +35,12 @@ namespace
 
 		FString GetQueueDirectory() const
 		{
-			return FPaths::Combine(RootPath, PostHogSdkInfo::GetLibraryName(), TEXT("Queue"));
+			return FPaths::Combine(RootPath, FPostHogSdkInfo::GetLibraryName(), TEXT("Queue"));
 		}
 
 		FString GetStateDirectory() const
 		{
-			return FPaths::Combine(RootPath, PostHogSdkInfo::GetLibraryName(), TEXT("State"));
+			return FPaths::Combine(RootPath, FPostHogSdkInfo::GetLibraryName(), TEXT("State"));
 		}
 
 	private:
@@ -306,6 +304,13 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogFileStorageEmptyKeysFailTest, "UnrealHo
 
 bool FPostHogFileStorageEmptyKeysFailTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("Cannot save PostHog event with empty event ID"), EAutomationExpectedErrorFlags::Contains, 1, false);
+	AddExpectedError(TEXT("Cannot load PostHog event with empty event ID"), EAutomationExpectedErrorFlags::Contains, 1, false);
+	AddExpectedError(TEXT("Cannot delete PostHog event with empty event ID"), EAutomationExpectedErrorFlags::Contains, 1, false);
+	AddExpectedError(TEXT("Cannot save PostHog state with empty state key"), EAutomationExpectedErrorFlags::Contains, 1, false);
+	AddExpectedError(TEXT("Cannot load PostHog state with empty state key"), EAutomationExpectedErrorFlags::Contains, 1, false);
+	AddExpectedError(TEXT("Cannot delete PostHog state with empty state key"), EAutomationExpectedErrorFlags::Contains, 1, false);
+
 	FScopedTestStorageDirectory Fixture;
 	FPostHogFileStorageProvider Provider(Fixture.GetRootPath());
 

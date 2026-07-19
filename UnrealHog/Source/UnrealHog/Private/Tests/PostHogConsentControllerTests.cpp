@@ -1,5 +1,3 @@
-// Trevor Eckhoff, 2026. All rights reserved.
-
 #include "Consent/PostHogConsentController.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -9,9 +7,13 @@
 #include "Misc/Paths.h"
 #include "HAL/FileManager.h"
 #include "HAL/PlatformProcess.h"
+#include "Events/PostHogBatchPayload.h"
+#include "Events/PostHogBeforeSend.h"
 #include "Events/PostHogEvent.h"
+#include "Events/PostHogEventProperties.h"
 #include "Events/PostHogEventQueue.h"
 #include "PostHogDeveloperSettings.h"
+#include "PostHogSettingsValidation.h"
 #include "SDK/PostHogSdkInfo.h"
 #include "Storage/PostHogFileStorageProvider.h"
 #include "Tests/PostHogFakeBatchTransport.h"
@@ -39,24 +41,37 @@ namespace
 
 		FString GetQueueDirectory() const
 		{
-			return FPaths::Combine(RootPath, PostHogSdkInfo::GetLibraryName(), TEXT("Queue"));
+			return FPaths::Combine(RootPath, FPostHogSdkInfo::GetLibraryName(), TEXT("Queue"));
 		}
 
 		FString GetStateDirectory() const
 		{
-			return FPaths::Combine(RootPath, PostHogSdkInfo::GetLibraryName(), TEXT("State"));
+			return FPaths::Combine(RootPath, FPostHogSdkInfo::GetLibraryName(), TEXT("State"));
+		}
+
+		FString GetLifecycleStateFile() const
+		{
+			return FPaths::Combine(GetStateDirectory(), TEXT("lifecycle.json"));
 		}
 
 	private:
 		FString RootPath;
 	};
 
-	UPostHogDeveloperSettings* MakeTransientSettings(bool bValidApiKey, bool bAnalyticsEnabled, bool bDefaultUserOptIn)
+	UPostHogDeveloperSettings* MakeTransientSettings(bool bValidApiKey,
+		bool bAnalyticsEnabled,
+		bool bDefaultUserOptIn,
+		bool bCaptureApplicationLifecycleEvents = false,
+		EPostHogPersonProfiles PersonProfiles = EPostHogPersonProfiles::IdentifiedOnly)
 	{
 		UPostHogDeveloperSettings* Settings = NewObject<UPostHogDeveloperSettings>(GetTransientPackage());
 		UnrealHogTests::SetPropertyValue<FString>(Settings, TEXT("ApiKey"), bValidApiKey ? TEXT("phc_valid_key") : TEXT(""));
 		UnrealHogTests::SetPropertyValue<bool>(Settings, TEXT("bAnalyticsEnabled"), bAnalyticsEnabled);
 		UnrealHogTests::SetPropertyValue<bool>(Settings, TEXT("bDefaultUserOptIn"), bDefaultUserOptIn);
+		UnrealHogTests::SetPropertyValue<bool>(Settings, TEXT("bCaptureApplicationLifecycleEvents"), bCaptureApplicationLifecycleEvents);
+		UnrealHogTests::SetPropertyValue<bool>(Settings, TEXT("bPreloadFeatureFlags"), false);
+		UnrealHogTests::SetPropertyValue<bool>(Settings, TEXT("bSessionReplay"), false);
+		UnrealHogTests::SetPropertyValue<EPostHogPersonProfiles>(Settings, TEXT("PersonProfiles"), PersonProfiles);
 		return Settings;
 	}
 
@@ -89,6 +104,62 @@ namespace
 	{
 		return FPostHogEvent(FString::Printf(TEXT("test-event-%s"), *Suffix), TEXT("distinct-id"));
 	}
+
+	bool TryGetSinglePayloadEvent(const FPostHogBatchPayload& Payload, TSharedPtr<FJsonObject>& OutEventObject)
+	{
+		const TSharedRef<FJsonObject> PayloadJson = Payload.ToJsonObject();
+
+		const TArray<TSharedPtr<FJsonValue>>* BatchArray = nullptr;
+		if (!PayloadJson->TryGetArrayField(TEXT("batch"), BatchArray) || BatchArray->Num() != 1)
+		{
+			return false;
+		}
+
+		OutEventObject = (*BatchArray)[0]->AsObject();
+		return OutEventObject.IsValid();
+	}
+
+	bool TryGetPayloadEventNames(const FPostHogBatchPayload& Payload, TArray<FString>& OutEventNames)
+	{
+		const TSharedRef<FJsonObject> PayloadJson = Payload.ToJsonObject();
+
+		const TArray<TSharedPtr<FJsonValue>>* BatchArray = nullptr;
+		if (!PayloadJson->TryGetArrayField(TEXT("batch"), BatchArray))
+		{
+			return false;
+		}
+
+		OutEventNames.Reset(BatchArray->Num());
+		for (const TSharedPtr<FJsonValue>& EventValue : *BatchArray)
+		{
+			const TSharedPtr<FJsonObject> EventObject = EventValue->AsObject();
+			if (!EventObject.IsValid())
+			{
+				return false;
+			}
+
+			FString EventName;
+			if (!EventObject->TryGetStringField(TEXT("event"), EventName))
+			{
+				return false;
+			}
+
+			OutEventNames.Add(EventName);
+		}
+
+		return true;
+	}
+
+	FPostHogConsentController::FLifecycleMetadataProvider MakeConsentLifecycleMetadataProvider()
+	{
+		return []()
+		{
+			FPostHogApplicationMetadata Metadata;
+			Metadata.Version = TEXT("1.0.0");
+			Metadata.Build = TEXT("build-1");
+			return Metadata;
+		};
+	}
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerDefaultOptOutTest, "UnrealHog.Consent.ConsentController.DefaultOptOutInitializeIsSideEffectFree", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
@@ -107,11 +178,93 @@ bool FPostHogConsentControllerDefaultOptOutTest::RunTest(const FString& Paramete
 	TestFalse(TEXT("Not opted in by default"), Controller.IsOptedIn());
 	TestTrue(TEXT("No session id created"), Controller.GetSessionId().IsEmpty());
 	TestEqual(TEXT("No transport created"), Controller.GetTransportCreationCount(), 0);
-	TestEqual(TEXT("No session created"), Controller.GetSessionCreationCount(), 0);
+	TestEqual(TEXT("Identity manager never loaded"), Controller.GetIdentityManagerLoadCount(), 0);
+	TestTrue(TEXT("No distinct id assigned"), Controller.GetDistinctId().IsEmpty());
 	TestFalse(TEXT("Capture is a no-op before consent"), Controller.Capture(MakeConsentTestEvent(TEXT("1"))));
 	TestEqual(TEXT("No events queued"), Controller.GetQueuedEventCount(), 0);
 	TestFalse(TEXT("No queue directory created before consent"), IFileManager::Get().DirectoryExists(*Fixture.GetQueueDirectory()));
 	TestFalse(TEXT("No state directory created before consent"), IFileManager::Get().DirectoryExists(*Fixture.GetStateDirectory()));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerLifecycleGatingTest, "UnrealHog.Consent.ConsentController.LifecycleEventsHonorConsentAndSetting", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogConsentControllerLifecycleGatingTest::RunTest(const FString& Parameters)
+{
+	{
+		FScopedConsentTestStorageDirectory Fixture;
+		FPostHogFakeBatchTransport* LastTransport = nullptr;
+		int32 UuidCounter = 0;
+
+		FPostHogConsentController Controller(
+			MakeStorageFactory(Fixture.GetRootPath()),
+			MakeTransportFactory(LastTransport),
+			MakeUuidGenerator(UuidCounter),
+			MakeConsentLifecycleMetadataProvider());
+		UPostHogDeveloperSettings* Settings = MakeTransientSettings(true, true, false, true);
+
+		Controller.Initialize(*Settings);
+
+		TestFalse(TEXT("Default opt-out remains opted out"), Controller.IsOptedIn());
+		TestEqual(TEXT("Default opt-out queues no lifecycle events"), Controller.GetQueuedEventCount(), 0);
+		TestFalse(TEXT("Default opt-out creates no lifecycle state"), IFileManager::Get().FileExists(*Fixture.GetLifecycleStateFile()));
+	}
+
+	{
+		FScopedConsentTestStorageDirectory Fixture;
+		FPostHogFakeBatchTransport* LastTransport = nullptr;
+		int32 UuidCounter = 0;
+
+		FPostHogConsentController Controller(
+			MakeStorageFactory(Fixture.GetRootPath()),
+			MakeTransportFactory(LastTransport),
+			MakeUuidGenerator(UuidCounter),
+			MakeConsentLifecycleMetadataProvider());
+		UPostHogDeveloperSettings* Settings = MakeTransientSettings(true, true, false, false);
+
+		Controller.Initialize(*Settings);
+		TestTrue(TEXT("Lifecycle-disabled opt-in succeeds"), Controller.SetOptIn(true, *Settings));
+
+		TestEqual(TEXT("Lifecycle-disabled opt-in queues no lifecycle events"), Controller.GetQueuedEventCount(), 0);
+		TestFalse(TEXT("Lifecycle-disabled opt-in does not create lifecycle state"), IFileManager::Get().FileExists(*Fixture.GetLifecycleStateFile()));
+	}
+
+	{
+		FScopedConsentTestStorageDirectory Fixture;
+		FPostHogFakeBatchTransport* LastTransport = nullptr;
+		int32 UuidCounter = 0;
+
+		FPostHogConsentController Controller(
+			MakeStorageFactory(Fixture.GetRootPath()),
+			MakeTransportFactory(LastTransport),
+			MakeUuidGenerator(UuidCounter),
+			MakeConsentLifecycleMetadataProvider());
+		UPostHogDeveloperSettings* Settings = MakeTransientSettings(true, true, false, true);
+
+		Controller.Initialize(*Settings);
+		TestTrue(TEXT("Lifecycle-enabled opt-in succeeds"), Controller.SetOptIn(true, *Settings));
+
+		TestEqual(TEXT("Lifecycle-enabled opt-in queues Installed and Opened"), Controller.GetQueuedEventCount(), 2);
+		TestTrue(TEXT("Lifecycle-enabled opt-in writes lifecycle state"), IFileManager::Get().FileExists(*Fixture.GetLifecycleStateFile()));
+
+		Controller.Flush();
+		if (!TestNotNull(TEXT("Transport created"), LastTransport))
+		{
+			return false;
+		}
+
+		TArray<FString> EventNames;
+		TestTrue(TEXT("Lifecycle payload event names parsed"), TryGetPayloadEventNames(LastTransport->GetLastPayload(), EventNames));
+		TestEqual(TEXT("Lifecycle payload has two events"), EventNames.Num(), 2);
+		if (EventNames.Num() == 2)
+		{
+			TestEqual(TEXT("Installed is first"), EventNames[0], TEXT("Application Installed"));
+			TestEqual(TEXT("Opened is second"), EventNames[1], TEXT("Application Opened"));
+		}
+
+		LastTransport->CompleteLast(true, 200, TEXT(""));
+	}
 
 	return true;
 }
@@ -131,12 +284,13 @@ bool FPostHogConsentControllerOptInIdempotentTest::RunTest(const FString& Parame
 
 	TestTrue(TEXT("First opt-in succeeds"), Controller.SetOptIn(true, *Settings));
 	TestEqual(TEXT("One transport created"), Controller.GetTransportCreationCount(), 1);
-	TestEqual(TEXT("One session created"), Controller.GetSessionCreationCount(), 1);
+	TestEqual(TEXT("Identity manager loaded once"), Controller.GetIdentityManagerLoadCount(), 1);
+	TestFalse(TEXT("Distinct id assigned"), Controller.GetDistinctId().IsEmpty());
 	TestFalse(TEXT("Session id assigned"), Controller.GetSessionId().IsEmpty());
 
 	TestTrue(TEXT("Repeat opt-in succeeds"), Controller.SetOptIn(true, *Settings));
 	TestEqual(TEXT("Repeat opt-in does not create another transport"), Controller.GetTransportCreationCount(), 1);
-	TestEqual(TEXT("Repeat opt-in does not create another session"), Controller.GetSessionCreationCount(), 1);
+	TestEqual(TEXT("Repeat opt-in does not reload identity manager"), Controller.GetIdentityManagerLoadCount(), 1);
 
 	TestTrue(TEXT("Capture succeeds once opted in"), Controller.Capture(MakeConsentTestEvent(TEXT("1"))));
 	TestEqual(TEXT("Event queued"), Controller.GetQueuedEventCount(), 1);
@@ -185,14 +339,16 @@ bool FPostHogConsentControllerReOptInFreshSessionTest::RunTest(const FString& Pa
 
 	Controller.Initialize(*Settings);
 	Controller.SetOptIn(true, *Settings);
-	TestEqual(TEXT("One session created initially"), Controller.GetSessionCreationCount(), 1);
+	TestEqual(TEXT("Identity manager loaded once initially"), Controller.GetIdentityManagerLoadCount(), 1);
 	const FString FirstSessionId = Controller.GetSessionId();
+	const FString FirstDistinctId = Controller.GetDistinctId();
 
 	Controller.SetOptIn(false, *Settings);
 	Controller.SetOptIn(true, *Settings);
 
-	TestEqual(TEXT("Second session created on re-opt-in"), Controller.GetSessionCreationCount(), 2);
+	TestEqual(TEXT("Identity manager reloaded on re-opt-in"), Controller.GetIdentityManagerLoadCount(), 2);
 	TestEqual(TEXT("Second transport created on re-opt-in"), Controller.GetTransportCreationCount(), 2);
+	TestEqual(TEXT("Distinct id is stable across a disable/enable cycle"), Controller.GetDistinctId(), FirstDistinctId);
 	TestNotEqual(TEXT("Fresh session id differs from the original"), Controller.GetSessionId(), FirstSessionId);
 
 	return true;
@@ -202,6 +358,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerInvalidConfigRejectsTe
 
 bool FPostHogConsentControllerInvalidConfigRejectsTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("rejected opt-in (API key is missing or whitespace.)"), EAutomationExpectedErrorFlags::Contains, 1, false);
+
 	FScopedConsentTestStorageDirectory Fixture;
 	FPostHogFakeBatchTransport* LastTransport = nullptr;
 	int32 UuidCounter = 0;
@@ -222,6 +380,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerKillSwitchBlocksTest, 
 
 bool FPostHogConsentControllerKillSwitchBlocksTest::RunTest(const FString& Parameters)
 {
+	AddExpectedError(TEXT("rejected opt-in (analytics disabled by developer setting)"), EAutomationExpectedErrorFlags::Contains, 1, false);
+
 	FScopedConsentTestStorageDirectory Fixture;
 	FPostHogFakeBatchTransport* LastTransport = nullptr;
 	int32 UuidCounter = 0;
@@ -276,6 +436,676 @@ bool FPostHogConsentControllerPersistsAcrossReinitializeTest::RunTest(const FStr
 		TestFalse(TEXT("Persisted opt-out is honored"), ControllerC.IsOptedIn());
 		TestEqual(TEXT("No transport created when opted out"), ControllerC.GetTransportCreationCount(), 0);
 	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerDistinctIdPersistsAcrossRestartTest, "UnrealHog.Consent.ConsentController.DistinctIdPersistsAcrossRestart", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogConsentControllerDistinctIdPersistsAcrossRestartTest::RunTest(const FString& Parameters)
+{
+	FScopedConsentTestStorageDirectory Fixture;
+	UPostHogDeveloperSettings* Settings = MakeTransientSettings(true, true, false);
+
+	FString FirstDistinctId;
+
+	{
+		FPostHogFakeBatchTransport* LastTransportA = nullptr;
+		int32 UuidCounterA = 0;
+		FPostHogConsentController ControllerA(MakeStorageFactory(Fixture.GetRootPath()), MakeTransportFactory(LastTransportA), MakeUuidGenerator(UuidCounterA));
+
+		TestTrue(TEXT("No distinct id before Initialize"), ControllerA.GetDistinctId().IsEmpty());
+
+		ControllerA.Initialize(*Settings);
+		TestTrue(TEXT("No distinct id before opt-in"), ControllerA.GetDistinctId().IsEmpty());
+
+		ControllerA.SetOptIn(true, *Settings);
+		FirstDistinctId = ControllerA.GetDistinctId();
+		TestFalse(TEXT("Distinct id assigned once opted in"), FirstDistinctId.IsEmpty());
+	}
+
+	{
+		FPostHogFakeBatchTransport* LastTransportB = nullptr;
+		int32 UuidCounterB = 0;
+		FPostHogConsentController ControllerB(MakeStorageFactory(Fixture.GetRootPath()), MakeTransportFactory(LastTransportB), MakeUuidGenerator(UuidCounterB));
+
+		ControllerB.Initialize(*Settings);
+
+		TestEqual(TEXT("Second controller reuses the same distinct id across restart"), ControllerB.GetDistinctId(), FirstDistinctId);
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerCaptureEventRejectsInvalidNameTest, "UnrealHog.Consent.ConsentController.CaptureEventRejectsInvalidName", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogConsentControllerCaptureEventRejectsInvalidNameTest::RunTest(const FString& Parameters)
+{
+	AddExpectedError(TEXT("rejected capture with an empty or whitespace-only event name"), EAutomationExpectedErrorFlags::Contains, 1, false);
+
+	FScopedConsentTestStorageDirectory Fixture;
+	FPostHogFakeBatchTransport* LastTransport = nullptr;
+	int32 UuidCounter = 0;
+
+	FPostHogConsentController Controller(MakeStorageFactory(Fixture.GetRootPath()), MakeTransportFactory(LastTransport), MakeUuidGenerator(UuidCounter));
+	UPostHogDeveloperSettings* Settings = MakeTransientSettings(true, true, false);
+
+	Controller.Initialize(*Settings);
+	Controller.SetOptIn(true, *Settings);
+
+	const EPostHogCaptureResult Result = Controller.CaptureEvent(TEXT("   "), nullptr);
+
+	TestEqual(TEXT("Whitespace-only name is rejected"), Result, EPostHogCaptureResult::InvalidEventName);
+	TestEqual(TEXT("No event queued"), Controller.GetQueuedEventCount(), 0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerCaptureEventRejectsWithoutConsentTest, "UnrealHog.Consent.ConsentController.CaptureEventRejectsWithoutConsent", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogConsentControllerCaptureEventRejectsWithoutConsentTest::RunTest(const FString& Parameters)
+{
+	AddExpectedError(TEXT("dropping event ev"), EAutomationExpectedErrorFlags::Contains, 1, false);
+
+	FScopedConsentTestStorageDirectory Fixture;
+	FPostHogFakeBatchTransport* LastTransport = nullptr;
+	int32 UuidCounter = 0;
+
+	FPostHogConsentController Controller(MakeStorageFactory(Fixture.GetRootPath()), MakeTransportFactory(LastTransport), MakeUuidGenerator(UuidCounter));
+	UPostHogDeveloperSettings* Settings = MakeTransientSettings(true, true, false);
+
+	Controller.Initialize(*Settings);
+
+	const EPostHogCaptureResult Result = Controller.CaptureEvent(TEXT("ev"), nullptr);
+
+	TestEqual(TEXT("Capture without consent is rejected"), Result, EPostHogCaptureResult::NotOptedIn);
+	TestEqual(TEXT("No event queued"), Controller.GetQueuedEventCount(), 0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerCaptureEventNullPropertiesRetainsSdkEnrichmentTest, "UnrealHog.Consent.ConsentController.CaptureEventNullPropertiesRetainsSdkEnrichment", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogConsentControllerCaptureEventNullPropertiesRetainsSdkEnrichmentTest::RunTest(const FString& Parameters)
+{
+	FScopedConsentTestStorageDirectory Fixture;
+	FPostHogFakeBatchTransport* LastTransport = nullptr;
+	int32 UuidCounter = 0;
+
+	FPostHogConsentController Controller(MakeStorageFactory(Fixture.GetRootPath()), MakeTransportFactory(LastTransport), MakeUuidGenerator(UuidCounter));
+	UPostHogDeveloperSettings* Settings = MakeTransientSettings(true, true, false);
+
+	Controller.Initialize(*Settings);
+	Controller.SetOptIn(true, *Settings);
+
+	const EPostHogCaptureResult Result = Controller.CaptureEvent(TEXT("ev"), nullptr);
+
+	TestEqual(TEXT("Capture with null properties succeeds"), Result, EPostHogCaptureResult::Success);
+	TestEqual(TEXT("One event queued"), Controller.GetQueuedEventCount(), 1);
+
+	Controller.Flush();
+	TestNotNull(TEXT("Transport created"), LastTransport);
+
+	const TSharedRef<FJsonObject> PayloadJson = LastTransport->GetLastPayload().ToJsonObject();
+	LastTransport->CompleteLast(true, 200, TEXT(""));
+
+	const TArray<TSharedPtr<FJsonValue>>* BatchArray = nullptr;
+	TestTrue(TEXT("Has batch array"), PayloadJson->TryGetArrayField(TEXT("batch"), BatchArray));
+	TestEqual(TEXT("Batch has one event"), BatchArray->Num(), 1);
+
+	const TSharedPtr<FJsonObject> EventObject = (*BatchArray)[0]->AsObject();
+	const TSharedPtr<FJsonObject>* PropertiesObject = nullptr;
+	TestTrue(TEXT("Event has properties object"), EventObject->TryGetObjectField(TEXT("properties"), PropertiesObject));
+
+	FString LibValue;
+	TestTrue(TEXT("properties has $lib"), (*PropertiesObject)->TryGetStringField(TEXT("$lib"), LibValue));
+	TestFalse(TEXT("$lib is non-empty"), LibValue.IsEmpty());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerCaptureEventEnforcesReservedPropertyPrecedenceTest, "UnrealHog.Consent.ConsentController.CaptureEventEnforcesReservedPropertyPrecedence", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogConsentControllerCaptureEventEnforcesReservedPropertyPrecedenceTest::RunTest(const FString& Parameters)
+{
+	AddExpectedError(TEXT("protected PostHog property \"$lib\""), EAutomationExpectedErrorFlags::Contains, 1, false);
+	AddExpectedError(TEXT("protected PostHog property \"$lib_version\""), EAutomationExpectedErrorFlags::Contains, 1, false);
+	AddExpectedError(TEXT("protected PostHog property \"$process_person_profile\""), EAutomationExpectedErrorFlags::Contains, 1, false);
+	AddExpectedError(TEXT("protected PostHog property \"$session_id\""), EAutomationExpectedErrorFlags::Contains, 1, false);
+	AddExpectedError(TEXT("protected PostHog property \"$groups\""), EAutomationExpectedErrorFlags::Contains, 1, false);
+
+	FScopedConsentTestStorageDirectory Fixture;
+	FPostHogFakeBatchTransport* LastTransport = nullptr;
+	int32 UuidCounter = 0;
+
+	FPostHogConsentController Controller(MakeStorageFactory(Fixture.GetRootPath()), MakeTransportFactory(LastTransport), MakeUuidGenerator(UuidCounter));
+	UPostHogDeveloperSettings* Settings = MakeTransientSettings(true, true, false);
+
+	Controller.Initialize(*Settings);
+	Controller.SetOptIn(true, *Settings);
+
+	const FString ExpectedSessionId = Controller.GetSessionId();
+
+	UPostHogEventProperties* Properties = NewObject<UPostHogEventProperties>();
+	Properties->AddString(TEXT("$lib"), TEXT("attacker"));
+	Properties->AddString(TEXT("$lib_version"), TEXT("attacker"));
+	Properties->AddBoolean(TEXT("$process_person_profile"), true);
+	Properties->AddString(TEXT("$session_id"), TEXT("attacker-session"));
+	Properties->AddString(TEXT("$groups"), TEXT("attacker-groups"));
+
+	const EPostHogCaptureResult Result = Controller.CaptureEvent(TEXT("ev"), Properties);
+	TestEqual(TEXT("Capture succeeds"), Result, EPostHogCaptureResult::Success);
+
+	Controller.Flush();
+	TestNotNull(TEXT("Transport created"), LastTransport);
+
+	const TSharedRef<FJsonObject> PayloadJson = LastTransport->GetLastPayload().ToJsonObject();
+	LastTransport->CompleteLast(true, 200, TEXT(""));
+
+	const TArray<TSharedPtr<FJsonValue>>* BatchArray = nullptr;
+	TestTrue(TEXT("Has batch array"), PayloadJson->TryGetArrayField(TEXT("batch"), BatchArray));
+	TestEqual(TEXT("Batch has one event"), BatchArray->Num(), 1);
+
+	const TSharedPtr<FJsonObject> EventObject = (*BatchArray)[0]->AsObject();
+	const TSharedPtr<FJsonObject>* PropertiesObject = nullptr;
+	TestTrue(TEXT("Event has properties object"), EventObject->TryGetObjectField(TEXT("properties"), PropertiesObject));
+
+	FString LibValue;
+	TestTrue(TEXT("properties has $lib"), (*PropertiesObject)->TryGetStringField(TEXT("$lib"), LibValue));
+	TestEqual(TEXT("$lib is the SDK library name, not the caller's value"), LibValue, FPostHogSdkInfo::GetLibraryName());
+
+	FString LibVersionValue;
+	TestTrue(TEXT("properties has $lib_version"), (*PropertiesObject)->TryGetStringField(TEXT("$lib_version"), LibVersionValue));
+	TestEqual(TEXT("$lib_version is the SDK plugin version, not the caller's value"), LibVersionValue, FPostHogSdkInfo::GetPluginVersion());
+
+	bool bProcessPersonProfileValue = true;
+	TestTrue(TEXT("properties has $process_person_profile"), (*PropertiesObject)->TryGetBoolField(TEXT("$process_person_profile"), bProcessPersonProfileValue));
+	TestFalse(TEXT("$process_person_profile is the SDK-supplied value, not the caller's true"), bProcessPersonProfileValue);
+
+	FString SessionIdValue;
+	TestTrue(TEXT("properties has $session_id"), (*PropertiesObject)->TryGetStringField(TEXT("$session_id"), SessionIdValue));
+	TestEqual(TEXT("$session_id is the controller's session id, not the caller's value"), SessionIdValue, ExpectedSessionId);
+
+	TestFalse(TEXT("$groups from caller input never survives (no group source exists yet)"), (*PropertiesObject)->HasField(TEXT("$groups")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerCaptureEventDuplicateCallerKeyLastWriteWinsTest, "UnrealHog.Consent.ConsentController.CaptureEventDuplicateCallerKeyLastWriteWins", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogConsentControllerCaptureEventDuplicateCallerKeyLastWriteWinsTest::RunTest(const FString& Parameters)
+{
+	FScopedConsentTestStorageDirectory Fixture;
+	FPostHogFakeBatchTransport* LastTransport = nullptr;
+	int32 UuidCounter = 0;
+
+	FPostHogConsentController Controller(MakeStorageFactory(Fixture.GetRootPath()), MakeTransportFactory(LastTransport), MakeUuidGenerator(UuidCounter));
+	UPostHogDeveloperSettings* Settings = MakeTransientSettings(true, true, false);
+
+	Controller.Initialize(*Settings);
+	Controller.SetOptIn(true, *Settings);
+
+	UPostHogEventProperties* Properties = NewObject<UPostHogEventProperties>();
+	Properties->AddString(TEXT("dup"), TEXT("first"));
+	Properties->AddString(TEXT("dup"), TEXT("second"));
+
+	const EPostHogCaptureResult Result = Controller.CaptureEvent(TEXT("ev"), Properties);
+	TestEqual(TEXT("Capture succeeds"), Result, EPostHogCaptureResult::Success);
+
+	Controller.Flush();
+	TestNotNull(TEXT("Transport created"), LastTransport);
+
+	const TSharedRef<FJsonObject> PayloadJson = LastTransport->GetLastPayload().ToJsonObject();
+	LastTransport->CompleteLast(true, 200, TEXT(""));
+
+	const TArray<TSharedPtr<FJsonValue>>* BatchArray = nullptr;
+	TestTrue(TEXT("Has batch array"), PayloadJson->TryGetArrayField(TEXT("batch"), BatchArray));
+	TestEqual(TEXT("Batch has one event"), BatchArray->Num(), 1);
+
+	const TSharedPtr<FJsonObject> EventObject = (*BatchArray)[0]->AsObject();
+	const TSharedPtr<FJsonObject>* PropertiesObject = nullptr;
+	TestTrue(TEXT("Event has properties object"), EventObject->TryGetObjectField(TEXT("properties"), PropertiesObject));
+
+	FString DupValue;
+	TestTrue(TEXT("properties has dup"), (*PropertiesObject)->TryGetStringField(TEXT("dup"), DupValue));
+	TestEqual(TEXT("Last-added duplicate key value wins"), DupValue, TEXT("second"));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerCaptureScreenNullPropertiesEmitsScreenEventTest, "UnrealHog.Consent.ConsentController.CaptureScreenNullPropertiesEmitsScreenEvent", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogConsentControllerCaptureScreenNullPropertiesEmitsScreenEventTest::RunTest(const FString& Parameters)
+{
+	FScopedConsentTestStorageDirectory Fixture;
+	FPostHogFakeBatchTransport* LastTransport = nullptr;
+	int32 UuidCounter = 0;
+
+	FPostHogConsentController Controller(MakeStorageFactory(Fixture.GetRootPath()), MakeTransportFactory(LastTransport), MakeUuidGenerator(UuidCounter));
+	UPostHogDeveloperSettings* Settings = MakeTransientSettings(true, true, false);
+
+	Controller.Initialize(*Settings);
+	Controller.SetOptIn(true, *Settings);
+
+	const EPostHogCaptureResult Result = Controller.CaptureScreen(TEXT("Main Menu"), nullptr);
+
+	TestEqual(TEXT("Screen capture succeeds"), Result, EPostHogCaptureResult::Success);
+	TestEqual(TEXT("Exactly one screen event queued"), Controller.GetQueuedEventCount(), 1);
+
+	Controller.Flush();
+	if (!TestNotNull(TEXT("Transport created"), LastTransport))
+	{
+		return false;
+	}
+	TestEqual(TEXT("One batch sent"), LastTransport->GetSentCount(), 1);
+
+	TSharedPtr<FJsonObject> EventObject;
+	if (!TestTrue(TEXT("Payload contains exactly one event"), TryGetSinglePayloadEvent(LastTransport->GetLastPayload(), EventObject)))
+	{
+		return false;
+	}
+	LastTransport->CompleteLast(true, 200, TEXT(""));
+
+	FString EventName;
+	TestTrue(TEXT("Persisted event has name"), EventObject->TryGetStringField(TEXT("event"), EventName));
+	TestEqual(TEXT("Persisted event is $screen"), EventName, TEXT("$screen"));
+
+	const TSharedPtr<FJsonObject>* PropertiesObject = nullptr;
+	if (!TestTrue(TEXT("Persisted event has properties object"), EventObject->TryGetObjectField(TEXT("properties"), PropertiesObject)))
+	{
+		return false;
+	}
+
+	FString ScreenNameValue;
+	TestTrue(TEXT("Persisted properties include $screen_name"), (*PropertiesObject)->TryGetStringField(TEXT("$screen_name"), ScreenNameValue));
+	TestEqual(TEXT("$screen_name uses explicit screen argument"), ScreenNameValue, TEXT("Main Menu"));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerCaptureScreenPropertiesCannotOverrideScreenNameTest, "UnrealHog.Consent.ConsentController.CaptureScreenPropertiesCannotOverrideScreenName", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogConsentControllerCaptureScreenPropertiesCannotOverrideScreenNameTest::RunTest(const FString& Parameters)
+{
+	AddExpectedError(TEXT("protected PostHog property \"$screen_name\""), EAutomationExpectedErrorFlags::Contains, 1, false);
+
+	FScopedConsentTestStorageDirectory Fixture;
+	FPostHogFakeBatchTransport* LastTransport = nullptr;
+	int32 UuidCounter = 0;
+
+	FPostHogConsentController Controller(MakeStorageFactory(Fixture.GetRootPath()), MakeTransportFactory(LastTransport), MakeUuidGenerator(UuidCounter));
+	UPostHogDeveloperSettings* Settings = MakeTransientSettings(true, true, false);
+
+	Controller.Initialize(*Settings);
+	Controller.SetOptIn(true, *Settings);
+
+	UPostHogEventProperties* Properties = NewObject<UPostHogEventProperties>();
+	Properties->AddString(TEXT("source"), TEXT("ui"));
+	Properties->AddString(TEXT("$screen_name"), TEXT("attacker"));
+
+	bool bHookCalled = false;
+	FString HookScreenName;
+	FString HookSource;
+
+	FPostHogBeforeSendDelegate BeforeSend;
+	BeforeSend.BindLambda([&](FPostHogBeforeSendEvent& Event)
+	{
+		bHookCalled = true;
+		Event.GetProperties().TryGetStringField(TEXT("$screen_name"), HookScreenName);
+		Event.GetProperties().TryGetStringField(TEXT("source"), HookSource);
+		return EPostHogBeforeSendResult::Continue;
+	});
+	Controller.SetBeforeSend(MoveTemp(BeforeSend));
+
+	const EPostHogCaptureResult Result = Controller.CaptureScreen(TEXT("Inventory"), Properties);
+
+	TestEqual(TEXT("Screen capture succeeds"), Result, EPostHogCaptureResult::Success);
+	TestTrue(TEXT("Before-send hook was invoked"), bHookCalled);
+	TestEqual(TEXT("Before-send sees explicit $screen_name"), HookScreenName, TEXT("Inventory"));
+	TestEqual(TEXT("Before-send sees caller property"), HookSource, TEXT("ui"));
+	TestEqual(TEXT("Exactly one screen event queued"), Controller.GetQueuedEventCount(), 1);
+
+	Controller.Flush();
+	if (!TestNotNull(TEXT("Transport created"), LastTransport))
+	{
+		return false;
+	}
+	TestEqual(TEXT("One batch sent"), LastTransport->GetSentCount(), 1);
+
+	TSharedPtr<FJsonObject> EventObject;
+	if (!TestTrue(TEXT("Payload contains exactly one event"), TryGetSinglePayloadEvent(LastTransport->GetLastPayload(), EventObject)))
+	{
+		return false;
+	}
+	LastTransport->CompleteLast(true, 200, TEXT(""));
+
+	FString EventName;
+	TestTrue(TEXT("Persisted event has name"), EventObject->TryGetStringField(TEXT("event"), EventName));
+	TestEqual(TEXT("Persisted event is $screen"), EventName, TEXT("$screen"));
+
+	const TSharedPtr<FJsonObject>* PropertiesObject = nullptr;
+	if (!TestTrue(TEXT("Persisted event has properties object"), EventObject->TryGetObjectField(TEXT("properties"), PropertiesObject)))
+	{
+		return false;
+	}
+
+	FString ScreenNameValue;
+	TestTrue(TEXT("Persisted properties include $screen_name"), (*PropertiesObject)->TryGetStringField(TEXT("$screen_name"), ScreenNameValue));
+	TestEqual(TEXT("Caller cannot override $screen_name"), ScreenNameValue, TEXT("Inventory"));
+	TestNotEqual(TEXT("$screen_name is not the caller's reserved value"), ScreenNameValue, TEXT("attacker"));
+
+	FString SourceValue;
+	TestTrue(TEXT("Persisted properties keep caller source"), (*PropertiesObject)->TryGetStringField(TEXT("source"), SourceValue));
+	TestEqual(TEXT("Caller source is preserved"), SourceValue, TEXT("ui"));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerCaptureScreenRejectsBlankNameTest, "UnrealHog.Consent.ConsentController.CaptureScreenRejectsBlankName", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogConsentControllerCaptureScreenRejectsBlankNameTest::RunTest(const FString& Parameters)
+{
+	AddExpectedError(TEXT("rejected screen capture with an empty or whitespace-only screen name"), EAutomationExpectedErrorFlags::Contains, 1, false);
+
+	FScopedConsentTestStorageDirectory Fixture;
+	FPostHogFakeBatchTransport* LastTransport = nullptr;
+	int32 UuidCounter = 0;
+
+	FPostHogConsentController Controller(MakeStorageFactory(Fixture.GetRootPath()), MakeTransportFactory(LastTransport), MakeUuidGenerator(UuidCounter));
+	UPostHogDeveloperSettings* Settings = MakeTransientSettings(true, true, false);
+
+	Controller.Initialize(*Settings);
+	Controller.SetOptIn(true, *Settings);
+
+	const EPostHogCaptureResult Result = Controller.CaptureScreen(TEXT("   "), nullptr);
+
+	TestEqual(TEXT("Whitespace-only screen name is rejected"), Result, EPostHogCaptureResult::InvalidEventName);
+	TestEqual(TEXT("No screen event queued"), Controller.GetQueuedEventCount(), 0);
+	TestFalse(TEXT("No queue directory created"), IFileManager::Get().DirectoryExists(*Fixture.GetQueueDirectory()));
+	if (!TestNotNull(TEXT("Transport exists from opt-in"), LastTransport))
+	{
+		return false;
+	}
+	TestEqual(TEXT("No batch sent"), LastTransport->GetSentCount(), 0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerCaptureScreenHonorsConsentGatesTest, "UnrealHog.Consent.ConsentController.CaptureScreenHonorsConsentGates", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogConsentControllerCaptureScreenHonorsConsentGatesTest::RunTest(const FString& Parameters)
+{
+	AddExpectedError(TEXT("dropping event $screen"), EAutomationExpectedErrorFlags::Contains, 2, false);
+
+	FScopedConsentTestStorageDirectory Fixture;
+	FPostHogFakeBatchTransport* LastTransport = nullptr;
+	int32 UuidCounter = 0;
+
+	FPostHogConsentController Controller(MakeStorageFactory(Fixture.GetRootPath()), MakeTransportFactory(LastTransport), MakeUuidGenerator(UuidCounter));
+	UPostHogDeveloperSettings* Settings = MakeTransientSettings(true, true, false);
+
+	Controller.Initialize(*Settings);
+
+	const EPostHogCaptureResult PreConsentResult = Controller.CaptureScreen(TEXT("PreConsent"), nullptr);
+
+	TestEqual(TEXT("Screen capture before consent is rejected"), PreConsentResult, EPostHogCaptureResult::NotOptedIn);
+	TestEqual(TEXT("No pre-consent screen event queued"), Controller.GetQueuedEventCount(), 0);
+	TestNull(TEXT("No transport created before consent"), LastTransport);
+	TestFalse(TEXT("No pre-consent queue directory created"), IFileManager::Get().DirectoryExists(*Fixture.GetQueueDirectory()));
+
+	TestTrue(TEXT("Opt-in succeeds"), Controller.SetOptIn(true, *Settings));
+	TestNotNull(TEXT("Transport created by opt-in"), LastTransport);
+	const int32 TransportCountAfterOptIn = Controller.GetTransportCreationCount();
+	TestTrue(TEXT("Opt-out succeeds"), Controller.SetOptIn(false, *Settings));
+	LastTransport = nullptr;
+
+	const EPostHogCaptureResult PostOptOutResult = Controller.CaptureScreen(TEXT("PostOptOut"), nullptr);
+
+	TestEqual(TEXT("Screen capture after opt-out is rejected"), PostOptOutResult, EPostHogCaptureResult::NotOptedIn);
+	TestEqual(TEXT("No post-opt-out screen event queued"), Controller.GetQueuedEventCount(), 0);
+	TestNull(TEXT("Event queue remains released after opt-out"), Controller.GetEventQueue());
+	TestEqual(TEXT("Capture after opt-out does not create transport"), Controller.GetTransportCreationCount(), TransportCountAfterOptIn);
+	TestNull(TEXT("No new transport created after opt-out"), LastTransport);
+	TestFalse(TEXT("No post-opt-out queue directory created"), IFileManager::Get().DirectoryExists(*Fixture.GetQueueDirectory()));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerBeforeSendMutateTest, "UnrealHog.Consent.ConsentController.BeforeSendCanInspectAndMutateFinalEvent", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogConsentControllerBeforeSendMutateTest::RunTest(const FString& Parameters)
+{
+	FScopedConsentTestStorageDirectory Fixture;
+	FPostHogFakeBatchTransport* LastTransport = nullptr;
+	int32 UuidCounter = 0;
+
+	FPostHogConsentController Controller(MakeStorageFactory(Fixture.GetRootPath()), MakeTransportFactory(LastTransport), MakeUuidGenerator(UuidCounter));
+	UPostHogDeveloperSettings* Settings = MakeTransientSettings(true, true, false);
+
+	Controller.Initialize(*Settings);
+	Controller.SetOptIn(true, *Settings);
+
+	const FString ExpectedSessionId = Controller.GetSessionId();
+	const FString ExpectedDistinctId = Controller.GetDistinctId();
+
+	UPostHogEventProperties* Properties = NewObject<UPostHogEventProperties>();
+	Properties->AddString(TEXT("source"), TEXT("caller"));
+	Properties->AddString(TEXT("secret"), TEXT("remove"));
+
+	bool bHookCalled = false;
+	bool bSawLibrary = false;
+	bool bSawSession = false;
+	bool bSawCallerProperty = false;
+	bool bSawSecretProperty = false;
+	FString SeenEventName;
+	FString SeenDistinctId;
+	FString SeenEventUuid;
+	FString SeenTimestamp;
+
+	FPostHogBeforeSendDelegate BeforeSend;
+	BeforeSend.BindLambda([&](FPostHogBeforeSendEvent& Event)
+	{
+		bHookCalled = true;
+		SeenEventName = Event.GetEventName();
+		SeenDistinctId = Event.GetDistinctId();
+		SeenEventUuid = Event.GetEventUuid();
+		SeenTimestamp = Event.GetTimestamp();
+
+		const FJsonObject& ReadOnlyProperties = Event.GetProperties();
+
+		FString LibraryName;
+		bSawLibrary = ReadOnlyProperties.TryGetStringField(TEXT("$lib"), LibraryName)
+			&& LibraryName == FPostHogSdkInfo::GetLibraryName();
+
+		FString SessionId;
+		bSawSession = ReadOnlyProperties.TryGetStringField(TEXT("$session_id"), SessionId)
+			&& SessionId == ExpectedSessionId;
+
+		FString SourceValue;
+		bSawCallerProperty = ReadOnlyProperties.TryGetStringField(TEXT("source"), SourceValue)
+			&& SourceValue == TEXT("caller");
+
+		FString SecretValue;
+		bSawSecretProperty = ReadOnlyProperties.TryGetStringField(TEXT("secret"), SecretValue)
+			&& SecretValue == TEXT("remove");
+
+		FJsonObject& MutableProperties = Event.GetMutableProperties();
+		MutableProperties.RemoveField(TEXT("secret"));
+		MutableProperties.SetBoolField(TEXT("before_send"), true);
+
+		return EPostHogBeforeSendResult::Continue;
+	});
+	Controller.SetBeforeSend(MoveTemp(BeforeSend));
+
+	const EPostHogCaptureResult Result = Controller.CaptureEvent(TEXT("before-send-event"), Properties);
+
+	TestEqual(TEXT("Capture succeeds"), Result, EPostHogCaptureResult::Success);
+	TestTrue(TEXT("Before-send hook was invoked"), bHookCalled);
+	TestEqual(TEXT("Hook sees event name"), SeenEventName, TEXT("before-send-event"));
+	TestEqual(TEXT("Hook sees distinct id"), SeenDistinctId, ExpectedDistinctId);
+	TestFalse(TEXT("Hook sees event uuid"), SeenEventUuid.IsEmpty());
+	TestFalse(TEXT("Hook sees timestamp"), SeenTimestamp.IsEmpty());
+	TestTrue(TEXT("Hook sees final SDK library property"), bSawLibrary);
+	TestTrue(TEXT("Hook sees final session property"), bSawSession);
+	TestTrue(TEXT("Hook sees caller property"), bSawCallerProperty);
+	TestTrue(TEXT("Hook sees removable property"), bSawSecretProperty);
+	TestEqual(TEXT("One event queued"), Controller.GetQueuedEventCount(), 1);
+
+	Controller.Flush();
+	if (!TestNotNull(TEXT("Transport created"), LastTransport))
+	{
+		return false;
+	}
+	TestEqual(TEXT("One batch sent"), LastTransport->GetSentCount(), 1);
+
+	TSharedPtr<FJsonObject> EventObject;
+	if (!TestTrue(TEXT("Payload contains one event"), TryGetSinglePayloadEvent(LastTransport->GetLastPayload(), EventObject)))
+	{
+		return false;
+	}
+	LastTransport->CompleteLast(true, 200, TEXT(""));
+
+	FString PersistedEventName;
+	TestTrue(TEXT("Persisted event has name"), EventObject->TryGetStringField(TEXT("event"), PersistedEventName));
+	TestEqual(TEXT("Persisted event name matches hook view"), PersistedEventName, SeenEventName);
+
+	FString PersistedDistinctId;
+	TestTrue(TEXT("Persisted event has distinct id"), EventObject->TryGetStringField(TEXT("distinct_id"), PersistedDistinctId));
+	TestEqual(TEXT("Persisted distinct id matches hook view"), PersistedDistinctId, SeenDistinctId);
+
+	FString PersistedUuid;
+	TestTrue(TEXT("Persisted event has uuid"), EventObject->TryGetStringField(TEXT("uuid"), PersistedUuid));
+	TestEqual(TEXT("Persisted uuid matches hook view"), PersistedUuid, SeenEventUuid);
+
+	FString PersistedTimestamp;
+	TestTrue(TEXT("Persisted event has timestamp"), EventObject->TryGetStringField(TEXT("timestamp"), PersistedTimestamp));
+	TestEqual(TEXT("Persisted timestamp matches hook view"), PersistedTimestamp, SeenTimestamp);
+
+	const TSharedPtr<FJsonObject>* PropertiesObject = nullptr;
+	if (!TestTrue(TEXT("Persisted event has properties object"), EventObject->TryGetObjectField(TEXT("properties"), PropertiesObject)))
+	{
+		return false;
+	}
+
+	bool bBeforeSendValue = false;
+	TestTrue(TEXT("Persisted properties include before_send"), (*PropertiesObject)->TryGetBoolField(TEXT("before_send"), bBeforeSendValue));
+	TestTrue(TEXT("Persisted before_send is true"), bBeforeSendValue);
+	TestFalse(TEXT("Persisted properties omit removed secret"), (*PropertiesObject)->HasField(TEXT("secret")));
+
+	FString SourceValue;
+	TestTrue(TEXT("Persisted properties keep caller source"), (*PropertiesObject)->TryGetStringField(TEXT("source"), SourceValue));
+	TestEqual(TEXT("Persisted caller source is unchanged"), SourceValue, TEXT("caller"));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerBeforeSendDropTest, "UnrealHog.Consent.ConsentController.BeforeSendDropPreventsQueueAndSend", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogConsentControllerBeforeSendDropTest::RunTest(const FString& Parameters)
+{
+	FScopedConsentTestStorageDirectory Fixture;
+	FPostHogFakeBatchTransport* LastTransport = nullptr;
+	int32 UuidCounter = 0;
+
+	FPostHogConsentController Controller(MakeStorageFactory(Fixture.GetRootPath()), MakeTransportFactory(LastTransport), MakeUuidGenerator(UuidCounter));
+	UPostHogDeveloperSettings* Settings = MakeTransientSettings(true, true, false);
+
+	Controller.Initialize(*Settings);
+	Controller.SetOptIn(true, *Settings);
+
+	bool bHookCalled = false;
+	FPostHogBeforeSendDelegate BeforeSend;
+	BeforeSend.BindLambda([&](FPostHogBeforeSendEvent&)
+	{
+		bHookCalled = true;
+		return EPostHogBeforeSendResult::Drop;
+	});
+	Controller.SetBeforeSend(MoveTemp(BeforeSend));
+
+	const EPostHogCaptureResult Result = Controller.CaptureEvent(TEXT("drop-me"), nullptr);
+
+	TestEqual(TEXT("Capture reports before-send drop"), Result, EPostHogCaptureResult::DroppedByBeforeSend);
+	TestTrue(TEXT("Before-send hook was invoked"), bHookCalled);
+	TestEqual(TEXT("No events queued"), Controller.GetQueuedEventCount(), 0);
+	TestFalse(TEXT("No queue directory created"), IFileManager::Get().DirectoryExists(*Fixture.GetQueueDirectory()));
+	if (!TestNotNull(TEXT("Transport exists from opt-in"), LastTransport))
+	{
+		return false;
+	}
+	TestEqual(TEXT("No batch sent"), LastTransport->GetSentCount(), 0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerBeforeSendFailureTest, "UnrealHog.Consent.ConsentController.BeforeSendFailurePreventsQueueAndSend", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogConsentControllerBeforeSendFailureTest::RunTest(const FString& Parameters)
+{
+	FScopedConsentTestStorageDirectory Fixture;
+	FPostHogFakeBatchTransport* LastTransport = nullptr;
+	int32 UuidCounter = 0;
+
+	FPostHogConsentController Controller(MakeStorageFactory(Fixture.GetRootPath()), MakeTransportFactory(LastTransport), MakeUuidGenerator(UuidCounter));
+	UPostHogDeveloperSettings* Settings = MakeTransientSettings(true, true, false);
+
+	Controller.Initialize(*Settings);
+	Controller.SetOptIn(true, *Settings);
+
+	bool bHookCalled = false;
+	FPostHogBeforeSendDelegate BeforeSend;
+	BeforeSend.BindLambda([&](FPostHogBeforeSendEvent&)
+	{
+		bHookCalled = true;
+		return EPostHogBeforeSendResult::Failure;
+	});
+	Controller.SetBeforeSend(MoveTemp(BeforeSend));
+
+	AddExpectedError(TEXT("PostHog before-send callback reported failure for event fail-me; dropping event before persistence."), EAutomationExpectedErrorFlags::Contains, 1);
+
+	const EPostHogCaptureResult Result = Controller.CaptureEvent(TEXT("fail-me"), nullptr);
+
+	TestEqual(TEXT("Capture reports before-send failure"), Result, EPostHogCaptureResult::BeforeSendFailed);
+	TestTrue(TEXT("Before-send hook was invoked"), bHookCalled);
+	TestEqual(TEXT("No events queued"), Controller.GetQueuedEventCount(), 0);
+	TestFalse(TEXT("No queue directory created"), IFileManager::Get().DirectoryExists(*Fixture.GetQueueDirectory()));
+	if (!TestNotNull(TEXT("Transport exists from opt-in"), LastTransport))
+	{
+		return false;
+	}
+	TestEqual(TEXT("No batch sent"), LastTransport->GetSentCount(), 0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerUnavailableCapabilityDiagnosticsEmitOnceTest, "UnrealHog.Consent.ConsentController.UnavailableCapabilityDiagnosticsEmitOnce", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogConsentControllerUnavailableCapabilityDiagnosticsEmitOnceTest::RunTest(const FString& Parameters)
+{
+	PostHogSettingsValidation::ResetUnavailableCapabilityDiagnosticLogStateForTests();
+	AddExpectedError(TEXT("feature-flag preload is unavailable until SDKP-012"), EAutomationExpectedErrorFlags::Contains, 1, false);
+	AddExpectedError(TEXT("session replay is unavailable until SDKP-018"), EAutomationExpectedErrorFlags::Contains, 1, false);
+
+	FScopedConsentTestStorageDirectory Fixture;
+	FPostHogFakeBatchTransport* LastTransport = nullptr;
+	int32 UuidCounter = 0;
+
+	FPostHogConsentController Controller(MakeStorageFactory(Fixture.GetRootPath()), MakeTransportFactory(LastTransport), MakeUuidGenerator(UuidCounter));
+	UPostHogDeveloperSettings* Settings = MakeTransientSettings(true, true, false);
+	UnrealHogTests::SetPropertyValue<bool>(Settings, TEXT("bPreloadFeatureFlags"), true);
+	UnrealHogTests::SetPropertyValue<bool>(Settings, TEXT("bSessionReplay"), true);
+
+	Controller.Initialize(*Settings);
+
+	TestTrue(TEXT("Opt-in succeeds with unavailable settings enabled"), Controller.SetOptIn(true, *Settings));
+	TestTrue(TEXT("Collection is opted in"), Controller.IsOptedIn());
+	TestEqual(TEXT("First opt-in creates one transport"), Controller.GetTransportCreationCount(), 1);
+
+	TestTrue(TEXT("Opt-out succeeds"), Controller.SetOptIn(false, *Settings));
+	TestFalse(TEXT("Collection is opted out"), Controller.IsOptedIn());
+
+	TestTrue(TEXT("Re-opt-in succeeds without repeated unavailable warnings"), Controller.SetOptIn(true, *Settings));
+	TestTrue(TEXT("Collection is opted in again"), Controller.IsOptedIn());
+	TestEqual(TEXT("Re-opt-in creates the expected second transport"), Controller.GetTransportCreationCount(), 2);
 
 	return true;
 }

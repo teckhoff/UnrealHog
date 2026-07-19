@@ -1,51 +1,10 @@
-// Trevor Eckhoff, 2026. All rights reserved.
-
 
 #include "Events/PostHogEventProperties.h"
+#include "Events/PostHogCapturePolicy.h"
 #include "Events/PostHogEvent.h"
+#include "Events/PostHogPropertyJson.h"
 #include "Dom/JsonValue.h"
-
-namespace
-{
-	TSharedRef<FJsonValue> ConvertPropertyToJsonValue(const FPostHogEventProperty& Property)
-	{
-		switch (Property.Type)
-		{
-			case EPostHogPropertyType::String:
-				return MakeShared<FJsonValueString>(Property.StringValue);
-			case EPostHogPropertyType::Number:
-				return MakeShared<FJsonValueNumber>(Property.NumberValue);
-			case EPostHogPropertyType::Boolean:
-				return MakeShared<FJsonValueBoolean>(Property.bBoolValue);
-			case EPostHogPropertyType::Object:
-			{
-				const TSharedRef<FJsonObject> ObjectValue = MakeShared<FJsonObject>();
-				for (const FPostHogEventProperty& Child : Property.Children)
-				{
-					if (Child.Key.IsEmpty())
-					{
-						continue;
-					}
-					ObjectValue->SetField(Child.Key, ConvertPropertyToJsonValue(Child));
-				}
-				return MakeShared<FJsonValueObject>(ObjectValue);
-			}
-			case EPostHogPropertyType::Array:
-			{
-				TArray<TSharedPtr<FJsonValue>> ArrayValue;
-				ArrayValue.Reserve(Property.Children.Num());
-				for (const FPostHogEventProperty& Child : Property.Children)
-				{
-					ArrayValue.Add(ConvertPropertyToJsonValue(Child));
-				}
-				return MakeShared<FJsonValueArray>(ArrayValue);
-			}
-			case EPostHogPropertyType::Null:
-			default:
-				return MakeShared<FJsonValueNull>();
-		}
-	}
-}
+#include "Logging/PostHogLogger.h"
 
 UPostHogEventProperties* UPostHogEventProperties::AddString(const FString& Key, const FString& StringValue)
 {
@@ -126,6 +85,16 @@ UPostHogEventProperties* UPostHogEventProperties::AddArray(const FString& Key, U
 	return this;
 }
 
+UPostHogEventProperties* UPostHogEventProperties::AppendFrom(const UPostHogEventProperties* Other)
+{
+	if (Other)
+	{
+		Properties.Append(Other->GetProperties());
+	}
+
+	return this;
+}
+
 void UPostHogEventProperties::ApplyToEvent(FPostHogEvent& Event)
 {
 	for (const auto& Property : Properties)
@@ -135,7 +104,13 @@ void UPostHogEventProperties::ApplyToEvent(FPostHogEvent& Event)
 			continue;
 		}
 
-		Event.SetJsonValueProperty(Property.Key, ConvertPropertyToJsonValue(Property));
+		if (PostHogCapturePolicy::GetReservedPropertyKeys().Contains(Property.Key))
+		{
+			UE_LOG(LogUnrealHog, Warning, TEXT("Ignoring attempt to overwrite protected PostHog property \"%s\"; reserved properties are SDK-owned and cannot be overwritten."), *Property.Key);
+			continue;
+		}
+
+		Event.SetJsonValueProperty(Property.Key, PostHogPropertyJson::ToJsonValue(Property));
 	}
 }
 

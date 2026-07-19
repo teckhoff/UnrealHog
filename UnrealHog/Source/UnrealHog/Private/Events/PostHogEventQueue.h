@@ -1,5 +1,3 @@
-// Trevor Eckhoff, 2026. All rights reserved.
-
 #pragma once
 
 #include "CoreMinimal.h"
@@ -7,6 +5,70 @@
 #include "Http/PostHogBatchTransport.h"
 
 class IPostHogStorageProvider;
+class IPostHogClock;
+class IPostHogReachabilityProvider;
+
+enum class EPostHogEventQueueEnqueueResult : uint8
+{
+	Enqueued,
+	RejectedCapacityNoEvictableEvent,
+	RejectedCapacityDeleteFailed,
+	RejectedSaveFailed
+};
+
+enum class EPostHogEventQueueFlushResult : uint8
+{
+	Empty,
+	Drained,
+	Failed,
+	Cancelled,
+	ProgressBlocked,
+	Paused,
+	SkippedOffline
+};
+
+inline const TCHAR* LexToString(EPostHogEventQueueEnqueueResult Result)
+{
+	switch (Result)
+	{
+	case EPostHogEventQueueEnqueueResult::Enqueued:
+		return TEXT("Enqueued");
+	case EPostHogEventQueueEnqueueResult::RejectedCapacityNoEvictableEvent:
+		return TEXT("RejectedCapacityNoEvictableEvent");
+	case EPostHogEventQueueEnqueueResult::RejectedCapacityDeleteFailed:
+		return TEXT("RejectedCapacityDeleteFailed");
+	case EPostHogEventQueueEnqueueResult::RejectedSaveFailed:
+		return TEXT("RejectedSaveFailed");
+	default:
+		return TEXT("Unknown");
+	}
+}
+
+inline const TCHAR* LexToString(EPostHogEventQueueFlushResult Result)
+{
+	switch (Result)
+	{
+	case EPostHogEventQueueFlushResult::Empty:
+		return TEXT("Empty");
+	case EPostHogEventQueueFlushResult::Drained:
+		return TEXT("Drained");
+	case EPostHogEventQueueFlushResult::Failed:
+		return TEXT("Failed");
+	case EPostHogEventQueueFlushResult::Cancelled:
+		return TEXT("Cancelled");
+	case EPostHogEventQueueFlushResult::ProgressBlocked:
+		return TEXT("ProgressBlocked");
+	case EPostHogEventQueueFlushResult::Paused:
+		return TEXT("Paused");
+	case EPostHogEventQueueFlushResult::SkippedOffline:
+		return TEXT("SkippedOffline");
+	default:
+		return TEXT("Unknown");
+	}
+}
+
+using FPostHogEventQueueFlushComplete = TFunction<void(EPostHogEventQueueFlushResult Result)>;
+
 /**
  *
  */
@@ -15,11 +77,13 @@ class FPostHogEventQueue
 public:
 	FPostHogEventQueue(IPostHogStorageProvider& InStorageProvider,
 		IPostHogBatchTransport& InTransport, const FString& InApiKey,
-		int32 InMaxQueueSize, int32 InMaxBatchSize, int32 InFlushEventCount);
+		int32 InMaxQueueSize, int32 InMaxBatchSize, int32 InFlushEventCount,
+		IPostHogClock* InClock = nullptr,
+		IPostHogReachabilityProvider* InReachabilityProvider = nullptr);
 	~FPostHogEventQueue();
 
-	bool Enqueue(const FPostHogEvent& Event);
-	void Flush();
+	EPostHogEventQueueEnqueueResult Enqueue(const FPostHogEvent& Event);
+	void Flush(FPostHogEventQueueFlushComplete OnComplete = {});
 	void CancelInFlightRequest();
 
 	// Cancels any in-flight send, clears all persisted and in-memory queued events.
@@ -27,17 +91,62 @@ public:
 
 	int32 Num() const;
 
+	// True from the start of a Flush() call until CompleteFlush() runs; a second Flush() call
+	// while this is true coalesces its callback instead of starting a parallel request.
+	bool IsFlushing() const { return bIsFlushing; }
+
+	// Whether any event is currently persisted and not yet delivered. Can be false while
+	// IsFlushing() is still true (e.g. the last batch has been dequeued but its response is
+	// still in flight), so callers deciding whether a flush would do anything should check both.
+	bool HasPendingEvents() const { return Num() > 0; }
+
+#if WITH_DEV_AUTOMATION_TESTS
+	int32 GetAdjustedMaxBatchSizeForTests() const { return AdjustedMaxBatchSize; }
+	int32 GetAdjustedFlushEventCountForTests() const { return AdjustedFlushEventCount; }
+#endif
+
 private:
 	IPostHogStorageProvider& StorageProvider;
 	IPostHogBatchTransport& Transport;
 	FString ApiKey;
 	int32 MaxQueueSize;
-	int32 MaxBatchSize;
-	int32 FlushEventCount;
+	int32 AdjustedMaxBatchSize;
+	int32 AdjustedFlushEventCount;
 
-	TArray<FPostHogEvent> EventsQueue;
 	TSet<FString> InFlightEventIds;
 	TSharedPtr<IPostHogBatchRequestHandle> ActiveRequestHandle;
+	TArray<FPostHogEventQueueFlushComplete> PendingFlushCallbacks;
+	TSharedPtr<bool> FlushLifetimeToken;
+	uint64 ActiveFlushGeneration = 0;
+	int32 ActiveFlushInitialCount = 0;
+	int32 ActiveFlushBatchCount = 0;
 	bool bIsFlushing = false;
 
+	TUniquePtr<IPostHogClock> OwnedClock;
+	IPostHogClock& Clock;
+	TUniquePtr<IPostHogReachabilityProvider> OwnedReachabilityProvider;
+	IPostHogReachabilityProvider& ReachabilityProvider;
+	int32 ConsecutiveRetryableFailures = 0;
+	TOptional<FDateTime> PausedUntil;
+	static constexpr int32 RetryDelaySeconds = 5;
+	static constexpr int32 MaxRetryDelaySeconds = 30;
+
+	struct FFlushBatch
+	{
+		TArray<FString> EventIds;
+		TArray<FPostHogEvent> Events;
+	};
+
+	EPostHogEventQueueEnqueueResult EnsureCapacityForSave(const FString& IncomingEventId);
+	bool TryGetOldestEvictableEventId(FString& OutEventId);
+	bool TryLoadPersistedEventForBatch(const FString& EventId, FPostHogEvent& OutEvent, bool& bOutStopFlush);
+	bool DeleteCorruptPersistedEvent(const FString& EventId, const FString& Reason);
+	void ContinueFlush();
+	bool TryBuildNextBatch(FFlushBatch& OutBatch, bool& bOutProgressBlocked);
+	void SendBatch(FFlushBatch&& Batch);
+	void HandleBatchComplete(uint64 Generation, const TArray<FString>& BatchEventIds, bool bSuccess, int32 StatusCode, const FString& ResponseBody);
+	bool DeleteSentBatchRecords(const TArray<FString>& BatchEventIds);
+	void CompleteFlush(EPostHogEventQueueFlushResult Result);
+	void ReduceBatchLimitsAfterPayloadTooLarge();
+	static bool IsPermanentFailureStatus(int32 StatusCode);
 };

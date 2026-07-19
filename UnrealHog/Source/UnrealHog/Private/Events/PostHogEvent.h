@@ -1,9 +1,10 @@
-// Trevor Eckhoff, 2026. All rights reserved.
-
 #pragma once
 
 #include "CoreMinimal.h"
 #include "Dom/JsonObject.h"
+#include "Events/PostHogBeforeSend.h"
+#include "Events/PostHogEventContext.h"
+#include "Misc/Optional.h"
 
 class FJsonValue;
 
@@ -32,7 +33,8 @@ private:
 	// A timestamp in ISO 8601 format.
 	FString Timestamp;
 	
-	// A JSON object containing the event properties. Always contains $lib and $lib_version.
+	// A JSON object containing the event properties. Always contains $lib, $lib_version, and the
+	// other SDK-owned default properties populated by ApplySdkProperties.
 	FJsonObject Properties;
 	
 public:
@@ -43,9 +45,32 @@ public:
 	void SetNumberProperty(const FString& Key, double NumberValue);
 	void SetObjectProperty(const FString& Key, FJsonObject& ObjectValue);
 	void SetJsonValueProperty(const FString& Key, const TSharedRef<FJsonValue>& Value);
-	void SetProcessPersonProfile(bool bProcessPersonProfile);
-	
+
+	// Populates the SDK-owned properties ($lib, $lib_version, platform/device/app info) by
+	// capturing a fresh FPostHogEventContext. bProcessPersonProfile is a suppress-when-false
+	// signal: $process_person_profile is only written (as false) when profile processing should
+	// be suppressed; it is never written true, matching Unity's AddSdkProperties. Not called by
+	// the constructor so callers control composition order.
+	void ApplySdkProperties(bool bProcessPersonProfile);
+
+	// Same as above, but serializes from a caller-supplied Context instead of capturing one, so
+	// tests can inject deterministic platform/app/screen values.
+	void ApplySdkProperties(bool bProcessPersonProfile, const FPostHogEventContext& Context);
+
 	FString GetEventId() const { return EventUuid; };
-	
+
+	EPostHogBeforeSendResult RunBeforeSend(const FPostHogBeforeSendDelegate& BeforeSend);
+
 	TSharedRef<FJsonObject> ToJsonObject() const;
+
+	// Rehydrates a persisted event verbatim from stored JSON. Requires correctly typed uuid, event,
+	// distinct_id, timestamp, and properties fields; returns unset with OutErrorMessage populated on
+	// the first missing/mistyped field rather than constructing a partial event. Never enriches,
+	// generates identifiers, or invokes before-send.
+	static TOptional<FPostHogEvent> TryParseFromJson(const TSharedRef<FJsonObject>& JsonObject, FString& OutErrorMessage);
+
+private:
+	// This ctor exists only for rehydrating persisted records verbatim; it must never be reached
+	// from CaptureEvent/enrichment paths.
+	FPostHogEvent(const FString& InEventUuid, const FString& InEventName, const FString& InDistinctId, const FString& InTimestamp, const TSharedRef<FJsonObject>& InProperties);
 };

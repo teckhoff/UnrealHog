@@ -1,8 +1,7 @@
-// Trevor Eckhoff, 2026. All rights reserved.
-
 #pragma once
 
 #include "CoreMinimal.h"
+#include "PostHogDeveloperSettings.h"
 
 class UPostHogDeveloperSettings;
 
@@ -17,10 +16,21 @@ struct FPostHogSettingsValidationResult
 	bool bIsValid = false;
 	FString ResolvedHost;
 	FString FailureReason;
+	EPostHogPersonProfiles PersonProfiles = EPostHogPersonProfiles::IdentifiedOnly;
+	bool bFeatureFlagPreloadUnavailable = false;
+	bool bSessionReplayUnavailable = false;
+	TArray<FString> UnavailableCapabilityDiagnostics;
 };
 
 namespace PostHogSettingsValidation
 {
 	// Validates a settings snapshot without throwing and without creating any runtime collaborators.
 	FPostHogSettingsValidationResult Validate(const UPostHogDeveloperSettings& Settings);
+
+	// Emits at most one process-wide warning per unavailable settings family.
+	void LogUnavailableCapabilityDiagnosticsOnce(const FPostHogSettingsValidationResult& Result);
+
+#if WITH_DEV_AUTOMATION_TESTS
+	void ResetUnavailableCapabilityDiagnosticLogStateForTests();
+#endif
 }

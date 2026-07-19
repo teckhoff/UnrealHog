@@ -1,5 +1,3 @@
-// Trevor Eckhoff, 2026. All rights reserved.
-
 #include "Events/PostHogEvent.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -80,7 +78,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventDefaultPropertiesTest, "UnrealHog.
 
 bool FPostHogEventDefaultPropertiesTest::RunTest(const FString& Parameters)
 {
-	const FPostHogEvent Event(TEXT("test-event"), TEXT("distinct-1"));
+	FPostHogEvent Event(TEXT("test-event"), TEXT("distinct-1"));
+	Event.ApplySdkProperties(false);
 
 	const TSharedRef<FJsonObject> JsonObject = Event.ToJsonObject();
 	const TSharedPtr<FJsonObject>* PropertiesObject = nullptr;

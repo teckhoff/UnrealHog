@@ -1,5 +1,3 @@
-// Trevor Eckhoff, 2026. All rights reserved.
-
 #include "Tests/PostHogFakeBatchTransport.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -17,7 +15,9 @@ TSharedPtr<IPostHogBatchRequestHandle> FPostHogFakeBatchTransport::SendBatch(con
 	}
 
 	const TSharedRef<bool> CancelledFlag = MakeShared<bool>(false);
-	Pending.Add(FPendingCall{ MakeShared<FPostHogBatchPayload>(Payload), MoveTemp(OnComplete), CancelledFlag });
+	const TSharedRef<FPostHogBatchPayload> PayloadRef = MakeShared<FPostHogBatchPayload>(Payload);
+	SentPayloads.Add(PayloadRef);
+	Pending.Add(FPendingCall{ PayloadRef, MoveTemp(OnComplete), CancelledFlag });
 
 	return MakeShared<FFakeRequestHandle>(CancelledFlag);
 }
@@ -27,10 +27,26 @@ int32 FPostHogFakeBatchTransport::GetSentCount() const
 	return Pending.Num();
 }
 
+int32 FPostHogFakeBatchTransport::GetTotalSendCount() const
+{
+	return SentPayloads.Num();
+}
+
+int32 FPostHogFakeBatchTransport::GetPendingCount() const
+{
+	return Pending.Num();
+}
+
 const FPostHogBatchPayload& FPostHogFakeBatchTransport::GetLastPayload() const
 {
 	check(Pending.Num() > 0);
 	return *Pending.Last().Payload;
+}
+
+const FPostHogBatchPayload& FPostHogFakeBatchTransport::GetPayloadAt(int32 Index) const
+{
+	check(SentPayloads.IsValidIndex(Index));
+	return *SentPayloads[Index];
 }
 
 bool FPostHogFakeBatchTransport::IsLastRequestCancelled() const

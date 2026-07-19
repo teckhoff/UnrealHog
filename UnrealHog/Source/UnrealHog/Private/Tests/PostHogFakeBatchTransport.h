@@ -1,5 +1,3 @@
-// Trevor Eckhoff, 2026. All rights reserved.
-
 #pragma once
 
 #include "CoreMinimal.h"
@@ -19,7 +17,10 @@ public:
 	virtual TSharedPtr<IPostHogBatchRequestHandle> SendBatch(const FPostHogBatchPayload& Payload, FOnSendComplete OnComplete) override;
 
 	int32 GetSentCount() const;
+	int32 GetTotalSendCount() const;
+	int32 GetPendingCount() const;
 	const FPostHogBatchPayload& GetLastPayload() const;
+	const FPostHogBatchPayload& GetPayloadAt(int32 Index) const;
 	bool IsLastRequestCancelled() const;
 
 	// Invokes the stored completion callback for the most recently sent request, unless it was cancelled.
@@ -49,6 +50,7 @@ private:
 	};
 
 	TArray<FPendingCall> Pending;
+	TArray<TSharedRef<FPostHogBatchPayload>> SentPayloads;
 	bool bSynchronousFailure = false;
 };
 

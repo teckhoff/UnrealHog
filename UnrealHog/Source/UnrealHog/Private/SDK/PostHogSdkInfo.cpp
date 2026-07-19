@@ -1,5 +1,3 @@
-// Trevor Eckhoff, 2026. All rights reserved.
-
 
 #include "SDK/PostHogSdkInfo.h"
 
@@ -11,7 +9,7 @@ namespace
 	constexpr const TCHAR* FallbackPluginVersion = TEXT("1.0.0");	
 }
 
-FString PostHogSdkInfo::GetLibraryName()
+FString FPostHogSdkInfo::GetLibraryName()
 {
 	const TSharedPtr<IPlugin> Plugin = IPluginManager::Get().FindPlugin(PluginDescriptorName);
 	
@@ -23,7 +21,7 @@ FString PostHogSdkInfo::GetLibraryName()
 	return PluginDescriptorName;
 }
 
-FString PostHogSdkInfo::GetPluginVersion()
+FString FPostHogSdkInfo::GetPluginVersion()
 {
 	const TSharedPtr<IPlugin> Plugin = IPluginManager::Get().FindPlugin(PluginDescriptorName);
 	
@@ -35,7 +33,7 @@ FString PostHogSdkInfo::GetPluginVersion()
 	return FallbackPluginVersion;
 }
 
-FString PostHogSdkInfo::GetUserAgent()
+FString FPostHogSdkInfo::GetUserAgent()
 {
 	return FString::Printf(TEXT("%s/%s"), *GetLibraryName(), *GetPluginVersion());
 }

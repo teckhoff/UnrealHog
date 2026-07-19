@@ -1,5 +1,3 @@
-// Trevor Eckhoff, 2026. All rights reserved.
-
 #pragma once
 
 #include "CoreMinimal.h"
@@ -7,7 +5,7 @@
 /**
  * 
  */
-class PostHogSdkInfo
+class FPostHogSdkInfo
 {
 public:
 	static FString GetLibraryName();
@@ -15,5 +13,5 @@ public:
 	static FString GetUserAgent();
 	
 private:
-	PostHogSdkInfo() = delete;
+	FPostHogSdkInfo() = delete;
 };

@@ -1,0 +1,43 @@
+name: Branch policy
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - edited
+      - reopened
+      - synchronize
+
+permissions:
+  contents: read
+
+jobs:
+  validate-pull-request-route:
+    name: Validate pull request route
+    runs-on: ubuntu-latest
+    env:
+      BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
+      HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+      HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+      TARGET_REPOSITORY: ${{ github.repository }}
+    steps:
+      - name: Enforce branch policy
+        shell: bash
+        run: |
+          if [[ "$BASE_BRANCH" == "dev" ]]; then
+            echo "Pull requests into dev are allowed."
+            exit 0
+          fi
+
+          if [[ "$BASE_BRANCH" == "main" && "$HEAD_BRANCH" == "dev" && "$HEAD_REPOSITORY" == "$TARGET_REPOSITORY" ]]; then
+            echo "Promotion pull requests from this repository's dev branch into main are allowed."
+            exit 0
+          fi
+
+          if [[ "$BASE_BRANCH" == "main" ]]; then
+            echo "::error::Only this repository's dev branch may open a pull request into main."
+          else
+            echo "::error::Pull requests must target dev. Milestone promotions may target main only when they originate from this repository's dev branch."
+          fi
+
+          exit 1

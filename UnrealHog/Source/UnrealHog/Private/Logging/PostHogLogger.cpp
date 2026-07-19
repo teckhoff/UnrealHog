@@ -1,3 +1,3 @@
 ﻿#include "Logging/PostHogLogger.h"
 
-DEFINE_LOG_CATEGORY(LogPostHog);
+DEFINE_LOG_CATEGORY(LogUnrealHog);

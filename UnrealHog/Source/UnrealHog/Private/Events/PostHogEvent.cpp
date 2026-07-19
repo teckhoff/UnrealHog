@@ -1,62 +1,145 @@
-// Trevor Eckhoff, 2026. All rights reserved.
-
 
 #include "Events/PostHogEvent.h"
 
-#include "Engine/Engine.h"
-#include "Engine/GameViewportClient.h"
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
 #include "SDK/PostHogSdkInfo.h"
-#include "GeneralProjectSettings.h"
 #include "Utilities/PostHogUuidV7.h"
 
+FPostHogBeforeSendEvent::FPostHogBeforeSendEvent(const FString& InEventName,
+	const FString& InDistinctId,
+	const FString& InEventUuid,
+	const FString& InTimestamp,
+	FJsonObject& InProperties)
+	: EventName(InEventName)
+	, DistinctId(InDistinctId)
+	, EventUuid(InEventUuid)
+	, Timestamp(InTimestamp)
+	, Properties(InProperties)
+{
+}
 
 FPostHogEvent::FPostHogEvent(const FString& InEventName, const FString& InDistinctId)
 	: EventUuid(PostHogUuidV7::New())
 	, EventName(InEventName)
 	, DistinctId(InDistinctId)
 	, Timestamp(FDateTime::UtcNow().ToIso8601())
-{	
-	Properties.SetStringField(TEXT("$lib"), PostHogSdkInfo::GetLibraryName());
-	Properties.SetStringField(TEXT("$lib_version"), PostHogSdkInfo::GetPluginVersion());
-	
-	Properties.SetStringField(TEXT("$platform"), FPlatformProperties::PlatformName());
-	
-	const FString PlatformVariant = FPlatformProperties::PlatformVariantName();
-	
-	if (!PlatformVariant.IsEmpty())
+{
+}
+
+FPostHogEvent::FPostHogEvent(const FString& InEventUuid, const FString& InEventName, const FString& InDistinctId, const FString& InTimestamp, const TSharedRef<FJsonObject>& InProperties)
+	: EventUuid(InEventUuid)
+	, EventName(InEventName)
+	, DistinctId(InDistinctId)
+	, Timestamp(InTimestamp)
+	, Properties(*InProperties)
+{
+}
+
+TOptional<FPostHogEvent> FPostHogEvent::TryParseFromJson(const TSharedRef<FJsonObject>& JsonObject, FString& OutErrorMessage)
+{
+	FString ParsedUuid;
+	if (!JsonObject->TryGetStringField(TEXT("uuid"), ParsedUuid))
 	{
-		Properties.SetStringField(TEXT("$platform_variant"), PlatformVariant);
+		OutErrorMessage = TEXT("Persisted event is missing a correctly typed \"uuid\" string field.");
+		return TOptional<FPostHogEvent>();
 	}
-	
-	const FString OsVersion = FPlatformMisc::GetOSVersion();
-	
-	if (!OsVersion.IsEmpty())
+
+	FString ParsedEventName;
+	if (!JsonObject->TryGetStringField(TEXT("event"), ParsedEventName))
 	{
-		Properties.SetStringField(TEXT("$os_version"), OsVersion);
+		OutErrorMessage = TEXT("Persisted event is missing a correctly typed \"event\" string field.");
+		return TOptional<FPostHogEvent>();
 	}
-	
-	const FString DeviceMakeAndModel = FPlatformMisc::GetDeviceMakeAndModel();
-	
-	if (!DeviceMakeAndModel.IsEmpty())
+
+	FString ParsedDistinctId;
+	if (!JsonObject->TryGetStringField(TEXT("distinct_id"), ParsedDistinctId))
 	{
-		Properties.SetStringField(TEXT("$device_model"), DeviceMakeAndModel);
+		OutErrorMessage = TEXT("Persisted event is missing a correctly typed \"distinct_id\" string field.");
+		return TOptional<FPostHogEvent>();
 	}
-	
-	const UGeneralProjectSettings* ProjectSettings = GetDefault<UGeneralProjectSettings>();
-	
-	Properties.SetStringField(TEXT("$app_name"), ProjectSettings->ProjectName);
-	Properties.SetStringField(TEXT("$app_version"), ProjectSettings->ProjectVersion);
-	
-	if (GEngine && GEngine->GameViewport)
+
+	FString ParsedTimestamp;
+	if (!JsonObject->TryGetStringField(TEXT("timestamp"), ParsedTimestamp))
 	{
-		FVector2D ViewportSize;
-		GEngine->GameViewport->GetViewportSize(ViewportSize);
-		Properties.SetNumberField(TEXT("$screen_width"), ViewportSize.X);
-		Properties.SetNumberField(TEXT("$screen_height"), ViewportSize.Y);
+		OutErrorMessage = TEXT("Persisted event is missing a correctly typed \"timestamp\" string field.");
+		return TOptional<FPostHogEvent>();
 	}
-	
+
+	const TSharedPtr<FJsonObject>* ParsedProperties = nullptr;
+	if (!JsonObject->TryGetObjectField(TEXT("properties"), ParsedProperties) || !ParsedProperties->IsValid())
+	{
+		OutErrorMessage = TEXT("Persisted event is missing a correctly typed \"properties\" object field.");
+		return TOptional<FPostHogEvent>();
+	}
+
+	return FPostHogEvent(ParsedUuid, ParsedEventName, ParsedDistinctId, ParsedTimestamp, (*ParsedProperties).ToSharedRef());
+}
+
+void FPostHogEvent::ApplySdkProperties(bool bProcessPersonProfile)
+{
+	ApplySdkProperties(bProcessPersonProfile, FPostHogEventContextProvider::Capture());
+}
+
+void FPostHogEvent::ApplySdkProperties(bool bProcessPersonProfile, const FPostHogEventContext& Context)
+{
+	Properties.SetStringField(TEXT("$lib"), FPostHogSdkInfo::GetLibraryName());
+	Properties.SetStringField(TEXT("$lib_version"), FPostHogSdkInfo::GetPluginVersion());
+
+	Properties.SetStringField(TEXT("$platform"), Context.PlatformName);
+
+	if (!Context.PlatformVariant.IsEmpty())
+	{
+		Properties.SetStringField(TEXT("$platform_variant"), Context.PlatformVariant);
+	}
+
+	if (!Context.OsVersion.IsEmpty())
+	{
+		Properties.SetStringField(TEXT("$os_version"), Context.OsVersion);
+	}
+
+	const FString NormalizedOs = PostHogEventContextNormalization::NormalizeOsName(Context.OsLabel);
+
+	if (!NormalizedOs.IsEmpty())
+	{
+		Properties.SetStringField(TEXT("$os"), NormalizedOs);
+	}
+
+	if (!Context.DeviceModel.IsEmpty())
+	{
+		Properties.SetStringField(TEXT("$device_model"), Context.DeviceModel);
+	}
+
+	if (!Context.DeviceManufacturer.IsEmpty())
+	{
+		Properties.SetStringField(TEXT("$device_manufacturer"), Context.DeviceManufacturer);
+	}
+
+	const FString DeviceType = PostHogEventContextNormalization::MapDeviceType(Context.DeviceFormFactor);
+
+	if (!DeviceType.IsEmpty())
+	{
+		Properties.SetStringField(TEXT("$device_type"), DeviceType);
+	}
+
+	Properties.SetStringField(TEXT("$app_name"), Context.AppName);
+	Properties.SetStringField(TEXT("$app_version"), Context.AppVersion);
+
+	if (!Context.AppBuild.IsEmpty())
+	{
+		Properties.SetStringField(TEXT("$app_build"), Context.AppBuild);
+	}
+
+	if (Context.ScreenWidth.IsSet() && Context.ScreenHeight.IsSet())
+	{
+		Properties.SetNumberField(TEXT("$screen_width"), Context.ScreenWidth.GetValue());
+		Properties.SetNumberField(TEXT("$screen_height"), Context.ScreenHeight.GetValue());
+	}
+
+	if (!bProcessPersonProfile)
+	{
+		Properties.SetBoolField(TEXT("$process_person_profile"), false);
+	}
 }
 
 void FPostHogEvent::SetStringProperty(const FString& Key, const FString& StringValue)
@@ -84,9 +167,15 @@ void FPostHogEvent::SetJsonValueProperty(const FString& Key, const TSharedRef<FJ
 	Properties.SetField(Key, Value);
 }
 
-void FPostHogEvent::SetProcessPersonProfile(bool bProcessPersonProfile)
+EPostHogBeforeSendResult FPostHogEvent::RunBeforeSend(const FPostHogBeforeSendDelegate& BeforeSend)
 {
-	Properties.SetBoolField(TEXT("$process_person_profile"), bProcessPersonProfile);
+	if (!BeforeSend.IsBound())
+	{
+		return EPostHogBeforeSendResult::Continue;
+	}
+
+	FPostHogBeforeSendEvent EventView(EventName, DistinctId, EventUuid, Timestamp, Properties);
+	return BeforeSend.Execute(EventView);
 }
 
 TSharedRef<FJsonObject> FPostHogEvent::ToJsonObject() const
