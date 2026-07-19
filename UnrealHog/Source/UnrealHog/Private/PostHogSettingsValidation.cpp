@@ -1,5 +1,6 @@
 #include "PostHogSettingsValidation.h"
 
+#include "Http/PostHogEndpointUrls.h"
 #include "PostHogDeveloperSettings.h"
 
 namespace
@@ -46,15 +47,11 @@ FPostHogSettingsValidationResult PostHogSettingsValidation::Validate(const UPost
 		return Result;
 	}
 
-	FString ResolvedHost = Settings.GetResolvedHost().TrimStartAndEnd();
+	FString ResolvedHost = PostHogEndpointUrls::NormalizeHost(Settings.GetResolvedHost());
 
 	if (ResolvedHost.IsEmpty())
 	{
 		ResolvedHost = FallbackHost;
-	}
-	else if (ResolvedHost.EndsWith(TEXT("/")))
-	{
-		ResolvedHost.LeftChopInline(1);
 	}
 
 	Result.bIsValid = true;
