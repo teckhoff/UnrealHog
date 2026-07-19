@@ -35,6 +35,15 @@ namespace
 	}
 }
 
+UPostHogRuntimeSubsystem::UPostHogRuntimeSubsystem() = default;
+
+UPostHogRuntimeSubsystem::UPostHogRuntimeSubsystem(FVTableHelper& Helper)
+	: Super(Helper)
+{
+}
+
+UPostHogRuntimeSubsystem::~UPostHogRuntimeSubsystem() = default;
+
 bool UPostHogRuntimeSubsystem::ShouldCreateSubsystem(UObject* Outer) const
 {
 	// The subsystem must always exist so consent can be granted at runtime even when analytics
