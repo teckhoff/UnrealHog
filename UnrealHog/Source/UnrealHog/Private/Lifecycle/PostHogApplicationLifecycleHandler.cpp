@@ -219,7 +219,7 @@ void FPostHogApplicationLifecycleHandler::LoadState(FString& OutLastSeenVersion,
 	const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(StateJson);
 	if (!FJsonSerializer::Deserialize(Reader, StateObject) || !StateObject.IsValid())
 	{
-		UE_LOG(LogPostHog, Warning, TEXT("Failed to parse PostHog lifecycle state."));
+		UE_LOG(LogUnrealHog, Warning, TEXT("Failed to parse PostHog lifecycle state."));
 		return;
 	}
 
@@ -240,7 +240,7 @@ void FPostHogApplicationLifecycleHandler::SaveState(const FPostHogApplicationMet
 
 	if (!StorageProvider->SaveState(LifecycleStateKey, StateObject))
 	{
-		UE_LOG(LogPostHog, Warning, TEXT("Failed to save PostHog lifecycle state."));
+		UE_LOG(LogUnrealHog, Warning, TEXT("Failed to save PostHog lifecycle state."));
 	}
 }
 

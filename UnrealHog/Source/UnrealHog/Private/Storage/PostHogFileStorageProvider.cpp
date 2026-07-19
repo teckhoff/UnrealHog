@@ -43,9 +43,7 @@ bool FPostHogFileStorageProvider::SaveEvent(const FString& EventId, const FStrin
 {
 	if (EventId.IsEmpty())
 	{
-#if !WITH_DEV_AUTOMATION_TESTS
-		UE_LOG(LogPostHog, Warning, TEXT("Cannot save PostHog event with empty event ID"));
-#endif
+		UE_LOG(LogUnrealHog, Warning, TEXT("Cannot save PostHog event with empty event ID"));
 		return false;
 	}
 
@@ -65,7 +63,7 @@ bool FPostHogFileStorageProvider::SaveEvent(const FString& EventId, const FStrin
 
 		if (!bSaved)
 		{
-			UE_LOG(LogPostHog, Warning, TEXT("Failed to save PostHog event to %s"), *EventFilePath);
+			UE_LOG(LogUnrealHog, Warning, TEXT("Failed to save PostHog event to %s"), *EventFilePath);
 
 			FScopeLock Lock(&IndexLock);
 			EventIdIndex.Remove(EventId);
@@ -81,9 +79,7 @@ bool FPostHogFileStorageProvider::LoadEvent(const FString& EventId, FString& Eve
 
 	if (EventId.IsEmpty())
 	{
-#if !WITH_DEV_AUTOMATION_TESTS
-		UE_LOG(LogPostHog, Warning, TEXT("Cannot load PostHog event with empty event ID"));
-#endif
+		UE_LOG(LogUnrealHog, Warning, TEXT("Cannot load PostHog event with empty event ID"));
 		return false;
 	}
 
@@ -98,7 +94,7 @@ bool FPostHogFileStorageProvider::LoadEvent(const FString& EventId, FString& Eve
 	const bool bLoaded = FFileHelper::LoadFileToString(EventJson, *EventFilePath);
 	if (!bLoaded)
 	{
-		UE_LOG(LogPostHog, Warning, TEXT("Failed to load PostHog event from %s"), *EventFilePath);
+		UE_LOG(LogUnrealHog, Warning, TEXT("Failed to load PostHog event from %s"), *EventFilePath);
 		EventJson.Empty();
 	}
 
@@ -109,9 +105,7 @@ bool FPostHogFileStorageProvider::DeleteEvent(const FString& EventId)
 {
 	if (EventId.IsEmpty())
 	{
-#if !WITH_DEV_AUTOMATION_TESTS
-		UE_LOG(LogPostHog, Warning, TEXT("Cannot delete PostHog event with empty event ID"));
-#endif
+		UE_LOG(LogUnrealHog, Warning, TEXT("Cannot delete PostHog event with empty event ID"));
 		return false;
 	}
 
@@ -181,9 +175,7 @@ bool FPostHogFileStorageProvider::SaveState(const FString& StateKey, const FStri
 {
 	if (StateKey.IsEmpty())
 	{
-#if !WITH_DEV_AUTOMATION_TESTS
-		UE_LOG(LogPostHog, Warning, TEXT("Cannot save PostHog state with empty state key"));
-#endif 
+		UE_LOG(LogUnrealHog, Warning, TEXT("Cannot save PostHog state with empty state key"));
 		return false;
 	}
 	
@@ -194,7 +186,7 @@ bool FPostHogFileStorageProvider::SaveState(const FString& StateKey, const FStri
 	
 	if (!bSaved)
 	{
-		UE_LOG(LogPostHog, Warning, TEXT("Failed to save PostHog state to %s"), *StateFilePath);
+		UE_LOG(LogUnrealHog, Warning, TEXT("Failed to save PostHog state to %s"), *StateFilePath);
 	}
 	
 	return bSaved;
@@ -206,9 +198,7 @@ bool FPostHogFileStorageProvider::LoadState(const FString& StateKey, FString& St
 	
 	if (StateKey.IsEmpty())
 	{
-#if !WITH_DEV_AUTOMATION_TESTS
-		UE_LOG(LogPostHog, Warning, TEXT("Cannot load PostHog state with empty state key"));
-#endif
+		UE_LOG(LogUnrealHog, Warning, TEXT("Cannot load PostHog state with empty state key"));
 		return false;
 	}
 	
@@ -221,7 +211,7 @@ bool FPostHogFileStorageProvider::LoadState(const FString& StateKey, FString& St
 	const bool bLoaded = FFileHelper::LoadFileToString(StateJson, *StateFilePath);
 	if (!bLoaded)
 	{
-		UE_LOG(LogPostHog, Warning, TEXT("Failed to load PostHog state from %s"), *StateFilePath);
+		UE_LOG(LogUnrealHog, Warning, TEXT("Failed to load PostHog state from %s"), *StateFilePath);
 		StateJson.Empty();
 	}
 	
@@ -232,9 +222,7 @@ bool FPostHogFileStorageProvider::DeleteState(const FString& StateKey)
 {
 	if (StateKey.IsEmpty())
 	{
-#if !WITH_DEV_AUTOMATION_TESTS
-		UE_LOG(LogPostHog, Warning, TEXT("Cannot delete PostHog state with empty state key"));
-#endif
+		UE_LOG(LogUnrealHog, Warning, TEXT("Cannot delete PostHog state with empty state key"));
 		return false;
 	}
 	
@@ -264,7 +252,7 @@ void FPostHogFileStorageProvider::EnsureQueueDirectory()
 		return;
 	}
 
-	UE_LOGFMT(LogPostHog, Log, "Using base path \"{BasePath}\".", BasePath);
+	UE_LOGFMT(LogUnrealHog, Log, "Using base path \"{BasePath}\".", BasePath);
 	bQueueDirectoryReady = IFileManager::Get().MakeDirectory(*QueuePath, true);
 }
 
@@ -276,7 +264,7 @@ void FPostHogFileStorageProvider::EnsureStateDirectory()
 		return;
 	}
 
-	UE_LOGFMT(LogPostHog, Log, "Using base path \"{BasePath}\".", BasePath);
+	UE_LOGFMT(LogUnrealHog, Log, "Using base path \"{BasePath}\".", BasePath);
 	bStateDirectoryReady = IFileManager::Get().MakeDirectory(*StatePath, true);
 }
 
@@ -305,7 +293,7 @@ bool FPostHogFileStorageProvider::DeleteFileIfExists(const FString& FilePath)
 	const bool bDeleted = IFileManager::Get().Delete(*FilePath, false, true);
 	if (!bDeleted)
 	{
-		UE_LOG(LogPostHog, Warning, TEXT("Failed to delete PostHog file %s"), *FilePath);
+		UE_LOG(LogUnrealHog, Warning, TEXT("Failed to delete PostHog file %s"), *FilePath);
 	}
 	
 	return bDeleted;

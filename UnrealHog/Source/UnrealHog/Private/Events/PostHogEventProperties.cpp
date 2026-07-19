@@ -106,9 +106,7 @@ void UPostHogEventProperties::ApplyToEvent(FPostHogEvent& Event)
 
 		if (PostHogCapturePolicy::GetReservedPropertyKeys().Contains(Property.Key))
 		{
-#if !WITH_DEV_AUTOMATION_TESTS
-			UE_LOG(LogPostHog, Warning, TEXT("Ignoring attempt to overwrite protected PostHog property \"%s\"; reserved properties are SDK-owned and cannot be overwritten."), *Property.Key);
-#endif
+			UE_LOG(LogUnrealHog, Warning, TEXT("Ignoring attempt to overwrite protected PostHog property \"%s\"; reserved properties are SDK-owned and cannot be overwritten."), *Property.Key);
 			continue;
 		}
 

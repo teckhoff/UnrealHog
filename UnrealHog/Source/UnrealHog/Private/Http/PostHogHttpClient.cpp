@@ -27,7 +27,7 @@ TSharedPtr<IPostHogBatchRequestHandle> FPostHogHttpClient::SendBatch(const FPost
 	FString JsonBody;
 	if (!SerializeJsonObject(Payload.ToJsonObject(), JsonBody))
 	{
-		UE_LOG(LogPostHog, Warning, TEXT("Failed to serialize PostHog batch payload"));
+		UE_LOG(LogUnrealHog, Warning, TEXT("Failed to serialize PostHog batch payload"));
 		
 		if (OnComplete)
 		{
@@ -47,7 +47,7 @@ TSharedPtr<IPostHogBatchRequestHandle> FPostHogHttpClient::SendBatch(const FPost
 	Request->SetTimeout(TimeoutSeconds);
 	
 	const FString RequestUrl = Request->GetURL();
-	UE_LOG(LogPostHog, Verbose, TEXT("Sending PostHog batch to %s"), *RequestUrl);
+	UE_LOG(LogUnrealHog, Verbose, TEXT("Sending PostHog batch to %s"), *RequestUrl);
 	
 	Request->OnProcessRequestComplete().BindLambda(
 		[OnComplete = MoveTemp(OnComplete), RequestUrl](FHttpRequestPtr, FHttpResponsePtr Response, bool bRequestSucceeded) mutable
@@ -58,11 +58,11 @@ TSharedPtr<IPostHogBatchRequestHandle> FPostHogHttpClient::SendBatch(const FPost
 			
 			if (bSuccess)
 			{
-				UE_LOG(LogPostHog, Verbose, TEXT("PostHog batch sent successfully (status: %d)"), StatusCode);
+				UE_LOG(LogUnrealHog, Verbose, TEXT("PostHog batch sent successfully (status: %d)"), StatusCode);
 			}
 			else
 			{
-				UE_LOG(LogPostHog, Warning, TEXT("PostHog batch send failed for %s (status: %d)"), *RequestUrl, StatusCode);
+				UE_LOG(LogUnrealHog, Warning, TEXT("PostHog batch send failed for %s (status: %d)"), *RequestUrl, StatusCode);
 			}
 			
 			if (OnComplete)

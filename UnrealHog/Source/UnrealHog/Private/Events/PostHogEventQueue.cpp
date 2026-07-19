@@ -50,7 +50,7 @@ EPostHogEventQueueEnqueueResult FPostHogEventQueue::Enqueue(const FPostHogEvent&
 
 	if (!StorageProvider.SaveEvent(IncomingEventId, Event.ToJsonObject()))
 	{
-		UE_LOGFMT(LogPostHog, Warning, "PostHog event queue rejected incoming event because SaveEvent failed. IncomingEventId={0}, MaxQueueSize={1}, CurrentCount={2}.",
+		UE_LOGFMT(LogUnrealHog, Warning, "PostHog event queue rejected incoming event because SaveEvent failed. IncomingEventId={0}, MaxQueueSize={1}, CurrentCount={2}.",
 			IncomingEventId, MaxQueueSize, StorageProvider.GetEventCount());
 		return EPostHogEventQueueEnqueueResult::RejectedSaveFailed;
 	}
@@ -72,14 +72,14 @@ EPostHogEventQueueEnqueueResult FPostHogEventQueue::EnsureCapacityForSave(const 
 		FString EventIdToDrop;
 		if (!TryGetOldestEvictableEventId(EventIdToDrop))
 		{
-			UE_LOGFMT(LogPostHog, Warning, "PostHog event queue rejected incoming event because every persisted record is in flight. IncomingEventId={0}, MaxQueueSize={1}, CurrentCount={2}.",
+			UE_LOGFMT(LogUnrealHog, Warning, "PostHog event queue rejected incoming event because every persisted record is in flight. IncomingEventId={0}, MaxQueueSize={1}, CurrentCount={2}.",
 				IncomingEventId, MaxQueueSize, CurrentCount);
 			return EPostHogEventQueueEnqueueResult::RejectedCapacityNoEvictableEvent;
 		}
 
 		if (!StorageProvider.DeleteEvent(EventIdToDrop))
 		{
-			UE_LOGFMT(LogPostHog, Warning, "PostHog event queue rejected incoming event because capacity eviction failed. IncomingEventId={0}, DroppedEventId={1}, MaxQueueSize={2}, CurrentCount={3}.",
+			UE_LOGFMT(LogUnrealHog, Warning, "PostHog event queue rejected incoming event because capacity eviction failed. IncomingEventId={0}, DroppedEventId={1}, MaxQueueSize={2}, CurrentCount={3}.",
 				IncomingEventId, EventIdToDrop, MaxQueueSize, CurrentCount);
 			return EPostHogEventQueueEnqueueResult::RejectedCapacityDeleteFailed;
 		}
@@ -87,12 +87,12 @@ EPostHogEventQueueEnqueueResult FPostHogEventQueue::EnsureCapacityForSave(const 
 		const int32 CountAfterDelete = StorageProvider.GetEventCount();
 		if (CountAfterDelete >= CurrentCount)
 		{
-			UE_LOGFMT(LogPostHog, Warning, "PostHog event queue rejected incoming event because capacity eviction did not reduce persisted count. IncomingEventId={0}, DroppedEventId={1}, MaxQueueSize={2}, CurrentCount={3}.",
+			UE_LOGFMT(LogUnrealHog, Warning, "PostHog event queue rejected incoming event because capacity eviction did not reduce persisted count. IncomingEventId={0}, DroppedEventId={1}, MaxQueueSize={2}, CurrentCount={3}.",
 				IncomingEventId, EventIdToDrop, MaxQueueSize, CountAfterDelete);
 			return EPostHogEventQueueEnqueueResult::RejectedCapacityDeleteFailed;
 		}
 
-		UE_LOGFMT(LogPostHog, Log, "PostHog event queue dropped oldest persisted event before enqueue. IncomingEventId={0}, DroppedEventId={1}, MaxQueueSize={2}, CurrentCount={3}.",
+		UE_LOGFMT(LogUnrealHog, Log, "PostHog event queue dropped oldest persisted event before enqueue. IncomingEventId={0}, DroppedEventId={1}, MaxQueueSize={2}, CurrentCount={3}.",
 			IncomingEventId, EventIdToDrop, MaxQueueSize, CurrentCount);
 	}
 
@@ -151,7 +151,7 @@ bool FPostHogEventQueue::DeleteCorruptPersistedEvent(const FString& EventId, con
 	const int32 CountBeforeDelete = StorageProvider.GetEventCount();
 	if (!StorageProvider.DeleteEvent(EventId))
 	{
-		UE_LOGFMT(LogPostHog, Warning, "PostHog event queue failed to delete corrupt persisted event; stopping flush. EventId={0}, Reason={1}.",
+		UE_LOGFMT(LogUnrealHog, Warning, "PostHog event queue failed to delete corrupt persisted event; stopping flush. EventId={0}, Reason={1}.",
 			EventId, Reason);
 		return false;
 	}
@@ -159,12 +159,12 @@ bool FPostHogEventQueue::DeleteCorruptPersistedEvent(const FString& EventId, con
 	const int32 CountAfterDelete = StorageProvider.GetEventCount();
 	if (CountAfterDelete >= CountBeforeDelete)
 	{
-		UE_LOGFMT(LogPostHog, Warning, "PostHog event queue failed to make progress deleting corrupt persisted event; stopping flush. EventId={0}, Reason={1}, CountBeforeDelete={2}, CountAfterDelete={3}.",
+		UE_LOGFMT(LogUnrealHog, Warning, "PostHog event queue failed to make progress deleting corrupt persisted event; stopping flush. EventId={0}, Reason={1}, CountBeforeDelete={2}, CountAfterDelete={3}.",
 			EventId, Reason, CountBeforeDelete, CountAfterDelete);
 		return false;
 	}
 
-	UE_LOGFMT(LogPostHog, Warning, "PostHog event queue deleted corrupt persisted event. EventId={0}, Reason={1}.",
+	UE_LOGFMT(LogUnrealHog, Warning, "PostHog event queue deleted corrupt persisted event. EventId={0}, Reason={1}.",
 		EventId, Reason);
 	return true;
 }
@@ -359,7 +359,7 @@ void FPostHogEventQueue::HandleBatchComplete(uint64 Generation, const TArray<FSt
 	{
 		if (IsPermanentFailureStatus(StatusCode))
 		{
-			UE_LOGFMT(LogPostHog, Warning, "PostHog event queue classified batch delivery failure as permanent; deleting attempted batch and ending flush. StatusCode={0}, BatchEventCount={1}.",
+			UE_LOGFMT(LogUnrealHog, Warning, "PostHog event queue classified batch delivery failure as permanent; deleting attempted batch and ending flush. StatusCode={0}, BatchEventCount={1}.",
 				StatusCode, BatchEventIds.Num());
 			DeleteSentBatchRecords(BatchEventIds);
 			CompleteFlush(EPostHogEventQueueFlushResult::Failed);
@@ -371,7 +371,7 @@ void FPostHogEventQueue::HandleBatchComplete(uint64 Generation, const TArray<FSt
 			ReduceBatchLimitsAfterPayloadTooLarge();
 		}
 
-		UE_LOGFMT(LogPostHog, Warning, "PostHog event queue classified batch delivery failure as retryable; retaining attempted batch. StatusCode={0}.",
+		UE_LOGFMT(LogUnrealHog, Warning, "PostHog event queue classified batch delivery failure as retryable; retaining attempted batch. StatusCode={0}.",
 			StatusCode);
 		++ConsecutiveRetryableFailures;
 		const int32 DelaySeconds = FMath::Min(ConsecutiveRetryableFailures * RetryDelaySeconds, MaxRetryDelaySeconds);
@@ -402,7 +402,7 @@ void FPostHogEventQueue::ReduceBatchLimitsAfterPayloadTooLarge()
 	AdjustedMaxBatchSize = FMath::Max(AdjustedMaxBatchSize / 2, 1);
 	AdjustedFlushEventCount = FMath::Max(AdjustedFlushEventCount / 2, 1);
 
-	UE_LOGFMT(LogPostHog, Warning, "PostHog event queue received HTTP 413; reducing local batch limits. AdjustedMaxBatchSize={0}, AdjustedFlushEventCount={1}.",
+	UE_LOGFMT(LogUnrealHog, Warning, "PostHog event queue received HTTP 413; reducing local batch limits. AdjustedMaxBatchSize={0}, AdjustedFlushEventCount={1}.",
 		AdjustedMaxBatchSize, AdjustedFlushEventCount);
 }
 
@@ -413,14 +413,14 @@ bool FPostHogEventQueue::DeleteSentBatchRecords(const TArray<FString>& BatchEven
 		const int32 CountBeforeDelete = StorageProvider.GetEventCount();
 		if (!StorageProvider.DeleteEvent(EventId))
 		{
-			UE_LOGFMT(LogPostHog, Warning, "PostHog event queue stopped flush because deleting a sent event failed. EventId={0}.", EventId);
+			UE_LOGFMT(LogUnrealHog, Warning, "PostHog event queue stopped flush because deleting a sent event failed. EventId={0}.", EventId);
 			return false;
 		}
 
 		const int32 CountAfterDelete = StorageProvider.GetEventCount();
 		if (CountAfterDelete >= CountBeforeDelete)
 		{
-			UE_LOGFMT(LogPostHog, Warning, "PostHog event queue stopped flush because deleting a sent event made no progress. EventId={0}, CountBeforeDelete={1}, CountAfterDelete={2}.",
+			UE_LOGFMT(LogUnrealHog, Warning, "PostHog event queue stopped flush because deleting a sent event made no progress. EventId={0}, CountBeforeDelete={1}, CountAfterDelete={2}.",
 				EventId, CountBeforeDelete, CountAfterDelete);
 			return false;
 		}

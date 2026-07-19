@@ -101,13 +101,13 @@ void UPostHogRuntimeSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 		const FString LibraryVersion = FPostHogSdkInfo::GetPluginVersion();
 		const FString UserAgent = FPostHogSdkInfo::GetUserAgent();
 
-		UE_LOGFMT(LogPostHog, Log, "PostHog Runtime Subsystem Initialized with active consent. Plugin {LibraryName} (ver. {Version}) ({Agent})", LibraryName, LibraryVersion, UserAgent);
+		UE_LOGFMT(LogUnrealHog, Log, "PostHog Runtime Subsystem Initialized with active consent. Plugin {LibraryName} (ver. {Version}) ({Agent})", LibraryName, LibraryVersion, UserAgent);
 
 		StartFlushTimer();
 	}
 	else
 	{
-		UE_LOGFMT(LogPostHog, Log, "PostHog Runtime Subsystem Initialized without consent; collection remains disabled until opt-in.");
+		UE_LOGFMT(LogUnrealHog, Log, "PostHog Runtime Subsystem Initialized without consent; collection remains disabled until opt-in.");
 	}
 }
 
@@ -187,7 +187,7 @@ void UPostHogRuntimeSubsystem::CaptureEvent(const FString& EventName, UPostHogEv
 {
 	if (!ConsentController)
 	{
-		UE_LOGFMT(LogPostHog, Warning, "PostHog Runtime Subsystem has no analytics consent; dropping event {EventName}.", EventName);
+		UE_LOGFMT(LogUnrealHog, Warning, "PostHog Runtime Subsystem has no analytics consent; dropping event {EventName}.", EventName);
 		return;
 	}
 
@@ -196,16 +196,16 @@ void UPostHogRuntimeSubsystem::CaptureEvent(const FString& EventName, UPostHogEv
 	switch (Result)
 	{
 	case EPostHogCaptureResult::InvalidEventName:
-		UE_LOGFMT(LogPostHog, Warning, "PostHog Runtime Subsystem rejected an empty or whitespace-only event name.");
+		UE_LOGFMT(LogUnrealHog, Warning, "PostHog Runtime Subsystem rejected an empty or whitespace-only event name.");
 		break;
 	case EPostHogCaptureResult::NotOptedIn:
-		UE_LOGFMT(LogPostHog, Warning, "PostHog Runtime Subsystem has no analytics consent; dropping event {EventName}.", EventName);
+		UE_LOGFMT(LogUnrealHog, Warning, "PostHog Runtime Subsystem has no analytics consent; dropping event {EventName}.", EventName);
 		break;
 	case EPostHogCaptureResult::DroppedByBeforeSend:
 	case EPostHogCaptureResult::BeforeSendFailed:
 		break;
 	case EPostHogCaptureResult::EnqueueFailed:
-		UE_LOGFMT(LogPostHog, Error, "PostHog Runtime Subsystem failed to enqueue event {EventName}.", EventName);
+		UE_LOGFMT(LogUnrealHog, Error, "PostHog Runtime Subsystem failed to enqueue event {EventName}.", EventName);
 		break;
 	case EPostHogCaptureResult::Success:
 	default:
@@ -227,7 +227,7 @@ void UPostHogRuntimeSubsystem::CaptureScreen(const FString& ScreenName, UPostHog
 {
 	if (!ConsentController)
 	{
-		UE_LOGFMT(LogPostHog, Warning, "PostHog Runtime Subsystem has no analytics consent; dropping screen {ScreenName}.", ScreenName);
+		UE_LOGFMT(LogUnrealHog, Warning, "PostHog Runtime Subsystem has no analytics consent; dropping screen {ScreenName}.", ScreenName);
 		return;
 	}
 
@@ -236,16 +236,16 @@ void UPostHogRuntimeSubsystem::CaptureScreen(const FString& ScreenName, UPostHog
 	switch (Result)
 	{
 	case EPostHogCaptureResult::InvalidEventName:
-		UE_LOGFMT(LogPostHog, Warning, "PostHog Runtime Subsystem rejected an empty or whitespace-only screen name.");
+		UE_LOGFMT(LogUnrealHog, Warning, "PostHog Runtime Subsystem rejected an empty or whitespace-only screen name.");
 		break;
 	case EPostHogCaptureResult::NotOptedIn:
-		UE_LOGFMT(LogPostHog, Warning, "PostHog Runtime Subsystem has no analytics consent; dropping screen {ScreenName}.", ScreenName);
+		UE_LOGFMT(LogUnrealHog, Warning, "PostHog Runtime Subsystem has no analytics consent; dropping screen {ScreenName}.", ScreenName);
 		break;
 	case EPostHogCaptureResult::DroppedByBeforeSend:
 	case EPostHogCaptureResult::BeforeSendFailed:
 		break;
 	case EPostHogCaptureResult::EnqueueFailed:
-		UE_LOGFMT(LogPostHog, Error, "PostHog Runtime Subsystem failed to enqueue screen {ScreenName}.", ScreenName);
+		UE_LOGFMT(LogUnrealHog, Error, "PostHog Runtime Subsystem failed to enqueue screen {ScreenName}.", ScreenName);
 		break;
 	case EPostHogCaptureResult::Success:
 	default:
@@ -485,21 +485,21 @@ EPostHogFlushRequestResult UPostHogRuntimeSubsystem::RequestFlushInternal(FPostH
 {
 	if (!ConsentController)
 	{
-		UE_LOGFMT(LogPostHog, Warning, "PostHog Runtime Subsystem has no analytics consent; skipping flush request.");
+		UE_LOGFMT(LogUnrealHog, Warning, "PostHog Runtime Subsystem has no analytics consent; skipping flush request.");
 		OnComplete.ExecuteIfBound(EPostHogFlushOutcome::Empty);
 		return EPostHogFlushRequestResult::Skipped;
 	}
 
 	if (ConsentController->IsShuttingDown())
 	{
-		UE_LOGFMT(LogPostHog, Log, "PostHog Runtime Subsystem is shutting down; skipping flush request.");
+		UE_LOGFMT(LogUnrealHog, Log, "PostHog Runtime Subsystem is shutting down; skipping flush request.");
 		OnComplete.ExecuteIfBound(EPostHogFlushOutcome::Empty);
 		return EPostHogFlushRequestResult::Skipped;
 	}
 
 	if (!ConsentController->IsOptedIn())
 	{
-		UE_LOGFMT(LogPostHog, Log, "PostHog Runtime Subsystem has no analytics consent; skipping flush request.");
+		UE_LOGFMT(LogUnrealHog, Log, "PostHog Runtime Subsystem has no analytics consent; skipping flush request.");
 		OnComplete.ExecuteIfBound(EPostHogFlushOutcome::Empty);
 		return EPostHogFlushRequestResult::Skipped;
 	}
@@ -515,7 +515,7 @@ EPostHogFlushRequestResult UPostHogRuntimeSubsystem::RequestFlushInternal(FPostH
 
 void UPostHogRuntimeSubsystem::FlushQueuedEvents()
 {
-	UE_LOGFMT(LogPostHog, Log, "Timer Queue Flush!");
+	UE_LOGFMT(LogUnrealHog, Log, "Timer Queue Flush!");
 	RequestFlushInternal({});
 }
 
