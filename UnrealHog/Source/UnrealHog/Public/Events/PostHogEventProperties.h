@@ -23,19 +23,19 @@ struct FPostHogEventProperty
 {
 	GENERATED_BODY()
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PostHog|Event")
 	FString Key;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PostHog|Event")
 	EPostHogPropertyType Type = EPostHogPropertyType::String;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (EditCondition = "Type == EPostHogPropertyType::String", EditConditionHides))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PostHog|Event", meta = (EditCondition = "Type == EPostHogPropertyType::String", EditConditionHides))
 	FString StringValue;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (EditCondition = "Type == EPostHogPropertyType::Number", EditConditionHides))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PostHog|Event", meta = (EditCondition = "Type == EPostHogPropertyType::Number", EditConditionHides))
 	double NumberValue = 0.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (EditCondition = "Type == EPostHogPropertyType::Boolean", EditConditionHides))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PostHog|Event", meta = (EditCondition = "Type == EPostHogPropertyType::Boolean", EditConditionHides))
 	bool bBoolValue = false;
 
 	// For Object type, each Child carries a Key (map entry). For Array type, Child.Key is ignored (ordered list).
