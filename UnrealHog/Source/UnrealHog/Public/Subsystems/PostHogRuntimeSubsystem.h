@@ -52,6 +52,14 @@ class UNREALHOG_API UPostHogRuntimeSubsystem : public UGameInstanceSubsystem
 	GENERATED_BODY()
 
 public:
+	UPostHogRuntimeSubsystem();
+	// We need a special constructor to preserve using Forward Declared TUniquePtrs.
+	// We could have opted to use TPimplPtrs, but wanted to preserve the functionality of the TUniqutePtrs.
+	// This trick is used in-engine as well, in UChaosClothAsset.
+	// Engine/Plugins/ChaosClothAsset/Source/ChaosClothAssetEngine/Public/ChaosClothAsset/ClothAsset.h
+	UPostHogRuntimeSubsystem(FVTableHelper& Helper);
+	virtual ~UPostHogRuntimeSubsystem() override;
+
 	virtual bool ShouldCreateSubsystem(UObject* Outer) const override;
 
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
