@@ -52,6 +52,24 @@ public:
 		const FString& StackTrace,
 		bool bHandled = true);
 
+	/**
+	 * Converts Unreal's FFrame::GetStackTrace() text (Blueprint custom-thunk current-stack) into SDK
+	 * wire order. Drops the non-frame "Script call stack:" header, trims whitespace, removes empty
+	 * lines and the PostHog helper frame, then reverses the retained frames so the most recent useful
+	 * caller is first. Used only by execMakeExceptionWithCurrentStack; caller-supplied raw stacks are
+	 * never routed through here.
+	 */
+	static FString NormalizeBlueprintStackTraceForExceptionInput(const FString& RawStackTrace);
+
+	/**
+	 * Removes the leading native SDK capture frame from FPlatformStackWalk text only when the first
+	 * parsed, non-empty frame positively identifies MakeExceptionWithCurrentStack, allowing for
+	 * platform-specific module/address/qualified-symbol decoration. If the first frame is already an
+	 * application frame, the input is returned unchanged byte-for-byte; a later matching frame is never
+	 * removed.
+	 */
+	static FString TrimLeadingCurrentStackHelperFrame(const FString& NativeStackTrace);
+
 	// The thunk converts the active VM frame to text immediately and stores no FFrame reference,
 	// pointer, or bytecode state. The tracked script-callstack API is deliberately not used here:
 	// it depends on DO_BLUEPRINT_GUARD and is not a reliable Shipping-build contract.
@@ -64,7 +82,7 @@ public:
 
 		P_NATIVE_BEGIN;
 		*(FPostHogExceptionInput*)RESULT_PARAM =
-			MakeExceptionWithStackTrace(Message, Type, Stack.GetStackTrace(), bHandled);
+			MakeExceptionWithStackTrace(Message, Type, NormalizeBlueprintStackTraceForExceptionInput(Stack.GetStackTrace()), bHandled);
 		P_NATIVE_END;
 	}
 };
