@@ -161,6 +161,31 @@ bool FPostHogExceptionLibraryNativeStackReturnsStructWithoutCrashTest::RunTest(c
 		AddInfo(FString::Printf(TEXT("Native stack walk returned %d characters."), Exception.StackTrace.Len()));
 	}
 
+	// When native symbols resolve, the SDK capture wrapper must be trimmed from the top so the
+	// caller is the first reported frame. Guarded by non-empty check because native output can be
+	// empty on any platform/config. Uses Contains (not StartsWith) since frame lines may carry
+	// address/module prefixes.
+	if (!Exception.StackTrace.IsEmpty())
+	{
+		FString FirstFrame;
+		TArray<FString> Lines;
+		Exception.StackTrace.ParseIntoArrayLines(Lines, false);
+		for (const FString& Line : Lines)
+		{
+			const FString Trimmed = Line.TrimStartAndEnd();
+			if (!Trimmed.IsEmpty())
+			{
+				FirstFrame = Trimmed;
+				break;
+			}
+		}
+
+		AddInfo(FString::Printf(TEXT("First native frame: %s"), *FirstFrame));
+		TestFalse(
+			TEXT("Current-stack helper frame trimmed from top of native stack"),
+			FirstFrame.Contains(TEXT("MakeExceptionWithCurrentStack")));
+	}
+
 	const FPostHogExceptionInput UnhandledException =
 		UPostHogExceptionLibrary::MakeExceptionWithNativeStack(TEXT("m2"), TEXT("t2"), false);
 	TestEqual(TEXT("Native helper message intact"), UnhandledException.Message, FString(TEXT("m2")));

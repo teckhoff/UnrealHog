@@ -54,5 +54,12 @@ FPostHogExceptionInput UPostHogExceptionLibrary::MakeExceptionWithCurrentStack(
 	const FString& Type,
 	bool bHandled)
 {
-	return MakeExceptionWithNativeStack(Message, Type, bHandled);
+	// Trim the SDK capture wrapper (this function) from the top of the reported stack so the
+	// caller becomes the first application frame. Best-effort: optimized builds may still drop
+	// intermediate frames. MakeExceptionWithNativeStack keeps its own skip depth (1).
+	return MakeExceptionWithStackTrace(
+		Message,
+		Type,
+		CaptureNativeStackTrace(2),
+		bHandled);
 }
