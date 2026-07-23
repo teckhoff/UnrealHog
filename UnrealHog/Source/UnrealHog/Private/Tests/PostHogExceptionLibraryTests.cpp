@@ -1,4 +1,4 @@
-#include "Events/PostHogExceptionLibrary.h"
+#include "Utilities/PostHogExceptionLibrary.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -159,6 +159,26 @@ bool FPostHogExceptionLibraryNativeStackReturnsStructWithoutCrashTest::RunTest(c
 	else
 	{
 		AddInfo(FString::Printf(TEXT("Native stack walk returned %d characters."), Exception.StackTrace.Len()));
+
+		// Best-effort assertion: when output is non-empty and the leading frame is symbolized, the SDK
+		// capture helper must not be the first useful frame. Symbol availability is build-dependent, so
+		// this only guards the case where a first frame is actually present.
+		TArray<FString> StackLines;
+		Exception.StackTrace.ParseIntoArrayLines(StackLines, /*bCullEmpty=*/false);
+		FString FirstFrame;
+		for (const FString& Line : StackLines)
+		{
+			const FString Trimmed = Line.TrimStartAndEnd();
+			if (!Trimmed.IsEmpty())
+			{
+				FirstFrame = Trimmed;
+				break;
+			}
+		}
+		if (!FirstFrame.IsEmpty())
+		{
+			TestFalse(TEXT("Leading native frame is not the SDK capture helper"), FirstFrame.Contains(TEXT("MakeExceptionWithCurrentStack")));
+		}
 	}
 
 	const FPostHogExceptionInput UnhandledException =
@@ -370,6 +390,82 @@ bool FPostHogExceptionLibraryHelperExceptionProducesStandardPayloadShapeTest::Ru
 			TestEqual(TEXT("Frame function matches helper stack line"), FrameFunction, FString(TEXT("Frame::One")));
 		}
 	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogExceptionLibraryBlueprintCurrentStackNormalizesToWireOrderTest, "UnrealHog.Events.ExceptionLibrary.BlueprintCurrentStackNormalizesToWireOrder", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogExceptionLibraryBlueprintCurrentStackNormalizesToWireOrderTest::RunTest(const FString& Parameters)
+{
+	// Engine-order fixture: header first, then oldest-to-newest frames ending with the SDK helper.
+	const FString EngineOrder = TEXT("Script call stack:\n\tRoot\n\tMiddle\n\tLeaf\n\tUPostHogExceptionLibrary::MakeExceptionWithCurrentStack");
+
+	const FString Normalized = UPostHogExceptionLibrary::NormalizeBlueprintStackTraceForExceptionInput(EngineOrder);
+
+	TArray<FString> Frames;
+	Normalized.ParseIntoArrayLines(Frames, /*bCullEmpty=*/false);
+
+	if (!TestEqual(TEXT("Header and helper frame removed, three frames retained"), Frames.Num(), 3))
+	{
+		return true;
+	}
+
+	TestEqual(TEXT("Most recent caller is frame zero"), Frames[0], FString(TEXT("Leaf")));
+	TestEqual(TEXT("Second frame is Middle"), Frames[1], FString(TEXT("Middle")));
+	TestEqual(TEXT("Oldest caller is last"), Frames[2], FString(TEXT("Root")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogExceptionLibraryNativeTrimRemovesLeadingHelperFrameTest, "UnrealHog.Events.ExceptionLibrary.NativeTrimRemovesLeadingHelperFrame", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogExceptionLibraryNativeTrimRemovesLeadingHelperFrameTest::RunTest(const FString& Parameters)
+{
+	// Platform-decorated helper at parsed index zero, followed by application callers.
+	const FString NativeStack = TEXT("0x00007ff6 UnrealEditor-UnrealHog.dll!UPostHogExceptionLibrary::MakeExceptionWithCurrentStack() + 0x1a\n0x00007ff6 UnrealEditor.exe!AApp::Caller0() + 0x2b\n0x00007ff6 UnrealEditor.exe!AApp::Caller1() + 0x3c");
+
+	const FString Trimmed = UPostHogExceptionLibrary::TrimLeadingCurrentStackHelperFrame(NativeStack);
+
+	TArray<FString> Lines;
+	Trimmed.ParseIntoArrayLines(Lines, /*bCullEmpty=*/false);
+
+	if (!TestEqual(TEXT("Exactly one frame removed"), Lines.Num(), 2))
+	{
+		return true;
+	}
+
+	TestTrue(TEXT("First retained frame is the immediate caller"), Lines[0].Contains(TEXT("AApp::Caller0")));
+	TestFalse(TEXT("Helper frame no longer present at front"), Lines[0].Contains(TEXT("MakeExceptionWithCurrentStack")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogExceptionLibraryNativeTrimPreservesLaterHelperMatchTest, "UnrealHog.Events.ExceptionLibrary.NativeTrimPreservesLaterHelperMatch", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogExceptionLibraryNativeTrimPreservesLaterHelperMatchTest::RunTest(const FString& Parameters)
+{
+	// Application frame at index zero; a MakeExceptionWithCurrentStack match appears only on a later
+	// line and must not be removed.
+	const FString NativeStack = TEXT("0x00007ff6 UnrealEditor.exe!AApp::Foo() + 0x11\n0x00007ff6 UnrealEditor-UnrealHog.dll!UPostHogExceptionLibrary::MakeExceptionWithCurrentStack() + 0x1a\n0x00007ff6 UnrealEditor.exe!AApp::Bar() + 0x22");
+
+	const FString Result = UPostHogExceptionLibrary::TrimLeadingCurrentStackHelperFrame(NativeStack);
+
+	TestEqual(TEXT("Stack unchanged when helper is not the leading frame"), Result, NativeStack);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogExceptionLibraryNativeTrimLeavesApplicationLeadingFrameTest, "UnrealHog.Events.ExceptionLibrary.NativeTrimLeavesApplicationLeadingFrame", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogExceptionLibraryNativeTrimLeavesApplicationLeadingFrameTest::RunTest(const FString& Parameters)
+{
+	// Application frame at index zero, no helper anywhere: byte-for-byte unchanged.
+	const FString NativeStack = TEXT("0x00007ff6 UnrealEditor.exe!AApp::Foo() + 0x11\n0x00007ff6 UnrealEditor.exe!AApp::Bar() + 0x22");
+
+	const FString Result = UPostHogExceptionLibrary::TrimLeadingCurrentStackHelperFrame(NativeStack);
+
+	TestEqual(TEXT("Stack returned verbatim when leading frame is application code"), Result, NativeStack);
 
 	return true;
 }
