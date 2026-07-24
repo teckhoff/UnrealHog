@@ -155,8 +155,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerIdentifyRequiresConsen
 
 bool FPostHogConsentControllerIdentifyRequiresConsentTest::RunTest(const FString& Parameters)
 {
-	AddExpectedError(TEXT("dropping Identify for user-1"), EAutomationExpectedErrorFlags::Contains, 1, false);
-
 	FScopedIdentityTestStorageDirectory Fixture;
 	FPostHogFakeBatchTransport* LastTransport = nullptr;
 	int32 UuidCounter = 0;

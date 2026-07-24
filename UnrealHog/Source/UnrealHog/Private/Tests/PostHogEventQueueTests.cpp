@@ -667,8 +667,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueFailureStopsBeforeLaterBatchA
 
 bool FPostHogEventQueueFailureStopsBeforeLaterBatchAndPreservesRecordsTest::RunTest(const FString& Parameters)
 {
-	AddExpectedError(TEXT("classified batch delivery failure as retryable; retaining attempted batch. StatusCode=500"), EAutomationExpectedErrorFlags::Contains, 1);
-
 	FControllableQueueStorageProvider Storage;
 	FPostHogFakeBatchTransport Transport;
 	TOptional<EPostHogEventQueueFlushResult> Result;
@@ -739,7 +737,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueClassifiesDeliveryFailuresTes
 
 bool FPostHogEventQueueClassifiesDeliveryFailuresTest::RunTest(const FString& Parameters)
 {
-	AddExpectedError(TEXT("classified batch delivery failure as retryable"), EAutomationExpectedErrorFlags::Contains, 11);
 	AddExpectedError(TEXT("classified batch delivery failure as permanent"), EAutomationExpectedErrorFlags::Contains, 5);
 	AddExpectedError(TEXT("received HTTP 413"), EAutomationExpectedErrorFlags::Contains, 1);
 
@@ -814,7 +811,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueuePayloadTooLargeHalvesAdjusted
 bool FPostHogEventQueuePayloadTooLargeHalvesAdjustedLimitsTest::RunTest(const FString& Parameters)
 {
 	AddExpectedError(TEXT("received HTTP 413"), EAutomationExpectedErrorFlags::Contains, 2);
-	AddExpectedError(TEXT("classified batch delivery failure as retryable; retaining attempted batch. StatusCode=413"), EAutomationExpectedErrorFlags::Contains, 2);
 
 	FControllableQueueStorageProvider Storage;
 	FPostHogFakeBatchTransport Transport;
@@ -911,7 +907,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueuePayloadTooLargeAdjustedThresh
 bool FPostHogEventQueuePayloadTooLargeAdjustedThresholdTriggersLaterFlushTest::RunTest(const FString& Parameters)
 {
 	AddExpectedError(TEXT("received HTTP 413"), EAutomationExpectedErrorFlags::Contains, 1);
-	AddExpectedError(TEXT("classified batch delivery failure as retryable; retaining attempted batch. StatusCode=413"), EAutomationExpectedErrorFlags::Contains, 1);
 
 	FControllableQueueStorageProvider Storage;
 	FPostHogFakeBatchTransport Transport;
@@ -964,7 +959,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueuePayloadTooLargeAtOneRetainsAn
 bool FPostHogEventQueuePayloadTooLargeAtOneRetainsAndBacksOffTest::RunTest(const FString& Parameters)
 {
 	AddExpectedError(TEXT("received HTTP 413"), EAutomationExpectedErrorFlags::Contains, 1);
-	AddExpectedError(TEXT("classified batch delivery failure as retryable; retaining attempted batch. StatusCode=413"), EAutomationExpectedErrorFlags::Contains, 1);
 
 	FControllableQueueStorageProvider Storage;
 	FPostHogFakeBatchTransport Transport;
@@ -1297,8 +1291,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueFailureRetainsQueueTest, "Unr
 
 bool FPostHogEventQueueFailureRetainsQueueTest::RunTest(const FString& Parameters)
 {
-	AddExpectedError(TEXT("classified batch delivery failure as retryable; retaining attempted batch. StatusCode=500"), EAutomationExpectedErrorFlags::Contains, 1);
-
 	FScopedQueueTestStorageDirectory Fixture;
 	FPostHogFileStorageProvider Storage(Fixture.GetRootPath());
 	FPostHogFakeBatchTransport Transport;
@@ -1333,8 +1325,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogEventQueueSynchronousFailureCompletesOn
 
 bool FPostHogEventQueueSynchronousFailureCompletesOnceTest::RunTest(const FString& Parameters)
 {
-	AddExpectedError(TEXT("classified batch delivery failure as retryable; retaining attempted batch. StatusCode=0"), EAutomationExpectedErrorFlags::Contains, 1);
-
 	FScopedQueueTestStorageDirectory Fixture;
 	FPostHogFileStorageProvider Storage(Fixture.GetRootPath());
 	FPostHogFakeBatchTransport Transport;

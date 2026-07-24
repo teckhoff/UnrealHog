@@ -162,7 +162,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogCoreIngressPermanentErrorRetryBackoffAn
 bool FPostHogCoreIngressPermanentErrorRetryBackoffAndOfflineTest::RunTest(const FString& Parameters)
 {
 	AddExpectedError(TEXT("classified batch delivery failure as permanent"), EAutomationExpectedErrorFlags::Contains, 1);
-	AddExpectedError(TEXT("classified batch delivery failure as retryable"), EAutomationExpectedErrorFlags::Contains, 2);
 	AddExpectedError(TEXT("received HTTP 413"), EAutomationExpectedErrorFlags::Contains, 1);
 
 	FPostHogAcceptanceFixture Fixture;

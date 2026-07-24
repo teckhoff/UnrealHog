@@ -175,6 +175,9 @@ public:
 	EPostHogPersonProfiles GetPersonProfiles() const { return PersonProfiles; }
 
 	UFUNCTION()
+	EPostHogLogLevel GetLogLevel() const { return LogLevel; }
+
+	UFUNCTION()
 	bool ShouldPreloadFeatureFlags() const { return bPreloadFeatureFlags; }
 
 	UFUNCTION()
@@ -243,7 +246,25 @@ protected:
 	UPROPERTY(Config, EditAnywhere, Category="PostHog|User Profiles")
 	EPostHogPersonProfiles PersonProfiles = EPostHogPersonProfiles::IdentifiedOnly;
 
-	// Minimum log level for SDK logging.
+	// Startup minimum severity for UnrealHog's own diagnostic logging. This value is applied to the
+	// process-global `LogUnrealHog` category when the runtime subsystem initializes and acts as the
+	// verbosity threshold: only messages at or above the selected severity are emitted.
+	//
+	// Level-to-verbosity mapping:
+	//   Debug   -> VeryVerbose (all UnrealHog diagnostics, including high-volume per-record detail)
+	//   Info    -> Log         (lifecycle/state transitions and above)
+	//   Warning -> Warning     (actionable but nonfatal problems and errors) -- the default
+	//   Error   -> Error       (only failures of accepted operations)
+	//   None    -> NoLogging   (suppresses every UnrealHog diagnostic)
+	//
+	// This is the startup verbosity for the process. A standard Unreal console command such as
+	// `Log LogUnrealHog VeryVerbose` may temporarily override the category after initialization for
+	// live diagnostics without changing project configuration; a later subsystem initialization
+	// reapplies this project setting deterministically.
+	//
+	// This setting controls the SDK's operational log output only. It is distinct from the
+	// session-replay console-log capture threshold (`FPostHogSessionReplayConfig::MinLogLevel`,
+	// owned by SDKP-016), which decides which game log lines are recorded into a replay.
 	UPROPERTY(Config, EditAnywhere, Category="PostHog|Logging")
 	EPostHogLogLevel LogLevel = EPostHogLogLevel::Warning;
 

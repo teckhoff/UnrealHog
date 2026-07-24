@@ -278,8 +278,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerCaptureExceptionNotOpt
 
 bool FPostHogConsentControllerCaptureExceptionNotOptedInIsSafeNoOpTest::RunTest(const FString& Parameters)
 {
-	AddExpectedError(TEXT("dropping event $exception"), EAutomationExpectedErrorFlags::Contains, 1, false);
-
 	FScopedExceptionTestStorageDirectory Fixture;
 	FPostHogFakeBatchTransport* LastTransport = nullptr;
 	int32 UuidCounter = 0;

@@ -110,6 +110,7 @@ bool FPostHogConsentController::SetOptIn(bool bOptIn, const UPostHogDeveloperSet
 		if (bIsOptedIn)
 		{
 			DisableCollection();
+			UE_LOGFMT(LogUnrealHog, Log, "PostHog analytics consent revoked; collection disabled.");
 		}
 		return true;
 	}
@@ -124,7 +125,10 @@ bool FPostHogConsentController::SetOptIn(bool bOptIn, const UPostHogDeveloperSet
 	if (!bOk)
 	{
 		UE_LOGFMT(LogUnrealHog, Warning, "PostHog Consent Controller rejected opt-in ({Reason}).", FailureReason);
+		return bOk;
 	}
+
+	UE_LOGFMT(LogUnrealHog, Log, "PostHog analytics consent granted; collection enabled.");
 	return bOk;
 }
 
@@ -179,7 +183,9 @@ EPostHogCaptureResult FPostHogConsentController::CaptureEventWithProducerPropert
 
 	if (!bIsOptedIn || !EventQueue.IsValid())
 	{
-		UE_LOGFMT(LogUnrealHog, Warning, "PostHog Consent Controller has no analytics consent; dropping event {EventName}.", EventName);
+		// Expected privacy behavior when the user has not opted in; not an actionable problem, so this
+		// is a Verbose diagnostic rather than a warning.
+		UE_LOGFMT(LogUnrealHog, Verbose, "PostHog Consent Controller has no analytics consent; dropping event {EventName}.", EventName);
 		return EPostHogCaptureResult::NotOptedIn;
 	}
 
@@ -225,6 +231,8 @@ EPostHogCaptureResult FPostHogConsentController::CaptureEventWithProducerPropert
 
 	SessionManager->Touch();
 
+	UE_LOGFMT(LogUnrealHog, Verbose, "PostHog Consent Controller accepted and enqueued event {EventName}.", EventName);
+
 	return EPostHogCaptureResult::Success;
 }
 
@@ -238,7 +246,8 @@ EPostHogCaptureResult FPostHogConsentController::Identify(const FString& Distinc
 
 	if (!bIsOptedIn || !IdentityManager.IsValid() || !StorageProvider.IsValid())
 	{
-		UE_LOGFMT(LogUnrealHog, Warning, "PostHog Consent Controller has no analytics consent; dropping Identify for {DistinctId}.", DistinctId);
+		// Expected privacy behavior when not opted in. The raw distinct id is intentionally not logged.
+		UE_LOGFMT(LogUnrealHog, Verbose, "PostHog Consent Controller has no analytics consent; dropping Identify.");
 		return EPostHogCaptureResult::NotOptedIn;
 	}
 
@@ -303,7 +312,8 @@ EPostHogCaptureResult FPostHogConsentController::Group(const FString& GroupType,
 
 	if (!bIsOptedIn || !IdentityManager.IsValid() || !StorageProvider.IsValid())
 	{
-		UE_LOGFMT(LogUnrealHog, Warning, "PostHog Consent Controller has no analytics consent; dropping Group for {GroupType}.", TrimmedType);
+		// Expected privacy behavior when not opted in. The group key (a raw identifier) is never logged.
+		UE_LOGFMT(LogUnrealHog, Verbose, "PostHog Consent Controller has no analytics consent; dropping Group for {GroupType}.", TrimmedType);
 		return EPostHogCaptureResult::NotOptedIn;
 	}
 
@@ -349,7 +359,7 @@ bool FPostHogConsentController::RegisterSuperProperty(const FString& Key, const 
 {
 	if (!bIsOptedIn || !SuperPropertiesManager.IsValid() || !StorageProvider.IsValid())
 	{
-		UE_LOGFMT(LogUnrealHog, Warning, "PostHog Consent Controller has no analytics consent; dropping RegisterSuperProperty for {Key}.", Key);
+		UE_LOGFMT(LogUnrealHog, Verbose, "PostHog Consent Controller has no analytics consent; dropping RegisterSuperProperty for {Key}.", Key);
 		return false;
 	}
 
@@ -361,7 +371,7 @@ void FPostHogConsentController::UnregisterSuperProperty(const FString& Key)
 {
 	if (!bIsOptedIn || !SuperPropertiesManager.IsValid() || !StorageProvider.IsValid())
 	{
-		UE_LOGFMT(LogUnrealHog, Warning, "PostHog Consent Controller has no analytics consent; dropping UnregisterSuperProperty for {Key}.", Key);
+		UE_LOGFMT(LogUnrealHog, Verbose, "PostHog Consent Controller has no analytics consent; dropping UnregisterSuperProperty for {Key}.", Key);
 		return;
 	}
 
@@ -372,7 +382,7 @@ void FPostHogConsentController::ClearSuperProperties()
 {
 	if (!bIsOptedIn || !SuperPropertiesManager.IsValid() || !StorageProvider.IsValid())
 	{
-		UE_LOGFMT(LogUnrealHog, Warning, "PostHog Consent Controller has no analytics consent; dropping ClearSuperProperties.");
+		UE_LOGFMT(LogUnrealHog, Verbose, "PostHog Consent Controller has no analytics consent; dropping ClearSuperProperties.");
 		return;
 	}
 
