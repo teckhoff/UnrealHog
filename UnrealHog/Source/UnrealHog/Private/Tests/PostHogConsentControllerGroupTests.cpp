@@ -131,8 +131,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerGroupRequiresConsentTe
 
 bool FPostHogConsentControllerGroupRequiresConsentTest::RunTest(const FString& Parameters)
 {
-	AddExpectedError(TEXT("dropping Group for company"), EAutomationExpectedErrorFlags::Contains, 1, false);
-
 	FScopedGroupTestStorageDirectory Fixture;
 	FPostHogFakeBatchTransport* LastTransport = nullptr;
 	int32 UuidCounter = 0;

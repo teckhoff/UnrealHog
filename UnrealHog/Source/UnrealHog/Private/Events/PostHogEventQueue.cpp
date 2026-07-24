@@ -92,7 +92,7 @@ EPostHogEventQueueEnqueueResult FPostHogEventQueue::EnsureCapacityForSave(const 
 			return EPostHogEventQueueEnqueueResult::RejectedCapacityDeleteFailed;
 		}
 
-		UE_LOGFMT(LogUnrealHog, Log, "PostHog event queue dropped oldest persisted event before enqueue. IncomingEventId={0}, DroppedEventId={1}, MaxQueueSize={2}, CurrentCount={3}.",
+		UE_LOGFMT(LogUnrealHog, Verbose, "PostHog event queue dropped oldest persisted event before enqueue. IncomingEventId={0}, DroppedEventId={1}, MaxQueueSize={2}, CurrentCount={3}.",
 			IncomingEventId, EventIdToDrop, MaxQueueSize, CurrentCount);
 	}
 
@@ -371,7 +371,9 @@ void FPostHogEventQueue::HandleBatchComplete(uint64 Generation, const TArray<FSt
 			ReduceBatchLimitsAfterPayloadTooLarge();
 		}
 
-		UE_LOGFMT(LogUnrealHog, Warning, "PostHog event queue classified batch delivery failure as retryable; retaining attempted batch. StatusCode={0}.",
+		// Retryable delivery failure with backoff is expected transient behavior, not an actionable
+		// problem, so it is a Verbose diagnostic. Permanent rejection below remains a warning.
+		UE_LOGFMT(LogUnrealHog, Verbose, "PostHog event queue classified batch delivery failure as retryable; retaining attempted batch. StatusCode={0}.",
 			StatusCode);
 		++ConsecutiveRetryableFailures;
 		const int32 DelaySeconds = FMath::Min(ConsecutiveRetryableFailures * RetryDelaySeconds, MaxRetryDelaySeconds);

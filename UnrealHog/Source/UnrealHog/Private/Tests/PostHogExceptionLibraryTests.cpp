@@ -263,8 +263,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogExceptionLibraryConsentBlockedHelperExc
 
 bool FPostHogExceptionLibraryConsentBlockedHelperExceptionIsNoOpTest::RunTest(const FString& Parameters)
 {
-	AddExpectedError(TEXT("dropping event $exception"), EAutomationExpectedErrorFlags::Contains, 1, false);
-
 	FScopedExceptionLibraryStorageDirectory Fixture;
 	FPostHogFakeBatchTransport* LastTransport = nullptr;
 	int32 UuidCounter = 0;

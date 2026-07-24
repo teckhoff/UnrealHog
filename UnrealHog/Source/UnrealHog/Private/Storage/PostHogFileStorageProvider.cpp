@@ -252,7 +252,7 @@ void FPostHogFileStorageProvider::EnsureQueueDirectory()
 		return;
 	}
 
-	UE_LOGFMT(LogUnrealHog, Log, "Using base path \"{BasePath}\".", BasePath);
+	UE_LOGFMT(LogUnrealHog, VeryVerbose, "Using base path \"{BasePath}\".", BasePath);
 	bQueueDirectoryReady = IFileManager::Get().MakeDirectory(*QueuePath, true);
 }
 
@@ -264,7 +264,7 @@ void FPostHogFileStorageProvider::EnsureStateDirectory()
 		return;
 	}
 
-	UE_LOGFMT(LogUnrealHog, Log, "Using base path \"{BasePath}\".", BasePath);
+	UE_LOGFMT(LogUnrealHog, VeryVerbose, "Using base path \"{BasePath}\".", BasePath);
 	bStateDirectoryReady = IFileManager::Get().MakeDirectory(*StatePath, true);
 }
 

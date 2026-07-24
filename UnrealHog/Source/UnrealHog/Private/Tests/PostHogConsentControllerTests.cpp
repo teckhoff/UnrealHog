@@ -505,8 +505,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerCaptureEventRejectsWit
 
 bool FPostHogConsentControllerCaptureEventRejectsWithoutConsentTest::RunTest(const FString& Parameters)
 {
-	AddExpectedError(TEXT("dropping event ev"), EAutomationExpectedErrorFlags::Contains, 1, false);
-
 	FScopedConsentTestStorageDirectory Fixture;
 	FPostHogFakeBatchTransport* LastTransport = nullptr;
 	int32 UuidCounter = 0;
@@ -835,8 +833,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerCaptureScreenHonorsCon
 
 bool FPostHogConsentControllerCaptureScreenHonorsConsentGatesTest::RunTest(const FString& Parameters)
 {
-	AddExpectedError(TEXT("dropping event $screen"), EAutomationExpectedErrorFlags::Contains, 2, false);
-
 	FScopedConsentTestStorageDirectory Fixture;
 	FPostHogFakeBatchTransport* LastTransport = nullptr;
 	int32 UuidCounter = 0;
