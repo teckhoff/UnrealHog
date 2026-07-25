@@ -78,6 +78,7 @@ SDKP-022 is conditional and independent.
 | [SDKP-020](SDKP-020-automatic-exception-signal-policy.md) | Deliberate Unreal-native nonfatal signal coverage | SDKP-019, EP-015 | ❌ |
 | [SDKP-021](SDKP-021-error-tracking-acceptance-suite.md) | Error-tracking phase-two parity proof | SDKP-005, SDKP-019, SDKP-020 | ❌ |
 | [SDKP-022](SDKP-022-restricted-platform-storage-validation.md) | Evidence-backed storage support per target platform | None | ⚙️ |
+| [SDKP-023](SDKP-023-configured-log-level.md) | Configured minimum severity for SDK-owned diagnostic logging | None | ✅ |
 
 ## Completion boundary
 

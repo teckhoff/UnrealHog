@@ -105,8 +105,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerRegisterSuperPropertyR
 
 bool FPostHogConsentControllerRegisterSuperPropertyRequiresConsentTest::RunTest(const FString& Parameters)
 {
-	AddExpectedError(TEXT("dropping RegisterSuperProperty for foo"), EAutomationExpectedErrorFlags::Contains, 1, false);
-
 	FScopedSuperPropertiesTestStorageDirectory Fixture;
 	FPostHogFakeBatchTransport* LastTransport = nullptr;
 	int32 UuidCounter = 0;

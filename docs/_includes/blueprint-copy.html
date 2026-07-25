@@ -1,0 +1,58 @@
+<div class="blueprint-copy">
+  <button type="button" class="blueprint-copy-button" data-blueprint-copy-target="blueprint-copy-{{ include.id }}" data-copy-label="{{ include.label | default: "Copy Blueprint" | escape }}" data-copied-label="{{ include.copied_label | default: "Copied" | escape }}">{{ include.label | default: "Copy Blueprint" }}</button>
+  <script type="application/json" id="blueprint-copy-{{ include.id }}" class="blueprint-copy-source">{{ include.text | strip | jsonify }}</script>
+</div>
+
+<script>
+  if (!window.PostHogBlueprintCopyInitialized) {
+    window.PostHogBlueprintCopyInitialized = true;
+
+    document.addEventListener("click", async function(event) {
+      var button = event.target.closest("[data-blueprint-copy-target]");
+      if (!button) {
+        return;
+      }
+
+      var source = document.getElementById(button.getAttribute("data-blueprint-copy-target"));
+      if (!source) {
+        return;
+      }
+
+      var blueprintText = "";
+      try {
+        blueprintText = JSON.parse(source.textContent);
+      } catch (error) {
+        blueprintText = source.textContent;
+      }
+
+      var originalText = button.getAttribute("data-copy-label") || "Copy Blueprint";
+      var copiedText = button.getAttribute("data-copied-label") || "Copied";
+
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(blueprintText);
+        } else {
+          var fallback = document.createElement("textarea");
+          fallback.value = blueprintText;
+          fallback.setAttribute("readonly", "");
+          fallback.style.position = "fixed";
+          fallback.style.left = "-9999px";
+          document.body.appendChild(fallback);
+          fallback.select();
+          document.execCommand("copy");
+          document.body.removeChild(fallback);
+        }
+
+        button.textContent = copiedText;
+        window.setTimeout(function() {
+          button.textContent = originalText;
+        }, 1500);
+      } catch (error) {
+        button.textContent = "Copy failed";
+        window.setTimeout(function() {
+          button.textContent = originalText;
+        }, 1500);
+      }
+    });
+  }
+</script>
