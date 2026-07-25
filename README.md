@@ -17,7 +17,7 @@ UnrealHog was developed using [Zeroshot](https://github.com/the-open-engine/zero
 
 ## Documentation
 
-**Published documentation:** [https://teckhoff.github.io/UnrealHog/](https://teckhoff.github.io/UnrealHog/)
+**Published documentation:** [https://teckhoff.github.io/UnrealHog/]()
 
 The documentation source is available in [`docs/`](docs/index.md).
 
@@ -41,4 +41,4 @@ Feature flags and session replay are not implemented. Their settings are current
 
 UnrealHog is developed and tested for Unreal Engine 5.8. Prepackaged releases currently target Windows x64 and Linux; other targets can use the plugin from source or package it for a compatible engine and platform toolchain.
 
-See the [installation guide](docs/installation.md) and [quickstart](docs/quickstart.md) to add the plugin, configure a development PostHog project, grant test consent, and verify a first event.
+See the [installation guide](https://teckhoff.github.io/UnrealHog/installation.html) and [quickstart](https://teckhoff.github.io/UnrealHog/quickstart.html) to add the plugin, configure a development PostHog project, grant test consent, and verify a first event.
