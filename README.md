@@ -17,7 +17,7 @@ UnrealHog was developed using [Zeroshot](https://github.com/the-open-engine/zero
 
 ## Documentation
 
-**Published documentation:** [https://teckhoff.github.io/UnrealHog/]()
+**Published documentation:** [https://teckhoff.github.io/UnrealHog/](https://teckhoff.github.io/UnrealHog/)
 
 The documentation source is available in [`docs/`](docs/index.md).
 
