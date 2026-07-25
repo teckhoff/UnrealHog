@@ -1,0 +1,32 @@
+<div class="language-toggle" id="language-toggle-{{ include.id }}"{% if include.samples_default == false or include.samples_default == "false" %} data-samples-default="false"{% endif %}>
+  <input type="radio" id="{{ include.id }}-cpp" name="{{ include.id }}-language" checked>
+  <label for="{{ include.id }}-cpp">{{ include.cpp_label | default: "C++" }}</label>
+  <input type="radio" id="{{ include.id }}-blueprints" name="{{ include.id }}-language">
+  <label for="{{ include.id }}-blueprints">{{ include.blueprint_label | default: "Blueprints" }}</label>
+  <div class="tab-panels">
+    <div class="tab-panel tab-panel-cpp">
+      {% if include.cpp %}
+        {{ include.cpp | markdownify }}
+      {% else %}
+        {% if include.cpp_text %}
+          {{ include.cpp_text | markdownify }}
+        {% endif %}
+        {% if include.cpp_image %}
+          <img class="language-toggle-image" src="{{ include.cpp_image | relative_url }}" alt="{{ include.cpp_alt | escape }}">
+        {% endif %}
+      {% endif %}
+    </div>
+    <div class="tab-panel tab-panel-blueprints">
+      {% if include.blueprint %}
+        {{ include.blueprint | markdownify }}
+      {% else %}
+        {% if include.blueprint_text %}
+          {{ include.blueprint_text | markdownify }}
+        {% endif %}
+        {% if include.blueprint_image %}
+          <img class="language-toggle-image blueprint-sample" src="{{ include.blueprint_image | relative_url }}" alt="{{ include.blueprint_alt | escape }}">
+        {% endif %}
+      {% endif %}
+    </div>
+  </div>
+</div>

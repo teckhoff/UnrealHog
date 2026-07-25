@@ -1,0 +1,125 @@
+- id: posthog-flush-outcome
+  name: EPostHogFlushOutcome
+  category: Consent and Delivery
+  source: UnrealHog/Source/UnrealHog/Public/Subsystems/PostHogRuntimeSubsystem.h
+  summary: Eventual outcome delivered to a C++ flush completion delegate after a manual flush resolves.
+  values:
+    - name: Drained
+      description: Queued events were drained successfully.
+    - name: Empty
+      description: There were no queued events to flush.
+    - name: Failed
+      description: The flush attempted delivery but failed.
+    - name: Cancelled
+      description: The flush was cancelled before completion.
+    - name: ProgressBlocked
+      description: The queue could not make forward progress during the flush.
+    - name: Paused
+      description: Delivery is paused, such as while waiting for retry backoff.
+    - name: SkippedOffline
+      display_name: Skipped Offline
+      description: Delivery was skipped because the device was offline; queued events remain available for a later attempt.
+
+- id: posthog-flush-request-result
+  name: EPostHogFlushRequestResult
+  category: Consent and Delivery
+  source: UnrealHog/Source/UnrealHog/Public/Subsystems/PostHogRuntimeSubsystem.h
+  summary: Immediate acceptance result returned by UPostHogRuntimeSubsystem::Flush.
+  values:
+    - name: Started
+      description: A flush request was accepted and started.
+    - name: AlreadyInProgress
+      description: A flush was already running, so this request joined the in-progress drain.
+    - name: Skipped
+      description: No flush was started, such as when the subsystem is unavailable or there is nothing to drain.
+
+- id: posthog-host
+  name: EPostHogHost
+  category: Configuration Types
+  source: UnrealHog/Source/UnrealHog/Public/PostHogDeveloperSettings.h
+  summary: Project setting for the PostHog ingestion host.
+  values:
+    - name: US
+      description: Send events to the United States PostHog host, https://us.i.posthog.com.
+    - name: EU
+      description: Send events to the European Union PostHog host, https://eu.i.posthog.com.
+    - name: Custom
+      description: Send events to the custom host URL configured in project settings.
+
+- id: posthog-log-level
+  name: EPostHogLogLevel
+  category: Configuration Types
+  source: UnrealHog/Source/UnrealHog/Public/Logging/PostHogLogger.h
+  summary: Sets the startup severity threshold for SDK-owned LogUnrealHog diagnostics.
+  values:
+    - name: Debug
+      description: Emit debug, info, warning, and error log messages.
+    - name: Info
+      description: Emit info, warning, and error log messages.
+    - name: Warning
+      description: Emit warning and error log messages.
+    - name: Error
+      description: Emit error log messages only.
+    - name: None
+      description: Disable SDK log output.
+
+- id: posthog-person-profiles
+  name: EPostHogPersonProfiles
+  category: Configuration Types
+  source: UnrealHog/Source/UnrealHog/Public/PostHogDeveloperSettings.h
+  summary: Controls when PostHog person profiles should be created or updated.
+  values:
+    - name: Always
+      description: Always create or update person profiles.
+    - name: IdentifiedOnly
+      display_name: Identified Only
+      description: Create or update person profiles only after the user has been identified.
+    - name: Never
+      description: Never create or update person profiles.
+
+- id: posthog-property-type
+  name: EPostHogPropertyType
+  category: Events and Properties
+  source: UnrealHog/Source/UnrealHog/Public/Events/PostHogEventProperties.h
+  summary: JSON-compatible value type used by event property builders.
+  values:
+    - name: String
+      description: A string property value.
+    - name: Number
+      description: A numeric property value.
+    - name: Boolean
+      description: A boolean property value.
+    - name: "Null"
+      description: An explicit null property value.
+    - name: Object
+      description: A nested object property value.
+    - name: Array
+      description: A nested array property value.
+
+- id: posthog-before-send-result
+  name: EPostHogBeforeSendResult
+  category: Advanced C++
+  availability: C++ only
+  source: UnrealHog/Source/UnrealHog/Public/Events/PostHogBeforeSend.h
+  summary: Result returned by a before-send hook after it inspects or mutates an event.
+  values:
+    - name: Continue
+      description: Continue composing and persist the event.
+    - name: Drop
+      description: Intentionally discard the event without persisting it.
+    - name: Failure
+      description: Reject the event because the before-send hook failed.
+
+- id: posthog-session-replay-log-level
+  name: EPostHogSessionReplayLogLevel
+  category: Configuration Types
+  availability: Unavailable until SDKP-018
+  source: UnrealHog/Source/UnrealHog/Public/PostHogDeveloperSettings.h
+  summary: Serialized compatibility setting for future session replay log capture; it currently has no runtime effect.
+  values:
+    - name: Log
+      description: Capture all log messages.
+    - name: Warning
+      description: Capture warning and error log messages.
+    - name: Error
+      description: Capture error log messages only.

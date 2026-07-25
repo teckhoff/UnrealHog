@@ -1,0 +1,710 @@
+- id: capture-event
+  name: CaptureEvent
+  source: UnrealHog/Source/UnrealHog/Public/Subsystems/PostHogRuntimeSubsystem.h
+  implementation: UnrealHog/Source/UnrealHog/Private/Subsystems/PostHogRuntimeSubsystem.cpp
+  category: Events and Properties
+  summary: Captures a named analytics event with optional event properties.
+  signature: |
+    void CaptureEvent(const FString& EventName, UPostHogEventProperties* Properties = nullptr);
+  parameters:
+    - name: EventName
+      type: const FString&
+      required: true
+      description: The event name sent to PostHog.
+    - name: Properties
+      type: UPostHogEventProperties*
+      required: false
+      description: Optional event properties created with CreateEventProperties.
+  outputs:
+    - type: void
+      description: This method does not return a value.
+
+- id: capture-exception
+  name: CaptureException
+  source: UnrealHog/Source/UnrealHog/Public/Subsystems/PostHogRuntimeSubsystem.h
+  implementation: UnrealHog/Source/UnrealHog/Private/Subsystems/PostHogRuntimeSubsystem.cpp
+  category: Error Tracking
+  summary: Captures a handled exception event with optional properties.
+  signature: |
+    void CaptureException(const FPostHogExceptionInput& Exception, UPostHogEventProperties* Properties = nullptr);
+  parameters:
+    - name: Exception
+      type: const FPostHogExceptionInput&
+      required: true
+      description: Exception details to include in the event payload.
+    - name: Properties
+      type: UPostHogEventProperties*
+      required: false
+      description: Optional event properties to include with the exception.
+  outputs:
+    - type: void
+      description: This method does not return a value.
+
+- id: make-exception-with-current-stack
+  name: MakeExceptionWithCurrentStack
+  source: UnrealHog/Source/UnrealHog/Public/Utilities/PostHogExceptionLibrary.h
+  implementation: UnrealHog/Source/UnrealHog/Private/Utilities/PostHogExceptionLibrary.cpp
+  category: Error Tracking
+  summary: Creates an exception input with the current Blueprint or native C++ call stack.
+  signature: |
+    static FPostHogExceptionInput MakeExceptionWithCurrentStack(
+        const FString& Message,
+        const FString& Type,
+        bool bHandled = true);
+  parameters:
+    - name: Message
+      type: const FString&
+      required: true
+      description: Human-readable description of the failure.
+    - name: Type
+      type: const FString&
+      required: true
+      description: Stable category for the failure.
+    - name: bHandled
+      type: bool
+      required: false
+      description: Whether application code handled the failure. Defaults to true.
+  outputs:
+    - type: FPostHogExceptionInput
+      description: Exception details containing a best-effort call stack captured at the call site.
+  notes:
+    - Include Utilities/PostHogExceptionLibrary.h in C++.
+    - This helper only creates an in-memory value. Pass the result to CaptureException to capture an event.
+    - Native stack symbols, file names, line numbers, and nonempty output are not guaranteed in optimized builds.
+
+- id: make-exception-with-native-stack
+  name: MakeExceptionWithNativeStack
+  source: UnrealHog/Source/UnrealHog/Public/Utilities/PostHogExceptionLibrary.h
+  implementation: UnrealHog/Source/UnrealHog/Private/Utilities/PostHogExceptionLibrary.cpp
+  category: Error Tracking
+  availability: C++ only
+  summary: Creates an exception input with a best-effort native call stack.
+  signature: |
+    static FPostHogExceptionInput MakeExceptionWithNativeStack(
+        const FString& Message,
+        const FString& Type,
+        bool bHandled = true);
+  parameters:
+    - name: Message
+      type: const FString&
+      required: true
+      description: Human-readable description of the failure.
+    - name: Type
+      type: const FString&
+      required: true
+      description: Stable category for the failure.
+    - name: bHandled
+      type: bool
+      required: false
+      description: Whether application code handled the failure. Defaults to true.
+  outputs:
+    - type: FPostHogExceptionInput
+      description: Exception details containing a best-effort native call stack.
+  notes:
+    - Include Utilities/PostHogExceptionLibrary.h.
+    - This helper only creates an in-memory value. Pass the result to CaptureException to capture an event.
+
+- id: make-exception-with-stack-trace
+  name: MakeExceptionWithStackTrace
+  source: UnrealHog/Source/UnrealHog/Public/Utilities/PostHogExceptionLibrary.h
+  implementation: UnrealHog/Source/UnrealHog/Private/Utilities/PostHogExceptionLibrary.cpp
+  category: Error Tracking
+  availability: C++ only
+  summary: Creates an exception input from caller-supplied stack trace text.
+  signature: |
+    static FPostHogExceptionInput MakeExceptionWithStackTrace(
+        const FString& Message,
+        const FString& Type,
+        const FString& StackTrace,
+        bool bHandled = true);
+  parameters:
+    - name: Message
+      type: const FString&
+      required: true
+      description: Human-readable description of the failure.
+    - name: Type
+      type: const FString&
+      required: true
+      description: Stable category for the failure.
+    - name: StackTrace
+      type: const FString&
+      required: true
+      description: Raw stack trace text copied into the exception input.
+    - name: bHandled
+      type: bool
+      required: false
+      description: Whether application code handled the failure. Defaults to true.
+  outputs:
+    - type: FPostHogExceptionInput
+      description: Exception details containing the supplied stack trace.
+  notes:
+    - Include Utilities/PostHogExceptionLibrary.h.
+    - This helper only creates an in-memory value. Pass the result to CaptureException to capture an event.
+
+- id: capture-screen
+  name: CaptureScreen
+  source: UnrealHog/Source/UnrealHog/Public/Subsystems/PostHogRuntimeSubsystem.h
+  implementation: UnrealHog/Source/UnrealHog/Private/Subsystems/PostHogRuntimeSubsystem.cpp
+  category: Events and Properties
+  summary: Captures a screen view event for a named screen.
+  signature: |
+    void CaptureScreen(const FString& ScreenName, UPostHogEventProperties* Properties = nullptr);
+  parameters:
+    - name: ScreenName
+      type: const FString&
+      required: true
+      description: The screen name to report.
+    - name: Properties
+      type: UPostHogEventProperties*
+      required: false
+      description: Optional event properties to include with the screen event.
+  outputs:
+    - type: void
+      description: This method does not return a value.
+
+- id: create-event-properties
+  name: CreateEventProperties
+  source: UnrealHog/Source/UnrealHog/Public/Subsystems/PostHogRuntimeSubsystem.h
+  implementation: UnrealHog/Source/UnrealHog/Private/Subsystems/PostHogRuntimeSubsystem.cpp
+  category: Events and Properties
+  summary: Creates a Blueprint-friendly property builder for event payloads.
+  signature: |
+    UPostHogEventProperties* CreateEventProperties();
+  parameters: []
+  outputs:
+    - type: UPostHogEventProperties*
+      description: A new property builder object owned by Unreal object lifetime rules.
+
+- id: create-event-property-array
+  name: CreateEventPropertyArray
+  source: UnrealHog/Source/UnrealHog/Public/Subsystems/PostHogRuntimeSubsystem.h
+  implementation: UnrealHog/Source/UnrealHog/Private/Subsystems/PostHogRuntimeSubsystem.cpp
+  category: Events and Properties
+  summary: Creates a Blueprint-friendly array builder for nested event property values.
+  signature: |
+    UPostHogEventPropertyArray* CreateEventPropertyArray();
+  parameters: []
+  outputs:
+    - type: UPostHogEventPropertyArray*
+      description: A new array builder object owned by Unreal object lifetime rules.
+
+- id: add-string
+  name: AddString
+  source: UnrealHog/Source/UnrealHog/Public/Events/PostHogEventProperties.h
+  implementation: UnrealHog/Source/UnrealHog/Private/Events/PostHogEventProperties.cpp
+  category: Events and Properties
+  summary: Adds a string value to a property object or property array and returns the same builder for chaining.
+  signature: |
+    UPostHogEventProperties* AddString(const FString& Key, const FString& StringValue);
+    UPostHogEventPropertyArray* AddString(const FString& StringValue);
+  parameters:
+    - name: Key
+      type: const FString&
+      required: false
+      required_label: EventProperties only
+      description: The property name when calling this on UPostHogEventProperties. Not used by UPostHogEventPropertyArray.
+    - name: StringValue
+      type: const FString&
+      required: true
+      description: The string value to store or append.
+  outputs:
+    - type: UPostHogEventProperties* or UPostHogEventPropertyArray*
+      description: The same builder instance, for chaining additional Add calls.
+  notes:
+    - Use UPostHogEventProperties when adding keyed fields to an event property object.
+    - Use UPostHogEventPropertyArray when appending ordered, unkeyed values to an array.
+- id: add-number
+  name: AddNumber
+  source: UnrealHog/Source/UnrealHog/Public/Events/PostHogEventProperties.h
+  implementation: UnrealHog/Source/UnrealHog/Private/Events/PostHogEventProperties.cpp
+  category: Events and Properties
+  summary: Adds a numeric value to a property object or property array and returns the same builder for chaining.
+  signature: |
+    UPostHogEventProperties* AddNumber(const FString& Key, double NumberValue);
+    UPostHogEventPropertyArray* AddNumber(double NumberValue);
+  parameters:
+    - name: Key
+      type: const FString&
+      required: false
+      required_label: EventProperties only
+      description: The property name when calling this on UPostHogEventProperties. Not used by UPostHogEventPropertyArray.
+    - name: NumberValue
+      type: double
+      required: true
+      description: The numeric value to store or append.
+  outputs:
+    - type: UPostHogEventProperties* or UPostHogEventPropertyArray*
+      description: The same builder instance, for chaining additional Add calls.
+  notes:
+    - Use UPostHogEventProperties when adding keyed fields to an event property object.
+    - Use UPostHogEventPropertyArray when appending ordered, unkeyed values to an array.
+- id: add-boolean
+  name: AddBoolean
+  source: UnrealHog/Source/UnrealHog/Public/Events/PostHogEventProperties.h
+  implementation: UnrealHog/Source/UnrealHog/Private/Events/PostHogEventProperties.cpp
+  category: Events and Properties
+  summary: Adds a boolean value to a property object or property array and returns the same builder for chaining.
+  signature: |
+    UPostHogEventProperties* AddBoolean(const FString& Key, bool bBoolValue);
+    UPostHogEventPropertyArray* AddBoolean(bool bBoolValue);
+  parameters:
+    - name: Key
+      type: const FString&
+      required: false
+      required_label: EventProperties only
+      description: The property name when calling this on UPostHogEventProperties. Not used by UPostHogEventPropertyArray.
+    - name: bBoolValue
+      type: bool
+      required: true
+      description: The boolean value to store or append.
+  outputs:
+    - type: UPostHogEventProperties* or UPostHogEventPropertyArray*
+      description: The same builder instance, for chaining additional Add calls.
+  notes:
+    - Use UPostHogEventProperties when adding keyed fields to an event property object.
+    - Use UPostHogEventPropertyArray when appending ordered, unkeyed values to an array.
+- id: add-null
+  name: AddNull
+  source: UnrealHog/Source/UnrealHog/Public/Events/PostHogEventProperties.h
+  implementation: UnrealHog/Source/UnrealHog/Private/Events/PostHogEventProperties.cpp
+  category: Events and Properties
+  summary: Adds an explicit null value to a property object or property array and returns the same builder for chaining.
+  signature: |
+    UPostHogEventProperties* AddNull(const FString& Key);
+    UPostHogEventPropertyArray* AddNull();
+  parameters:
+    - name: Key
+      type: const FString&
+      required: false
+      required_label: EventProperties only
+      description: The property name when calling this on UPostHogEventProperties. Not used by UPostHogEventPropertyArray.
+  outputs:
+    - type: UPostHogEventProperties* or UPostHogEventPropertyArray*
+      description: The same builder instance, for chaining additional Add calls.
+  notes:
+    - Use UPostHogEventProperties when adding keyed fields to an event property object.
+    - Use UPostHogEventPropertyArray when appending ordered, unkeyed values to an array.
+- id: add-object
+  name: AddObject
+  source: UnrealHog/Source/UnrealHog/Public/Events/PostHogEventProperties.h
+  implementation: UnrealHog/Source/UnrealHog/Private/Events/PostHogEventProperties.cpp
+  category: Events and Properties
+  summary: Adds a nested object value to a property object or property array and returns the same builder for chaining.
+  signature: |
+    UPostHogEventProperties* AddObject(const FString& Key, UPostHogEventProperties* Value);
+    UPostHogEventPropertyArray* AddObject(UPostHogEventProperties* Value);
+  parameters:
+    - name: Key
+      type: const FString&
+      required: false
+      required_label: EventProperties only
+      description: The property name when calling this on UPostHogEventProperties. Not used by UPostHogEventPropertyArray.
+    - name: Value
+      type: UPostHogEventProperties*
+      required: true
+      description: The nested property object to store or append, created with CreateEventProperties.
+  outputs:
+    - type: UPostHogEventProperties* or UPostHogEventPropertyArray*
+      description: The same builder instance, for chaining additional Add calls.
+  notes:
+    - Use UPostHogEventProperties when adding keyed fields to an event property object.
+    - Use UPostHogEventPropertyArray when appending ordered, unkeyed values to an array.
+- id: add-array
+  name: AddArray
+  source: UnrealHog/Source/UnrealHog/Public/Events/PostHogEventProperties.h
+  implementation: UnrealHog/Source/UnrealHog/Private/Events/PostHogEventProperties.cpp
+  category: Events and Properties
+  summary: Adds a nested array value to a property object or property array and returns the same builder for chaining.
+  signature: |
+    UPostHogEventProperties* AddArray(const FString& Key, UPostHogEventPropertyArray* Value);
+    UPostHogEventPropertyArray* AddArray(UPostHogEventPropertyArray* Value);
+  parameters:
+    - name: Key
+      type: const FString&
+      required: false
+      required_label: EventProperties only
+      description: The property name when calling this on UPostHogEventProperties. Not used by UPostHogEventPropertyArray.
+    - name: Value
+      type: UPostHogEventPropertyArray*
+      required: true
+      description: The nested property array to store or append, created with CreateEventPropertyArray.
+  outputs:
+    - type: UPostHogEventProperties* or UPostHogEventPropertyArray*
+      description: The same builder instance, for chaining additional Add calls.
+  notes:
+    - Use UPostHogEventProperties when adding keyed fields to an event property object.
+    - Use UPostHogEventPropertyArray when appending ordered, unkeyed values to an array.
+- id: flush
+  name: Flush
+  source: UnrealHog/Source/UnrealHog/Public/Subsystems/PostHogRuntimeSubsystem.h
+  implementation: UnrealHog/Source/UnrealHog/Private/Subsystems/PostHogRuntimeSubsystem.cpp
+  category: Consent and Delivery
+  summary: Requests an asynchronous drain of queued events and returns immediately with request status.
+  signature: |
+    EPostHogFlushRequestResult Flush();
+  parameters: []
+  outputs:
+    - type: EPostHogFlushRequestResult
+      description: Whether the flush request started, was already in progress, or was skipped.
+
+- id: flush-with-completion
+  name: Flush
+  source: UnrealHog/Source/UnrealHog/Public/Subsystems/PostHogRuntimeSubsystem.h
+  implementation: UnrealHog/Source/UnrealHog/Private/Subsystems/PostHogRuntimeSubsystem.cpp
+  category: Consent and Delivery
+  availability: C++ only
+  summary: Requests an asynchronous drain of queued events and invokes a completion delegate when the drain resolves.
+  signature: |
+    EPostHogFlushRequestResult Flush(FPostHogFlushCompletedDelegate OnComplete);
+  parameters:
+    - name: OnComplete
+      type: FPostHogFlushCompletedDelegate
+      required: true
+      description: Delegate invoked exactly once with the eventual flush outcome.
+  outputs:
+    - type: EPostHogFlushRequestResult
+      description: Whether the flush request started, was already in progress, or was skipped.
+
+- id: set-analytics-opt-in
+  name: SetAnalyticsOptIn
+  source: UnrealHog/Source/UnrealHog/Public/Subsystems/PostHogRuntimeSubsystem.h
+  implementation: UnrealHog/Source/UnrealHog/Private/Subsystems/PostHogRuntimeSubsystem.cpp
+  category: Consent and Delivery
+  summary: Changes analytics collection consent; successful opt-in and later opt-out transitions are persisted for future launches.
+  signature: |
+    void SetAnalyticsOptIn(bool bOptIn);
+  parameters:
+    - name: bOptIn
+      type: bool
+      required: true
+      description: Whether analytics collection should be enabled. Opting out also clears queued events.
+  outputs:
+    - type: void
+      description: This method does not return a value.
+  notes:
+    - A persisted choice takes precedence over the Default User Opt-In project setting on later launches.
+    - Opt-in can remain disabled when project settings are invalid or the developer kill switch is off; call IsAnalyticsOptedIn and inspect the UnrealHog log to confirm the effective state.
+    - Work attempted before opt-in is dropped rather than deferred.
+
+- id: is-analytics-opted-in
+  name: IsAnalyticsOptedIn
+  source: UnrealHog/Source/UnrealHog/Public/Subsystems/PostHogRuntimeSubsystem.h
+  implementation: UnrealHog/Source/UnrealHog/Private/Subsystems/PostHogRuntimeSubsystem.cpp
+  category: Consent and Delivery
+  summary: Returns whether analytics collection is currently opted in.
+  signature: |
+    bool IsAnalyticsOptedIn() const;
+  parameters: []
+  outputs:
+    - type: bool
+      description: true when analytics collection is currently permitted; otherwise false.
+
+- id: identify
+  name: Identify
+  source: UnrealHog/Source/UnrealHog/Public/Subsystems/PostHogRuntimeSubsystem.h
+  implementation: UnrealHog/Source/UnrealHog/Private/Subsystems/PostHogRuntimeSubsystem.cpp
+  category: Identity and Groups
+  summary: Associates future events with a distinct user identifier and optional user properties.
+  signature: |
+    void Identify(const FString& DistinctId, UPostHogEventProperties* UserProperties = nullptr, UPostHogEventProperties* UserPropertiesSetOnce = nullptr);
+  parameters:
+    - name: DistinctId
+      type: const FString&
+      required: true
+      description: The stable user identifier to associate with future events.
+    - name: UserProperties
+      type: UPostHogEventProperties*
+      required: false
+      description: Optional user properties to set or update.
+    - name: UserPropertiesSetOnce
+      type: UPostHogEventProperties*
+      required: false
+      description: Optional user properties that should only be set once.
+  outputs:
+    - type: void
+      description: This method does not return a value.
+
+- id: reset
+  name: Reset
+  source: UnrealHog/Source/UnrealHog/Public/Subsystems/PostHogRuntimeSubsystem.h
+  implementation: UnrealHog/Source/UnrealHog/Private/Subsystems/PostHogRuntimeSubsystem.cpp
+  category: Identity and Groups
+  summary: Clears the current identity state and returns the SDK to an anonymous identity.
+  signature: |
+    void Reset();
+  parameters: []
+  outputs:
+    - type: void
+      description: This method does not return a value.
+
+- id: alias
+  name: Alias
+  source: UnrealHog/Source/UnrealHog/Public/Subsystems/PostHogRuntimeSubsystem.h
+  implementation: UnrealHog/Source/UnrealHog/Private/Subsystems/PostHogRuntimeSubsystem.cpp
+  category: Identity and Groups
+  summary: Connects another identifier to the current distinct ID.
+  signature: |
+    void Alias(const FString& AliasId);
+  parameters:
+    - name: AliasId
+      type: const FString&
+      required: true
+      description: The alternate identifier to associate with the current distinct ID.
+  outputs:
+    - type: void
+      description: This method does not return a value.
+
+- id: get-distinct-id
+  name: GetDistinctId
+  source: UnrealHog/Source/UnrealHog/Public/Subsystems/PostHogRuntimeSubsystem.h
+  implementation: UnrealHog/Source/UnrealHog/Private/Subsystems/PostHogRuntimeSubsystem.cpp
+  category: Identity and Groups
+  summary: Returns the current distinct ID used for captured events.
+  signature: |
+    FString GetDistinctId() const;
+  parameters: []
+  outputs:
+    - type: FString
+      description: The current distinct ID.
+
+- id: group
+  name: Group
+  source: UnrealHog/Source/UnrealHog/Public/Subsystems/PostHogRuntimeSubsystem.h
+  implementation: UnrealHog/Source/UnrealHog/Private/Subsystems/PostHogRuntimeSubsystem.cpp
+  category: Identity and Groups
+  summary: Associates future events with a group membership and optional group properties.
+  signature: |
+    void Group(const FString& GroupType, const FString& GroupKey, UPostHogEventProperties* GroupProperties = nullptr);
+  parameters:
+    - name: GroupType
+      type: const FString&
+      required: true
+      description: The group category, such as organization or guild.
+    - name: GroupKey
+      type: const FString&
+      required: true
+      description: The stable identifier for the group.
+    - name: GroupProperties
+      type: UPostHogEventProperties*
+      required: false
+      description: Optional properties to associate with the group.
+  outputs:
+    - type: void
+      description: This method does not return a value.
+
+- id: reset-groups
+  name: ResetGroups
+  source: UnrealHog/Source/UnrealHog/Public/Subsystems/PostHogRuntimeSubsystem.h
+  implementation: UnrealHog/Source/UnrealHog/Private/Subsystems/PostHogRuntimeSubsystem.cpp
+  category: Identity and Groups
+  summary: Clears all currently registered group memberships.
+  signature: |
+    void ResetGroups();
+  parameters: []
+  outputs:
+    - type: void
+      description: This method does not return a value.
+
+- id: register-super-property-string
+  name: RegisterSuperPropertyString
+  source: UnrealHog/Source/UnrealHog/Public/Subsystems/PostHogRuntimeSubsystem.h
+  implementation: UnrealHog/Source/UnrealHog/Private/Subsystems/PostHogRuntimeSubsystem.cpp
+  category: Super Properties
+  summary: Registers a string super property that is included with future events.
+  signature: |
+    void RegisterSuperPropertyString(const FString& Key, const FString& StringValue);
+  parameters:
+    - name: Key
+      type: const FString&
+      required: true
+      description: The property name.
+    - name: StringValue
+      type: const FString&
+      required: true
+      description: The string value to register.
+  outputs:
+    - type: void
+      description: This method does not return a value.
+
+- id: register-super-property-number
+  name: RegisterSuperPropertyNumber
+  source: UnrealHog/Source/UnrealHog/Public/Subsystems/PostHogRuntimeSubsystem.h
+  implementation: UnrealHog/Source/UnrealHog/Private/Subsystems/PostHogRuntimeSubsystem.cpp
+  category: Super Properties
+  summary: Registers a numeric super property that is included with future events.
+  signature: |
+    void RegisterSuperPropertyNumber(const FString& Key, double NumberValue);
+  parameters:
+    - name: Key
+      type: const FString&
+      required: true
+      description: The property name.
+    - name: NumberValue
+      type: double
+      required: true
+      description: The numeric value to register.
+  outputs:
+    - type: void
+      description: This method does not return a value.
+
+- id: register-super-property-boolean
+  name: RegisterSuperPropertyBoolean
+  source: UnrealHog/Source/UnrealHog/Public/Subsystems/PostHogRuntimeSubsystem.h
+  implementation: UnrealHog/Source/UnrealHog/Private/Subsystems/PostHogRuntimeSubsystem.cpp
+  category: Super Properties
+  summary: Registers a boolean super property that is included with future events.
+  signature: |
+    void RegisterSuperPropertyBoolean(const FString& Key, bool bBoolValue);
+  parameters:
+    - name: Key
+      type: const FString&
+      required: true
+      description: The property name.
+    - name: bBoolValue
+      type: bool
+      required: true
+      description: The boolean value to register.
+  outputs:
+    - type: void
+      description: This method does not return a value.
+
+- id: register-super-property-null
+  name: RegisterSuperPropertyNull
+  source: UnrealHog/Source/UnrealHog/Public/Subsystems/PostHogRuntimeSubsystem.h
+  implementation: UnrealHog/Source/UnrealHog/Private/Subsystems/PostHogRuntimeSubsystem.cpp
+  category: Super Properties
+  summary: Registers a null super property that is included with future events.
+  signature: |
+    void RegisterSuperPropertyNull(const FString& Key);
+  parameters:
+    - name: Key
+      type: const FString&
+      required: true
+      description: The property name.
+  outputs:
+    - type: void
+      description: This method does not return a value.
+
+- id: register-super-property-object
+  name: RegisterSuperPropertyObject
+  source: UnrealHog/Source/UnrealHog/Public/Subsystems/PostHogRuntimeSubsystem.h
+  implementation: UnrealHog/Source/UnrealHog/Private/Subsystems/PostHogRuntimeSubsystem.cpp
+  category: Super Properties
+  summary: Registers an object super property that is included with future events.
+  signature: |
+    void RegisterSuperPropertyObject(const FString& Key, UPostHogEventProperties* Value);
+  parameters:
+    - name: Key
+      type: const FString&
+      required: true
+      description: The property name.
+    - name: Value
+      type: UPostHogEventProperties*
+      required: true
+      description: The object property builder to register.
+  outputs:
+    - type: void
+      description: This method does not return a value.
+
+- id: register-super-property-array
+  name: RegisterSuperPropertyArray
+  source: UnrealHog/Source/UnrealHog/Public/Subsystems/PostHogRuntimeSubsystem.h
+  implementation: UnrealHog/Source/UnrealHog/Private/Subsystems/PostHogRuntimeSubsystem.cpp
+  category: Super Properties
+  summary: Registers an array super property that is included with future events.
+  signature: |
+    void RegisterSuperPropertyArray(const FString& Key, UPostHogEventPropertyArray* Value);
+  parameters:
+    - name: Key
+      type: const FString&
+      required: true
+      description: The property name.
+    - name: Value
+      type: UPostHogEventPropertyArray*
+      required: true
+      description: The array property builder to register.
+  outputs:
+    - type: void
+      description: This method does not return a value.
+
+- id: unregister-super-property
+  name: UnregisterSuperProperty
+  source: UnrealHog/Source/UnrealHog/Public/Subsystems/PostHogRuntimeSubsystem.h
+  implementation: UnrealHog/Source/UnrealHog/Private/Subsystems/PostHogRuntimeSubsystem.cpp
+  category: Super Properties
+  summary: Removes a previously registered super property by key.
+  signature: |
+    void UnregisterSuperProperty(const FString& Key);
+  parameters:
+    - name: Key
+      type: const FString&
+      required: true
+      description: The super property key to remove.
+  outputs:
+    - type: void
+      description: This method does not return a value.
+
+- id: clear-super-properties
+  name: ClearSuperProperties
+  source: UnrealHog/Source/UnrealHog/Public/Subsystems/PostHogRuntimeSubsystem.h
+  implementation: UnrealHog/Source/UnrealHog/Private/Subsystems/PostHogRuntimeSubsystem.cpp
+  category: Super Properties
+  summary: Removes all registered super properties.
+  signature: |
+    void ClearSuperProperties();
+  parameters: []
+  outputs:
+    - type: void
+      description: This method does not return a value.
+
+- id: set-before-send
+  name: SetBeforeSend
+  source: UnrealHog/Source/UnrealHog/Public/Subsystems/PostHogRuntimeSubsystem.h
+  implementation: UnrealHog/Source/UnrealHog/Private/Subsystems/PostHogRuntimeSubsystem.cpp
+  category: Advanced C++
+  availability: C++ only
+  summary: Registers a synchronous C++ hook that can inspect, mutate, or drop composed events before persistence.
+  signature: |
+    void SetBeforeSend(FPostHogBeforeSendDelegate InBeforeSend);
+  parameters:
+    - name: InBeforeSend
+      type: FPostHogBeforeSendDelegate
+      required: true
+      description: Delegate invoked before an event is persisted.
+  outputs:
+    - type: void
+      description: This method does not return a value.
+  notes:
+    - Include Events/PostHogBeforeSend.h.
+    - Return EPostHogBeforeSendResult::Continue to persist the event, Drop to discard it intentionally, or Failure to reject it as a hook failure.
+    - The callback is synchronous and receives an FPostHogBeforeSendEvent whose mutable properties can be edited before persistence.
+
+- id: clear-before-send
+  name: ClearBeforeSend
+  source: UnrealHog/Source/UnrealHog/Public/Subsystems/PostHogRuntimeSubsystem.h
+  implementation: UnrealHog/Source/UnrealHog/Private/Subsystems/PostHogRuntimeSubsystem.cpp
+  category: Advanced C++
+  availability: C++ only
+  summary: Clears the currently registered before-send hook.
+  signature: |
+    void ClearBeforeSend();
+  parameters: []
+  outputs:
+    - type: void
+      description: This method does not return a value.
+
+- id: flush-and-quit
+  name: FlushAndQuit
+  source: UnrealHog/Source/UnrealHog/Public/Subsystems/PostHogRuntimeSubsystem.h
+  implementation: UnrealHog/Source/UnrealHog/Private/Subsystems/PostHogRuntimeSubsystem.cpp
+  category: Consent and Delivery
+  summary: Gives queued events a bounded opportunity to drain, then asks the engine to exit.
+  signature: |
+    void FlushAndQuit();
+  parameters: []
+  outputs:
+    - type: void
+      description: This method does not return a value.
+  notes:
+    - This method does not guarantee network delivery. Exit is requested when the queue drains or the configured timeout is reached.
+    - Undelivered durable records can be sent during a later consented run.
