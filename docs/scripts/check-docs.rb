@@ -33,8 +33,9 @@ module UnrealHogDocs
       errors
     end
 
-    def check_rendered_site(site_root)
+    def check_rendered_site(site_root, baseurl = nil)
       site_root = Pathname(site_root).expand_path
+      baseurl = normalize_baseurl(baseurl)
       rendered_errors = []
       id_cache = {}
 
@@ -51,7 +52,7 @@ module UnrealHogDocs
           next if raw_target.match?(/\A(?:https?:|mailto:|tel:|javascript:|data:|\/\/)/i)
 
           uri = URI.parse(raw_target)
-          target = rendered_target(page, site_root, uri.path)
+          target = rendered_target(page, site_root, uri.path, baseurl)
           unless target&.file?
             rendered_errors << "#{site_relative(page, site_root)}: rendered link target does not exist: #{raw_target}"
             next
@@ -396,17 +397,34 @@ module UnrealHogDocs
       Pathname(path).relative_path_from(@repository_root).to_s
     end
 
-    def rendered_target(page, site_root, raw_path)
+    def rendered_target(page, site_root, raw_path, baseurl)
       decoded = URI.decode_www_form_component(raw_path.to_s)
-      target = if decoded.empty?
+      lookup_path = strip_baseurl(decoded, baseurl)
+      target = if lookup_path.empty?
                  page
-               elsif decoded.start_with?("/")
-                 site_root.join(decoded.delete_prefix("/"))
+               elsif lookup_path.start_with?("/")
+                 site_root.join(lookup_path.delete_prefix("/"))
                else
-                 page.dirname.join(decoded)
+                 page.dirname.join(lookup_path)
                end
-      target = target.join("index.html") if target.directory? || decoded.end_with?("/")
+      target = target.join("index.html") if target.directory? || lookup_path.end_with?("/")
       target.cleanpath
+    end
+
+    def normalize_baseurl(value)
+      baseurl = value.to_s.strip
+      return "" if baseurl.empty? || baseurl == "/"
+
+      baseurl = "/#{baseurl}" unless baseurl.start_with?("/")
+      baseurl.chomp("/")
+    end
+
+    def strip_baseurl(path, baseurl)
+      return path if baseurl.empty? || !path.start_with?("/")
+      return "/" if path == baseurl
+      return path.delete_prefix(baseurl) if path.start_with?("#{baseurl}/")
+
+      path
     end
 
     def site_relative(path, site_root)
