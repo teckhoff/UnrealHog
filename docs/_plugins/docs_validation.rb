@@ -12,7 +12,7 @@ Jekyll::Hooks.register :site, :after_init do |site|
 end
 
 Jekyll::Hooks.register :site, :post_write do |site|
-  failures = UnrealHogDocs::Check.new(site.source).check_rendered_site(site.dest)
+  failures = UnrealHogDocs::Check.new(site.source).check_rendered_site(site.dest, site.config["baseurl"])
   next if failures.empty?
 
   message = "UnrealHog rendered-site validation failed:\n" +
