@@ -1,0 +1,21 @@
+title: UnrealHog
+description: Unreal Engine PostHog SDK documentation
+unrealhog_version: 0.6.0
+theme: just-the-docs
+search_enabled: true
+heading_anchors: true
+color_scheme: light
+
+callouts:
+  note:
+    title: Note
+    color: yellow
+  warning:
+    title: Warning
+    color: red
+  method:
+    title: Method
+    color: purple
+  enum:
+    title: Enum
+    color: dark-green

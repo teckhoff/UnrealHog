@@ -1,0 +1,242 @@
+
+.global-language-toggle {
+  border-top: 1px solid #d9d9e3;
+  box-sizing: border-box;
+  margin: 1rem 0 0;
+  padding: 1rem 0.75rem 0;
+}
+
+.global-language-toggle-title {
+  color: #5c5962;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.2;
+  margin: 0 0 0.5rem;
+  text-transform: uppercase;
+}
+
+.global-language-toggle-options {
+  display: grid;
+  gap: 0.35rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.global-language-toggle-option {
+  background: #fff;
+  border: 1px solid #d9d9e3;
+  border-radius: 4px;
+  box-sizing: border-box;
+  color: #27262b;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1;
+  overflow-wrap: anywhere;
+  padding: 0.5rem 0.45rem;
+  text-align: center;
+}
+
+.global-language-toggle-option:focus-visible {
+  outline: 2px solid #7253ed;
+  outline-offset: 2px;
+}
+
+.global-language-toggle-option.is-active {
+  background: #27262b;
+  border-color: #27262b;
+  color: #fff;
+}
+
+.global-language-toggle-note {
+  color: #5c5962;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  margin: 0.65rem 0 0;
+}
+
+.global-language-toggle-note a {
+  color: #006f65;
+  font-weight: 600;
+}
+
+.language-toggle {
+  box-sizing: border-box;
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(2, minmax(0, max-content)) minmax(0, 1fr);
+  margin: 1.5rem 0;
+  max-width: 100%;
+  min-width: 0;
+  width: 100%;
+}
+
+.language-toggle > input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.language-toggle > label {
+  border: 1px solid #d9d9e3;
+  border-radius: 4px;
+  box-sizing: border-box;
+  color: #27262b;
+  cursor: pointer;
+  font-weight: 600;
+  justify-self: start;
+  line-height: 1;
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  padding: 0.55rem 0.8rem;
+}
+
+.language-toggle > input[type="radio"]:focus-visible + label {
+  outline: 2px solid #7253ed;
+  outline-offset: 2px;
+}
+
+.language-toggle > input[type="radio"]:checked + label {
+  background: #27262b;
+  border-color: #27262b;
+  color: #fff;
+}
+
+.language-toggle .tab-panels {
+  border-top: 1px solid #d9d9e3;
+  box-sizing: border-box;
+  grid-column: 1 / -1;
+  justify-self: stretch;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  padding-top: 1rem;
+  width: 100%;
+}
+
+.language-toggle .tab-panel {
+  box-sizing: border-box;
+  display: none;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  width: 100%;
+}
+
+.language-toggle > input[id$="-cpp"]:checked ~ .tab-panels .tab-panel-cpp,
+.language-toggle > input[id$="-blueprints"]:checked ~ .tab-panels .tab-panel-blueprints {
+  display: block;
+}
+
+.language-toggle .tab-panel > * {
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+.language-toggle .tab-panel p,
+.language-toggle .tab-panel li,
+.language-toggle .tab-panel blockquote {
+  overflow-wrap: anywhere;
+}
+
+.language-toggle .tab-panel pre {
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: pre-wrap;
+}
+
+.language-toggle .tab-panel code {
+  overflow-wrap: anywhere;
+  white-space: inherit;
+}
+
+.language-toggle .tab-panel img {
+  background: #111318;
+  border: 1px solid #d9d9e3;
+  border-radius: 4px;
+  box-sizing: border-box;
+  display: block;
+  height: auto;
+  max-width: 100%;
+  object-fit: contain;
+  width: auto;
+}
+
+.api-method,
+.api-enum {
+  box-sizing: border-box;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.api-method pre,
+.api-enum pre {
+  box-sizing: border-box;
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: pre-wrap;
+}
+
+.api-method pre code,
+.api-enum pre code {
+  display: block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.api-method table,
+.api-enum table {
+  box-sizing: border-box;
+  display: table;
+  max-width: 100%;
+  table-layout: fixed;
+  width: 100%;
+}
+
+.api-method th,
+.api-method td,
+.api-enum th,
+.api-enum td {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+.blueprint-copy {
+  align-items: center;
+  display: flex;
+  margin-top: 0.75rem;
+}
+
+.blueprint-copy-button {
+  background: #006f65;
+  border: 1px solid #006f65;
+  border-radius: 4px;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  line-height: 1;
+  padding: 0.55rem 0.8rem;
+}
+
+.blueprint-copy-button:focus-visible {
+  outline: 2px solid #7253ed;
+  outline-offset: 2px;
+}
+
+.blueprint-copy-button:hover {
+  background: #005c54;
+  border-color: #005c54;
+}
+
+.blueprint-copy-source {
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  width: 1px;
+}

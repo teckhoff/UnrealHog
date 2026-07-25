@@ -1,0 +1,86 @@
+<script>
+  (function() {
+    if (window.PostHogLanguagePreferenceInitialized) {
+      return;
+    }
+
+    window.PostHogLanguagePreferenceInitialized = true;
+
+    var storageKey = "unrealhog.languagePreference";
+    var defaultLanguage = "cpp";
+    var validLanguages = {
+      cpp: true,
+      blueprints: true
+    };
+
+    function normalizeLanguage(value) {
+      return validLanguages[value] ? value : defaultLanguage;
+    }
+
+    function readPreference() {
+      try {
+        return normalizeLanguage(window.localStorage.getItem(storageKey));
+      } catch (error) {
+        return defaultLanguage;
+      }
+    }
+
+    function writePreference(language) {
+      try {
+        window.localStorage.setItem(storageKey, language);
+      } catch (error) {
+      }
+    }
+
+    function setChecked(input, checked) {
+      if (input) {
+        input.checked = checked;
+      }
+    }
+
+    function syncGlobalControls(language) {
+      document.querySelectorAll("[data-language-preference-control]").forEach(function(control) {
+        var isActive = control.getAttribute("data-language-value") === language;
+        control.classList.toggle("is-active", isActive);
+        control.setAttribute("aria-pressed", isActive ? "true" : "false");
+      });
+    }
+
+    function syncInlineToggles(language) {
+      document.querySelectorAll(".language-toggle:not([data-samples-default='false'])").forEach(function(toggle) {
+        setChecked(toggle.querySelector('input[id$="-cpp"]'), language === "cpp");
+        setChecked(toggle.querySelector('input[id$="-blueprints"]'), language === "blueprints");
+      });
+    }
+
+    function applyDefaultLanguage(language, shouldPersist) {
+      var normalizedLanguage = normalizeLanguage(language);
+      syncGlobalControls(normalizedLanguage);
+      syncInlineToggles(normalizedLanguage);
+
+      if (shouldPersist) {
+        writePreference(normalizedLanguage);
+      }
+    }
+
+    function handlePreferenceClick(event) {
+      var control = event.target.closest("[data-language-preference-control]");
+      if (!control) {
+        return;
+      }
+
+      applyDefaultLanguage(control.getAttribute("data-language-value"), true);
+    }
+
+    function initializeLanguagePreference() {
+      applyDefaultLanguage(readPreference(), false);
+      document.addEventListener("click", handlePreferenceClick);
+    }
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", initializeLanguagePreference);
+    } else {
+      initializeLanguagePreference();
+    }
+  })();
+</script>
