@@ -1,5 +1,7 @@
 # UnrealHog
 
+**[Read the documentation](https://teckhoff.github.io/UnrealHog/)**
+
 > ## UnrealHog has no affiliation with PostHog
 >
 > UnrealHog is an independent, unofficial community project. It is not created, maintained, endorsed, or supported by PostHog, Inc. “PostHog” is used only to describe compatibility with the PostHog service.
@@ -15,9 +17,7 @@ UnrealHog was developed using [Zeroshot](https://github.com/the-open-engine/zero
 
 ## Documentation
 
-<!-- PUBLISHED_DOCUMENTATION_URL: Replace this comment with a link to the published documentation after the GitHub Pages action completes successfully. -->
-
-**Published documentation:** _Link will be added after the GitHub Pages deployment succeeds._
+**Published documentation:** [https://teckhoff.github.io/UnrealHog/]()
 
 The documentation source is available in [`docs/`](docs/index.md).
 
@@ -41,4 +41,4 @@ Feature flags and session replay are not implemented. Their settings are current
 
 UnrealHog is developed and tested for Unreal Engine 5.8. Prepackaged releases currently target Windows x64 and Linux; other targets can use the plugin from source or package it for a compatible engine and platform toolchain.
 
-See the [installation guide](docs/installation.md) and [quickstart](docs/quickstart.md) to add the plugin, configure a development PostHog project, grant test consent, and verify a first event.
+See the [installation guide](https://teckhoff.github.io/UnrealHog/installation.html) and [quickstart](https://teckhoff.github.io/UnrealHog/quickstart.html) to add the plugin, configure a development PostHog project, grant test consent, and verify a first event.
