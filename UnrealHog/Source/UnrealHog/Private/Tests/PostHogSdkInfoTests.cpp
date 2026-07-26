@@ -17,7 +17,7 @@ bool FPostHogSdkInfoUserAgentTest::RunTest(const FString& Parameters)
 
 	// Matches UnrealHog/UnrealHog.uplugin at this baseline.
 	TestEqual(TEXT("Library name matches plugin descriptor"), LibraryName, TEXT("UnrealHog"));
-	TestEqual(TEXT("Plugin version matches plugin descriptor"), PluginVersion, TEXT("0.5.0"));
+	TestEqual(TEXT("Plugin version matches plugin descriptor"), PluginVersion, TEXT("0.6.0"));
 
 	return true;
 }
