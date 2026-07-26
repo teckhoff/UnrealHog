@@ -422,20 +422,27 @@ bool FPostHogFeatureFlagHttpFailureClassificationTest::RunTest(const FString& Pa
 		{TEXT("connection error after HTTP 200"), EHttpFailureReason::ConnectionError, TOptional<int32>(200), true, true, 5.0f, EPostHogFeatureFlagFailureReason::ConnectionLost, false},
 		// CURLE_RECV_ERROR / CURLE_PARTIAL_FILE leave the backend's failure reason unmapped, so they
 		// arrive as Other after the peer had already sent part of its response.
-		{TEXT("connection reset mid-response with no status line"), EHttpFailureReason::Other, TOptional<int32>(0), true, true, 1.0f, EPostHogFeatureFlagFailureReason::ConnectionLost, true},
+		{TEXT("CURLE_PARTIAL_FILE mid-response with no status line"), EHttpFailureReason::Other, TOptional<int32>(0), true, true, 1.0f, EPostHogFeatureFlagFailureReason::ConnectionLost, true},
 		// The reference's retryable reset/EOF class also covers drops before the server said anything
 		// at all: CURLE_RECV_ERROR before the status line and CURLE_GOT_NOTHING (the peer closed the
 		// connection after accepting the request) both land in the backend's default branch with no
-		// response, and are told apart from a failure to connect by the request having been sent.
-		{TEXT("connection reset before any response"), EHttpFailureReason::Other, TOptional<int32>(), false, true, 1.0f, EPostHogFeatureFlagFailureReason::ConnectionLost, true},
-		{TEXT("peer closed without answering"), EHttpFailureReason::None, TOptional<int32>(), false, true, 1.0f, EPostHogFeatureFlagFailureReason::ConnectionLost, true},
-		// The reference refuses to retry a connection failure once a real status arrived.
+		// response object, no status, no header and no received byte. They are told apart from a failure
+		// to connect solely by the request body having reached the wire, which curl reports as final
+		// upload progress before the completion delegate runs (CurlHttp.cpp:1274).
+		{TEXT("CURLE_RECV_ERROR reset before any status, header, or body byte"), EHttpFailureReason::Other, TOptional<int32>(), false, true, 1.0f, EPostHogFeatureFlagFailureReason::ConnectionLost, true},
+		{TEXT("CURLE_GOT_NOTHING peer closed without answering"), EHttpFailureReason::None, TOptional<int32>(), false, true, 1.0f, EPostHogFeatureFlagFailureReason::ConnectionLost, true},
+		// The reference refuses to retry a connection failure once a real status arrived, which is also
+		// what keeps post-status HTTP/2 framing errors and local write errors terminal: curl records the
+		// status code for them, so the `statusCode != 0` guard rejects the retry.
 		{TEXT("connection dropped after HTTP 200"), EHttpFailureReason::Other, TOptional<int32>(200), true, true, 1.0f, EPostHogFeatureFlagFailureReason::ConnectionLost, false},
 		{TEXT("connection dropped after HTTP 500"), EHttpFailureReason::Other, TOptional<int32>(500), true, true, 1.0f, EPostHogFeatureFlagFailureReason::ConnectionLost, false},
+		{TEXT("CURLE_HTTP2_STREAM after the response started"), EHttpFailureReason::Other, TOptional<int32>(200), true, true, 2.0f, EPostHogFeatureFlagFailureReason::ConnectionLost, false},
+		{TEXT("CURLE_WRITE_ERROR while storing the body"), EHttpFailureReason::Other, TOptional<int32>(200), true, true, 2.0f, EPostHogFeatureFlagFailureReason::ConnectionLost, false},
 		// Everything else in the backend's default branch (certificate verification, HTTP/2 handshake
 		// errors, local write errors) failed before the exchange began — nothing sent, nothing
 		// answered — and stays terminal, whether or not the backend already created a response object.
 		{TEXT("certificate verification failure"), EHttpFailureReason::Other, TOptional<int32>(), false, false, 0.02f, EPostHogFeatureFlagFailureReason::Other, false},
+		{TEXT("CURLE_HTTP2 handshake failure before the request went out"), EHttpFailureReason::Other, TOptional<int32>(), false, false, 0.05f, EPostHogFeatureFlagFailureReason::Other, false},
 		{TEXT("Apple TLS or protocol failure with a pre-created empty response"), EHttpFailureReason::Other, TOptional<int32>(0), false, false, 0.02f, EPostHogFeatureFlagFailureReason::Other, false},
 		{TEXT("unreported failure before any response"), EHttpFailureReason::None, TOptional<int32>(), false, false, 0.02f, EPostHogFeatureFlagFailureReason::Other, false},
 		{TEXT("engine cancellation"), EHttpFailureReason::Cancelled, TOptional<int32>(), false, true, 1.0f, EPostHogFeatureFlagFailureReason::Cancelled, false},

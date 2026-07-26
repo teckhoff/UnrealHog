@@ -95,9 +95,14 @@ Tests added by this row (all passing, none contacting PostHog):
   unknown failure before the exchange began stays terminal `Other`. The SDK's own 10-second timeout
   (`TimedOut`) is retryable `Timeout`. The status the failed response did carry is preserved, so —
   exactly like the reference's `statusCode != 0` guard — a drop after a real HTTP status is terminal.
+  That guard is also what keeps the remaining `Other` failures that do reach the wire terminal: curl
+  records the response code as soon as a status line arrives (`FCurlHttpRequest::MarkAsCompleted`), so
+  `CURLE_HTTP2_STREAM` and `CURLE_WRITE_ERROR` during a response never retry, and an HTTP/2 handshake
+  failure before the request goes out is terminal `Other`.
   `UnrealHog.FeatureFlags.Transport.HttpFailureClassification` covers the mapping end to end through
-  a fake `IHttpRequest`, including the connect-timeout, nonzero-status, pre-response reset,
-  peer-closed-without-answering, certificate-failure, and pre-created-empty-response (Apple) cases.
+  a fake `IHttpRequest`, including the connect-timeout, nonzero-status, `CURLE_RECV_ERROR` reset before
+  any status, header or body byte, `CURLE_GOT_NOTHING`, post-status HTTP/2 and write errors,
+  certificate-failure, and pre-created-empty-response (Apple) cases.
 - Cancellation is a barrier in both directions: a completion is claimed and delivered under the
   operation's delivery lock, and attempt creation and start are held under the same lock, so
   `Cancel()` / `CancelAll()` / transport destruction cannot return while a callback is still running

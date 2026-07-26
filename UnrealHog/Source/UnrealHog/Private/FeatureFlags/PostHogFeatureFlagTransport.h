@@ -29,8 +29,9 @@
  * status-line, header, and receive-progress callbacks, never from the existence of a response object,
  * which the Apple backend creates before any network I/O), whether request bytes reached the wire
  * (upload progress, which only happens once the connection and any TLS handshake succeeded, so a drop
- * before the server answered is a reset or unexpected EOF rather than a failure to connect), and how
- * long the attempt ran relative to the engine's connection timeout.
+ * before the server answered is a reset or unexpected EOF rather than a failure to connect; curl
+ * reports the final upload progress from FinishRequest, CurlHttp.cpp:1274, before the completion
+ * delegate runs), and how long the attempt ran relative to the engine's connection timeout.
  * The SDK's own 10-second timeout surfaces separately as EHttpFailureReason::TimedOut. Every
  * enumerator below is produced by the live HTTP path; none exists only for fakes.
  */
