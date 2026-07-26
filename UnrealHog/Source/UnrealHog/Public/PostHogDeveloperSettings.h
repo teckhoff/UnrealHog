@@ -180,6 +180,11 @@ public:
 	UFUNCTION()
 	bool ShouldPreloadFeatureFlags() const { return bPreloadFeatureFlags; }
 
+	// Retries attempted after the initial feature-flag request, matching Unity's
+	// FeatureFlagRequestMaxRetries. Zero means a single attempt.
+	UFUNCTION()
+	int32 GetFeatureFlagRequestMaxRetries() const { return FeatureFlagRequestMaxRetries; }
+
 	UFUNCTION()
 	bool IsSessionReplayEnabled() const { return bSessionReplay; }
 

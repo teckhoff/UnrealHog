@@ -4,6 +4,7 @@
 #include "Events/PostHogBeforeSend.h"
 #include "Events/PostHogEventQueue.h"
 #include "Events/PostHogExceptionInput.h"
+#include "FeatureFlags/PostHogFeatureFlagTransport.h"
 #include "Lifecycle/PostHogApplicationLifecycleHandler.h"
 #include "PostHogDeveloperSettings.h"
 #include "Templates/Function.h"
@@ -53,6 +54,9 @@ class FPostHogConsentController
 public:
 	using FStorageProviderFactory = TFunction<TUniquePtr<IPostHogStorageProvider>()>;
 	using FTransportFactory = TFunction<TUniquePtr<IPostHogBatchTransport>(const FString& ResolvedHost)>;
+	// Feature-flag transport seam. Defaulted to the real HTTP transport when not injected, so tests
+	// can substitute a fake without reaching FHttpModule.
+	using FFeatureFlagTransportFactory = TFunction<TUniquePtr<IPostHogFeatureFlagTransport>(const FString& ResolvedHost, int32 MaxRetries)>;
 	using FReachabilityProviderFactory = TFunction<TUniquePtr<IPostHogReachabilityProvider>()>;
 	using FUuidGenerator = TFunction<FString()>;
 	using FLifecycleMetadataProvider = FPostHogApplicationLifecycleHandler::FMetadataProvider;
@@ -61,7 +65,8 @@ public:
 		FTransportFactory InTransportFactory,
 		FUuidGenerator InUuidGenerator,
 		FLifecycleMetadataProvider InLifecycleMetadataProvider = nullptr,
-		FReachabilityProviderFactory InReachabilityProviderFactory = nullptr);
+		FReachabilityProviderFactory InReachabilityProviderFactory = nullptr,
+		FFeatureFlagTransportFactory InFeatureFlagTransportFactory = nullptr);
 	~FPostHogConsentController();
 
 	// Loads persisted opt-in state (falling back to the settings default) and, if opted in,
@@ -162,8 +167,22 @@ public:
 	FPostHogEventQueue* GetEventQueue() const { return EventQueue.Get(); }
 	int32 GetQueuedEventCount() const;
 
+	// Consent-gated feature-flag fetch. Creates no request object, payload, or transport traffic
+	// unless collection is currently permitted: returns null (and touches nothing) when not opted
+	// in, when shutting down, or when no feature-flag transport exists. The request is built from
+	// the effective distinct id and current group membership; the anonymous id is sent only when
+	// anonymous ids are not reused, matching the reference FeatureFlagManager. Evaluation
+	// properties (person/group) arrive with SDKP-010 and are absent here, so they are omitted from
+	// the request body rather than sent empty. A null handle is also returned when the fetch already
+	// completed synchronously (serialization or start failure), so it never indicates an
+	// unreported outcome.
+	TSharedPtr<IPostHogFeatureFlagFetchHandle> FetchFeatureFlags(IPostHogFeatureFlagTransport::FOnFetchComplete OnComplete);
+
+	IPostHogFeatureFlagTransport* GetFeatureFlagTransport() const { return FeatureFlagTransport.Get(); }
+
 	int32 GetStorageProviderCreationCount() const { return StorageProviderCreationCount; }
 	int32 GetTransportCreationCount() const { return TransportCreationCount; }
+	int32 GetFeatureFlagTransportCreationCount() const { return FeatureFlagTransportCreationCount; }
 
 	// Number of times EnableCollection has loaded or created the identity manager (once per
 	// successful opt-in transition), not the number of distinct anonymous ids generated: the
@@ -204,6 +223,7 @@ private:
 
 	FStorageProviderFactory StorageProviderFactory;
 	FTransportFactory TransportFactory;
+	FFeatureFlagTransportFactory FeatureFlagTransportFactory;
 	FReachabilityProviderFactory ReachabilityProviderFactory;
 	FUuidGenerator UuidGenerator;
 	FLifecycleMetadataProvider LifecycleMetadataProvider;
@@ -215,6 +235,7 @@ private:
 
 	TUniquePtr<IPostHogStorageProvider> StorageProvider;
 	TUniquePtr<IPostHogBatchTransport> Transport;
+	TUniquePtr<IPostHogFeatureFlagTransport> FeatureFlagTransport;
 	TUniquePtr<IPostHogReachabilityProvider> ReachabilityProvider;
 	TUniquePtr<FPostHogEventQueue> EventQueue;
 	TUniquePtr<FPostHogIdentityManager> IdentityManager;
@@ -222,8 +243,14 @@ private:
 	TUniquePtr<FPostHogSessionManager> SessionManager;
 	TUniquePtr<FPostHogApplicationLifecycleHandler> LifecycleHandler;
 
+	// Snapshots taken at EnableCollection time so a feature-flag fetch never re-reads settings that
+	// may have changed after consent was granted.
+	FString FeatureFlagApiKey;
+	bool bReuseAnonymousId = false;
+
 	int32 StorageProviderCreationCount = 0;
 	int32 TransportCreationCount = 0;
+	int32 FeatureFlagTransportCreationCount = 0;
 	int32 IdentityManagerLoadCount = 0;
 
 	bool bIsShuttingDown = false;

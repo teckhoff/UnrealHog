@@ -62,7 +62,7 @@ public:
 	virtual const FString& GetURL() const override { return Url; }
 	virtual const FString& GetEffectiveURL() const override { return Url; }
 	virtual EHttpRequestStatus::Type GetStatus() const override { return Status; }
-	virtual EHttpFailureReason GetFailureReason() const override { return EHttpFailureReason::None; }
+	virtual EHttpFailureReason GetFailureReason() const override { return FailureReason; }
 	virtual FString GetURLParameter(const FString&) const override { return FString(); }
 	virtual FString GetHeader(const FString& HeaderName) const override
 	{
@@ -142,7 +142,7 @@ public:
 
 	virtual const FHttpResponsePtr GetResponse() const override { return LastResponse; }
 	virtual void Tick(float) override {}
-	virtual float GetElapsedTime() const override { return 0.0f; }
+	virtual float GetElapsedTime() const override { return ElapsedSeconds; }
 	virtual void SetDelegateThreadPolicy(EHttpRequestDelegateThreadPolicy InThreadPolicy) override { ThreadPolicy = InThreadPolicy; }
 	virtual EHttpRequestDelegateThreadPolicy GetDelegateThreadPolicy() const override { return ThreadPolicy; }
 	virtual void ProcessRequestUntilComplete() override {}
@@ -165,12 +165,61 @@ public:
 		CompleteDelegate.ExecuteIfBound(AsShared(), LastResponse, bSuccess);
 	}
 
+	/**
+	 * Reports received bytes exactly as a platform backend does once the peer starts answering, so
+	 * tests can distinguish "the server began responding" from "a response object exists", which the
+	 * Apple backend creates before any network I/O.
+	 */
+	void SimulateReceivedBytes(uint64 BytesReceived)
+	{
+		ProgressDelegate.ExecuteIfBound(AsShared(), 0, BytesReceived);
+	}
+
+	/**
+	 * Reports sent bytes exactly as a platform backend does once request bytes reach the wire, which
+	 * only happens after the connection and any TLS handshake succeeded.
+	 */
+	void SimulateSentBytes(uint64 BytesSent)
+	{
+		ProgressDelegate.ExecuteIfBound(AsShared(), BytesSent, 0);
+	}
+
+	/** Reports a received status line, as the engine does when the peer's response headers arrive. */
+	void SimulateStatusCodeReceived(int32 StatusCode)
+	{
+		StatusCodeReceivedDelegate.ExecuteIfBound(AsShared(), StatusCode);
+	}
+
+	/**
+	 * Delivers a transport-level failure exactly as the engine does: no success flag, the platform's
+	 * coarse EHttpFailureReason, either no response at all (nothing ever arrived) or a partial
+	 * response carrying the status the server had already sent before the connection dropped, and the
+	 * time the attempt ran before failing.
+	 *
+	 * A response object alone says nothing about whether the server answered; call
+	 * SimulateReceivedBytes/SimulateStatusCodeReceived first to model a peer that actually did.
+	 */
+	void SimulateFailure(EHttpFailureReason InFailureReason,
+		TOptional<int32> PartialResponseStatusCode = TOptional<int32>(),
+		float InElapsedSeconds = 0.0f)
+	{
+		Status = EHttpRequestStatus::Failed;
+		FailureReason = InFailureReason;
+		ElapsedSeconds = InElapsedSeconds;
+		LastResponse = PartialResponseStatusCode.IsSet()
+			? MakeShared<FPostHogFakeHttpResponse, ESPMode::ThreadSafe>(PartialResponseStatusCode.GetValue(), FString())
+			: FHttpResponsePtr();
+		CompleteDelegate.ExecuteIfBound(AsShared(), LastResponse, false);
+	}
+
 	FString Verb;
 	FString Url;
+	EHttpFailureReason FailureReason = EHttpFailureReason::None;
 	TMap<FString, FString> Headers;
 	FString ContentString;
 	TArray<uint8> ContentBytes;
 	TOptional<float> TimeoutSecs;
+	float ElapsedSeconds = 0.0f;
 	bool bCancelled = false;
 	bool bProcessRequestCalled = false;
 	bool bNextStartResult = true;

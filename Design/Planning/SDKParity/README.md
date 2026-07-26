@@ -62,7 +62,7 @@ SDKP-022 is conditional and independent.
 | [SDKP-004](SDKP-004-unavailable-capability-settings.md) | Inert settings cannot imply working features | None | ✅ |
 | [SDKP-005](SDKP-005-exception-person-url.md) | Exception events include `$exception_personURL` | None | 💀 |
 | [SDKP-006](SDKP-006-feature-flag-response-models.md) | Lossless v2 flag response models | None | ✅ |
-| [SDKP-007](SDKP-007-feature-flag-transport.md) | Mockable consent-gated `/flags/?v=2` transport | SDKP-002, SDKP-006 | ❌ |
+| [SDKP-007](SDKP-007-feature-flag-transport.md) | Mockable consent-gated `/flags/?v=2` transport | SDKP-002, SDKP-006 | ✅ |
 | [SDKP-008](SDKP-008-feature-flag-cache.md) | Consent-safe memory and disk flag cache | SDKP-006, EP-002 | ❌ |
 | [SDKP-009](SDKP-009-feature-flag-public-api.md) | Blueprint/C++ reads, reload, payloads, and callback | SDKP-007, SDKP-008 | ❌ |
 | [SDKP-010](SDKP-010-feature-flag-evaluation-properties.md) | Persistent person/group evaluation properties | SDKP-007, SDKP-008, SDKP-009 | ❌ |
