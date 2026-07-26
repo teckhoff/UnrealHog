@@ -183,6 +183,11 @@ public:
 	UFUNCTION()
 	bool IsSessionReplayEnabled() const { return bSessionReplay; }
 
+	// Returns the serialized replay configuration verbatim. Callers must run it through
+	// PostHogSessionReplayConfigValidation before deriving any runtime behavior from it:
+	// editor clamps do not apply to values loaded from config files or set through reflection.
+	const FPostHogSessionReplayConfig& GetSessionReplayConfig() const { return SessionReplayConfig; }
+
 	UFUNCTION()
 	bool ShouldFlushOnQuit() const { return bFlushOnQuit; }
 

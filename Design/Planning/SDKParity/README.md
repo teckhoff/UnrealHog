@@ -68,7 +68,7 @@ SDKP-022 is conditional and independent.
 | [SDKP-010](SDKP-010-feature-flag-evaluation-properties.md) | Persistent person/group evaluation properties | SDKP-007, SDKP-008, SDKP-009 | ❌ |
 | [SDKP-011](SDKP-011-feature-flag-identity-lifecycle.md) | Consent, identity, group, reset, and preload integration | SDKP-009, SDKP-010, EP-007, EP-008, EP-011 | ❌ |
 | [SDKP-012](SDKP-012-feature-flag-acceptance-suite.md) | Isolated end-to-end feature-flag parity proof | SDKP-006–SDKP-011, EP-017 | ❌ |
-| [SDKP-013](SDKP-013-session-replay-models-and-config.md) | Validated replay settings and rrweb-style models | None | ⏳ |
+| [SDKP-013](SDKP-013-session-replay-models-and-config.md) | Validated replay settings and rrweb-style models | None | ✅ |
 | [SDKP-014](SDKP-014-session-replay-transport-queue.md) | Bounded `/s/` queue with mockable delivery | SDKP-002, SDKP-013 | ❌ |
 | [SDKP-015](SDKP-015-session-replay-screenshot-input.md) | Throttled screenshots and pointer input | SDKP-013 | ❌ |
 | [SDKP-016](SDKP-016-session-replay-logs-network.md) | Bounded console and network telemetry | SDKP-013 | ❌ |

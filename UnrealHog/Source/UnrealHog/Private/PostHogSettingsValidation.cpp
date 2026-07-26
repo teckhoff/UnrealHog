@@ -12,6 +12,12 @@ namespace
 
 	bool bLoggedFeatureFlagPreloadUnavailable = false;
 	bool bLoggedSessionReplayUnavailable = false;
+	bool bLoggedSessionReplayConfigInvalid = false;
+
+	FString MakeSessionReplayConfigInvalidDiagnostic(const FString& FailureReason)
+	{
+		return FString::Printf(TEXT("PostHog session replay is disabled because its configuration is invalid: %s Fix the Session Replay Config values in Project Settings > Plugins > PostHog, or disable Session Replay."), *FailureReason);
+	}
 
 	void PopulateUnavailableCapabilityDiagnostics(const UPostHogDeveloperSettings& Settings, FPostHogSettingsValidationResult& Result)
 	{
@@ -21,11 +27,28 @@ namespace
 			Result.UnavailableCapabilityDiagnostics.Add(FeatureFlagPreloadUnavailableDiagnostic);
 		}
 
-		if (Settings.IsSessionReplayEnabled())
+		if (!Settings.IsSessionReplayEnabled())
 		{
-			Result.bSessionReplayUnavailable = true;
-			Result.UnavailableCapabilityDiagnostics.Add(SessionReplayUnavailableDiagnostic);
+			return;
 		}
+
+		// Editor clamps do not apply to values loaded from config or written through reflection, so
+		// the serialized replay configuration is validated here, before anything could construct a
+		// capture, queue, or HTTP object from it.
+		FString ReplayFailureReason;
+		if (!PostHogSessionReplayConfigValidation::TryValidate(Settings.GetSessionReplayConfig(), Result.ValidatedSessionReplayConfig, ReplayFailureReason))
+		{
+			Result.ValidatedSessionReplayConfig = FPostHogValidatedSessionReplayConfig();
+			Result.bHasValidatedSessionReplayConfig = false;
+			Result.bSessionReplayConfigInvalid = true;
+			Result.SessionReplayConfigFailureReason = ReplayFailureReason;
+			Result.UnavailableCapabilityDiagnostics.Add(MakeSessionReplayConfigInvalidDiagnostic(ReplayFailureReason));
+			return;
+		}
+
+		Result.bHasValidatedSessionReplayConfig = true;
+		Result.bSessionReplayUnavailable = true;
+		Result.UnavailableCapabilityDiagnostics.Add(SessionReplayUnavailableDiagnostic);
 	}
 }
 
@@ -96,6 +119,12 @@ void PostHogSettingsValidation::LogUnavailableCapabilityDiagnosticsOnce(const FP
 		UE_LOG(LogUnrealHog, Warning, TEXT("%s"), SessionReplayUnavailableDiagnostic);
 		bLoggedSessionReplayUnavailable = true;
 	}
+
+	if (Result.bSessionReplayConfigInvalid && !bLoggedSessionReplayConfigInvalid)
+	{
+		UE_LOG(LogUnrealHog, Warning, TEXT("%s"), *MakeSessionReplayConfigInvalidDiagnostic(Result.SessionReplayConfigFailureReason));
+		bLoggedSessionReplayConfigInvalid = true;
+	}
 }
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -103,5 +132,6 @@ void PostHogSettingsValidation::ResetUnavailableCapabilityDiagnosticLogStateForT
 {
 	bLoggedFeatureFlagPreloadUnavailable = false;
 	bLoggedSessionReplayUnavailable = false;
+	bLoggedSessionReplayConfigInvalid = false;
 }
 #endif

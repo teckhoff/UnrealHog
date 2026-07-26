@@ -1106,4 +1106,43 @@ bool FPostHogConsentControllerUnavailableCapabilityDiagnosticsEmitOnceTest::RunT
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentControllerInvalidReplayConfigDoesNotBlockAnalyticsTest, "UnrealHog.Consent.ConsentController.InvalidReplayConfigDoesNotBlockAnalytics", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogConsentControllerInvalidReplayConfigDoesNotBlockAnalyticsTest::RunTest(const FString& Parameters)
+{
+	PostHogSettingsValidation::ResetUnavailableCapabilityDiagnosticLogStateForTests();
+
+	// One diagnostic for the whole process, even across an opt-out/opt-in cycle. The generic
+	// SDKP-018 notice must not also appear, because replay is off for a more specific reason.
+	AddExpectedError(TEXT("session replay is disabled because its configuration is invalid"), EAutomationExpectedErrorFlags::Contains, 1, false);
+
+	FScopedConsentTestStorageDirectory Fixture;
+	FPostHogFakeBatchTransport* LastTransport = nullptr;
+	int32 UuidCounter = 0;
+
+	FPostHogConsentController Controller(MakeStorageFactory(Fixture.GetRootPath()), MakeTransportFactory(LastTransport), MakeUuidGenerator(UuidCounter));
+	UPostHogDeveloperSettings* Settings = MakeTransientSettings(true, true, false);
+
+	FPostHogSessionReplayConfig InvalidReplayConfig;
+	InvalidReplayConfig.ThrottleDelaySeconds = 0.0f;
+	UnrealHogTests::SetPropertyValue<bool>(Settings, TEXT("bSessionReplay"), true);
+	UnrealHogTests::SetPropertyValue<FPostHogSessionReplayConfig>(Settings, TEXT("SessionReplayConfig"), InvalidReplayConfig);
+
+	Controller.Initialize(*Settings);
+
+	TestTrue(TEXT("Opt-in succeeds despite invalid replay configuration"), Controller.SetOptIn(true, *Settings));
+	TestTrue(TEXT("Core analytics is opted in"), Controller.IsOptedIn());
+	TestEqual(TEXT("Core analytics still creates its batch transport"), Controller.GetTransportCreationCount(), 1);
+	TestEqual(TEXT("Core analytics still loads identity"), Controller.GetIdentityManagerLoadCount(), 1);
+
+	TestTrue(TEXT("Core analytics still captures events"), Controller.Capture(MakeConsentTestEvent(TEXT("replay-config-invalid"))));
+	TestEqual(TEXT("Captured event is queued"), Controller.GetQueuedEventCount(), 1);
+
+	TestTrue(TEXT("Opt-out succeeds"), Controller.SetOptIn(false, *Settings));
+	TestTrue(TEXT("Re-opt-in succeeds without repeating the replay diagnostic"), Controller.SetOptIn(true, *Settings));
+	TestEqual(TEXT("Re-opt-in creates the expected second transport"), Controller.GetTransportCreationCount(), 2);
+
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS
