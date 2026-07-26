@@ -24,5 +24,9 @@ ELogVerbosity::Type PostHogLogger::ToVerbosity(EPostHogLogLevel Level)
 
 void PostHogLogger::ApplyConfiguredLevel(EPostHogLogLevel Level)
 {
+#if !NO_LOGGING
 	LogUnrealHog.SetVerbosity(ToVerbosity(Level));
+#else
+	static_cast<void>(Level);
+#endif
 }
