@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "PostHogDeveloperSettings.h"
+#include "SessionReplay/PostHogSessionReplayConfigValidation.h"
 
 class UPostHogDeveloperSettings;
 
@@ -19,6 +20,18 @@ struct FPostHogSettingsValidationResult
 	EPostHogPersonProfiles PersonProfiles = EPostHogPersonProfiles::IdentifiedOnly;
 	bool bFeatureFlagPreloadUnavailable = false;
 	bool bSessionReplayUnavailable = false;
+
+	// True when session replay is enabled but its serialized configuration is out of range. Replay
+	// stays off and reports its own actionable diagnostic instead of the generic SDKP-018 notice;
+	// core analytics is unaffected, so bIsValid can still be true.
+	bool bSessionReplayConfigInvalid = false;
+	FString SessionReplayConfigFailureReason;
+
+	// Only set when replay is enabled and its configuration passed runtime validation. Absent
+	// configuration is the signal that no replay collaborator may be constructed.
+	bool bHasValidatedSessionReplayConfig = false;
+	FPostHogValidatedSessionReplayConfig ValidatedSessionReplayConfig;
+
 	TArray<FString> UnavailableCapabilityDiagnostics;
 };
 

@@ -2,7 +2,7 @@
 
 ## Status and dependencies
 
-- **State:** Ready
+- **State:** Completed
 - **Blocked by:** None
 - **Blocks:** SDKP-014 through SDKP-018
 - **Parity row:** Replay settings and rrweb-compatible snapshot data
@@ -38,3 +38,24 @@ Define stable private replay-event models and reject unusable replay configurati
 - `Design/Reference/posthog-unity/com.posthog.unity/Runtime/SessionReplay/PostHogSessionReplayConfig.cs`
 - `Design/Reference/posthog-unity/com.posthog.unity/Runtime/SessionReplay/Models/RRWebModels.cs`
 - `Design/Reference/posthog-unity/com.posthog.unity/Runtime/SessionReplay/ReplayQueue.cs` (`SnapshotEvent`)
+
+## Implementation notes
+
+- `UPostHogDeveloperSettings::GetSessionReplayConfig` exposes the serialized struct verbatim; the editor clamps stay advisory and `PostHogSessionReplayConfigValidation::TryValidate` is the runtime boundary that decides whether replay may run.
+- Validation rejects non-finite floats and out-of-enum `MinLogLevel` values in addition to the Unity range rules, because config files and reflection can deliver values the editor never produces.
+- `PostHogSettingsValidation` validates replay only when it is enabled. Invalid replay leaves core analytics valid, exposes no `FPostHogValidatedSessionReplayConfig`, and replaces the generic SDKP-018 notice with one process-wide actionable diagnostic.
+- `PostHogSessionReplayModels` owns every rrweb field shape, the single `FDateTime` to Unix-millisecond converter, and the single condensed JSON serializer, so later capture sources cannot invent their own.
+- The `$snapshot` envelope factory takes injectable clock and UUID sources; the production overload uses UTC now plus a UUIDv7. `$window_id` always mirrors `$session_id`.
+- No capture source, replay queue, or `/s/` transport is created by this change.
+
+## Zeroshot validation
+
+- Command: `Scripts/run-windows-tests.sh`
+- Environment: WSL2 using repository `CI/UnrealEngine`, `CI/HostProject`, and `CI/Reports` links.
+- Result:
+
+```text
+BUILD RESULT: PASS
+AUTOMATION RESULT: 278 passed, 0 passed-with-warnings, 0 failed, 0 not run
+AUTOMATION RESULT: PASS
+```
