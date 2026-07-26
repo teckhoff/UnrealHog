@@ -42,7 +42,7 @@ Check the [latest UnrealHog release](https://github.com/teckhoff/UnrealHog/relea
 - [Getting Started](getting-started.html): installation, quickstart, configuration, subsystem access, and consent.
 - [Analytics](analytics.html): events, identity, super properties, groups, and lifecycle capture.
 - [Reliability and Diagnostics](reliability-and-diagnostics.html): collected data, local storage, delivery, troubleshooting, and error tracking.
-- [Advanced](advanced.html): before-send filtering, plugin packaging, and design considerations.
-- [Reference](reference.html): public APIs and settings.
+- [Advanced](advanced.html): before-send filtering and plugin packaging.
+- [Reference](reference.html): public APIs, settings, and design considerations.
 
 {% include page-footer.html title="Getting Started" url="/getting-started.html" %}
