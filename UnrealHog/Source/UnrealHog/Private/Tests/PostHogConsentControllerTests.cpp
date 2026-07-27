@@ -17,6 +17,7 @@
 #include "SDK/PostHogSdkInfo.h"
 #include "Storage/PostHogFileStorageProvider.h"
 #include "Tests/PostHogFakeBatchTransport.h"
+#include "Tests/PostHogFakeFeatureFlagTransport.h"
 #include "Tests/PostHogTestPropertyHelpers.h"
 #include "UObject/Package.h"
 
@@ -89,6 +90,24 @@ namespace
 		return [&OutLastTransport](const FString&) -> TUniquePtr<IPostHogBatchTransport>
 		{
 			TUniquePtr<FPostHogFakeBatchTransport> Transport = MakeUnique<FPostHogFakeBatchTransport>();
+			OutLastTransport = Transport.Get();
+			return Transport;
+		};
+	}
+
+	// Captures the most recently created fake feature-flag transport, and how many were created, so
+	// tests can prove none exists before consent.
+	FPostHogConsentController::FFeatureFlagTransportFactory MakeFeatureFlagTransportFactory(FPostHogFakeFeatureFlagTransport*& OutLastTransport,
+		int32& OutCreationCount,
+		int32& OutLastMaxRetries,
+		int32& OutCancelAllCount)
+	{
+		return [&OutLastTransport, &OutCreationCount, &OutLastMaxRetries, &OutCancelAllCount](const FString&, int32 MaxRetries) -> TUniquePtr<IPostHogFeatureFlagTransport>
+		{
+			++OutCreationCount;
+			OutLastMaxRetries = MaxRetries;
+			TUniquePtr<FPostHogFakeFeatureFlagTransport> Transport = MakeUnique<FPostHogFakeFeatureFlagTransport>();
+			Transport->ExternalCancelAllCount = &OutCancelAllCount;
 			OutLastTransport = Transport.Get();
 			return Transport;
 		};
@@ -1102,6 +1121,85 @@ bool FPostHogConsentControllerUnavailableCapabilityDiagnosticsEmitOnceTest::RunT
 	TestTrue(TEXT("Re-opt-in succeeds without repeated unavailable warnings"), Controller.SetOptIn(true, *Settings));
 	TestTrue(TEXT("Collection is opted in again"), Controller.IsOptedIn());
 	TestEqual(TEXT("Re-opt-in creates the expected second transport"), Controller.GetTransportCreationCount(), 2);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPostHogConsentFeatureFlagTransportGateTest, "UnrealHog.Consent.FeatureFlagTransportGate", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FPostHogConsentFeatureFlagTransportGateTest::RunTest(const FString& Parameters)
+{
+	FScopedConsentTestStorageDirectory Fixture;
+	FPostHogFakeBatchTransport* LastBatchTransport = nullptr;
+	FPostHogFakeFeatureFlagTransport* LastFlagTransport = nullptr;
+	int32 FlagTransportCreationCount = 0;
+	int32 LastMaxRetries = -1;
+	int32 CancelAllCount = 0;
+	int32 UuidCounter = 0;
+
+	FPostHogConsentController Controller(MakeStorageFactory(Fixture.GetRootPath()),
+		MakeTransportFactory(LastBatchTransport),
+		MakeUuidGenerator(UuidCounter),
+		nullptr,
+		nullptr,
+		MakeFeatureFlagTransportFactory(LastFlagTransport, FlagTransportCreationCount, LastMaxRetries, CancelAllCount));
+
+	UPostHogDeveloperSettings* Settings = MakeTransientSettings(true, true, false);
+	UnrealHogTests::SetPropertyValue<int32>(Settings, TEXT("FeatureFlagRequestMaxRetries"), 4);
+
+	Controller.Initialize(*Settings);
+
+	// Before consent: no transport, no request object, no fetch.
+	int32 CompletionCount = 0;
+	const auto CountingCallback = [&CompletionCount](const FPostHogFeatureFlagFetchResult&) { ++CompletionCount; };
+
+	TestFalse(TEXT("Opted out after default-opt-out initialize"), Controller.IsOptedIn());
+	TestFalse(TEXT("Fetch before consent returns no handle"), Controller.FetchFeatureFlags(CountingCallback).IsValid());
+	TestEqual(TEXT("No feature-flag transport created before consent"), FlagTransportCreationCount, 0);
+	TestEqual(TEXT("Controller reports no feature-flag transport"), Controller.GetFeatureFlagTransportCreationCount(), 0);
+	TestNull(TEXT("No feature-flag transport exists before consent"), Controller.GetFeatureFlagTransport());
+	TestEqual(TEXT("No completion delivered before consent"), CompletionCount, 0);
+
+	// After consent: exactly one transport, configured with the settings' retry count.
+	TestTrue(TEXT("Opt-in succeeds"), Controller.SetOptIn(true, *Settings));
+	TestEqual(TEXT("Opt-in creates exactly one feature-flag transport"), FlagTransportCreationCount, 1);
+	TestEqual(TEXT("Controller counts the feature-flag transport"), Controller.GetFeatureFlagTransportCreationCount(), 1);
+	TestEqual(TEXT("Configured retry count is passed to the transport"), LastMaxRetries, 4);
+	TestEqual(TEXT("No request built by enabling collection alone"), LastFlagTransport->Requests.Num(), 0);
+
+	Controller.Group(TEXT("company"), TEXT("acme"), nullptr);
+	Controller.Identify(TEXT("user-42"), nullptr, nullptr);
+
+	TestTrue(TEXT("Fetch after consent returns a handle"), Controller.FetchFeatureFlags(CountingCallback).IsValid());
+	TestEqual(TEXT("Exactly one request built"), LastFlagTransport->Requests.Num(), 1);
+
+	const FPostHogFeatureFlagRequest& Request = LastFlagTransport->Requests[0];
+	TestEqual(TEXT("Request carries the configured API key"), Request.ApiKey, FString(TEXT("phc_valid_key")));
+	TestEqual(TEXT("Request carries the effective distinct id"), Request.DistinctId, FString(TEXT("user-42")));
+	TestFalse(TEXT("Anonymous id is sent when anonymous ids are not reused"), Request.AnonymousId.IsEmpty());
+	TestEqual(TEXT("Request carries current group membership"), Request.Groups.Num(), 1);
+	TestEqual(TEXT("Request carries the group key"), Request.Groups.FindRef(TEXT("company")), FString(TEXT("acme")));
+	TestEqual(TEXT("Evaluation properties are omitted until SDKP-010"), Request.PersonProperties.Num(), 0);
+	TestEqual(TEXT("Group properties are omitted until SDKP-010"), Request.GroupProperties.Num(), 0);
+
+	// Opt-out cancels in-flight fetches before releasing identity and storage, and re-gates fetches.
+	TestTrue(TEXT("Opt-out succeeds"), Controller.SetOptIn(false, *Settings));
+	TestTrue(TEXT("Opt-out cancelled in-flight feature-flag fetches"), CancelAllCount >= 1);
+	TestFalse(TEXT("Fetch after opt-out returns no handle"), Controller.FetchFeatureFlags(CountingCallback).IsValid());
+	TestNull(TEXT("No feature-flag transport exists after opt-out"), Controller.GetFeatureFlagTransport());
+	TestEqual(TEXT("No fetch completion ever delivered"), CompletionCount, 0);
+	TestEqual(TEXT("Opt-out creates no additional transport"), FlagTransportCreationCount, 1);
+
+	// Shutdown re-gates fetches even while opted in.
+	TestTrue(TEXT("Re-opt-in succeeds"), Controller.SetOptIn(true, *Settings));
+	TestEqual(TEXT("Re-opt-in creates a second transport"), FlagTransportCreationCount, 2);
+
+	const int32 CancelAllCountBeforeShutdown = CancelAllCount;
+	Controller.Shutdown();
+	TestTrue(TEXT("Shutdown cancelled in-flight feature-flag fetches"), CancelAllCount > CancelAllCountBeforeShutdown);
+	TestFalse(TEXT("Fetch after shutdown returns no handle"), Controller.FetchFeatureFlags(CountingCallback).IsValid());
+	TestEqual(TEXT("Shutdown creates no additional transport"), FlagTransportCreationCount, 2);
+	TestEqual(TEXT("Still no fetch completion delivered"), CompletionCount, 0);
 
 	return true;
 }

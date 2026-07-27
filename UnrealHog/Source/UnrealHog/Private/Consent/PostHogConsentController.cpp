@@ -6,6 +6,7 @@
 #include "Events/PostHogEventProperties.h"
 #include "Events/PostHogEventQueue.h"
 #include "Events/PostHogExceptionPropertiesBuilder.h"
+#include "FeatureFlags/PostHogFeatureFlagHttpTransport.h"
 #include "Http/PostHogBatchTransport.h"
 #include "Lifecycle/PostHogApplicationLifecycleHandler.h"
 #include "Identity/PostHogIdentityManager.h"
@@ -30,9 +31,16 @@ FPostHogConsentController::FPostHogConsentController(FStorageProviderFactory InS
 	FTransportFactory InTransportFactory,
 	FUuidGenerator InUuidGenerator,
 	FLifecycleMetadataProvider InLifecycleMetadataProvider,
-	FReachabilityProviderFactory InReachabilityProviderFactory) :
+	FReachabilityProviderFactory InReachabilityProviderFactory,
+	FFeatureFlagTransportFactory InFeatureFlagTransportFactory) :
 	StorageProviderFactory(MoveTemp(InStorageProviderFactory)),
 	TransportFactory(MoveTemp(InTransportFactory)),
+	FeatureFlagTransportFactory(InFeatureFlagTransportFactory
+		? MoveTemp(InFeatureFlagTransportFactory)
+		: FFeatureFlagTransportFactory([](const FString& ResolvedHost, int32 MaxRetries) -> TUniquePtr<IPostHogFeatureFlagTransport>
+			{
+				return MakeUnique<FPostHogFeatureFlagHttpTransport>(ResolvedHost, MaxRetries);
+			})),
 	ReachabilityProviderFactory(MoveTemp(InReachabilityProviderFactory)),
 	UuidGenerator(MoveTemp(InUuidGenerator)),
 	LifecycleMetadataProvider(MoveTemp(InLifecycleMetadataProvider))
@@ -95,6 +103,13 @@ void FPostHogConsentController::Shutdown()
 	if (EventQueue)
 	{
 		EventQueue->CancelInFlightRequest();
+	}
+
+	// Cancelled before identity and storage are released so an in-flight flag fetch can never
+	// deliver a callback into torn-down state.
+	if (FeatureFlagTransport)
+	{
+		FeatureFlagTransport->CancelAll();
 	}
 
 	// Storage-only finalize: this path (also reached via Deinitialize, OnEnginePreExit, and the
@@ -483,6 +498,27 @@ void FPostHogConsentController::NotifyApplicationBackgrounded()
 	SessionManager->OnBackground();
 }
 
+TSharedPtr<IPostHogFeatureFlagFetchHandle> FPostHogConsentController::FetchFeatureFlags(IPostHogFeatureFlagTransport::FOnFetchComplete OnComplete)
+{
+	// Gate first: no request object, payload, or transport call is created before collection is
+	// permitted, and none is created once teardown has begun.
+	if (!bIsOptedIn || bIsShuttingDown || !FeatureFlagTransport.IsValid() || !IdentityManager.IsValid())
+	{
+		return nullptr;
+	}
+
+	FPostHogFeatureFlagRequest Request;
+	Request.ApiKey = FeatureFlagApiKey;
+	Request.DistinctId = IdentityManager->GetEffectiveDistinctId();
+	if (!bReuseAnonymousId)
+	{
+		Request.AnonymousId = IdentityManager->GetAnonymousId();
+	}
+	Request.Groups = IdentityManager->GetGroups();
+
+	return FeatureFlagTransport->Fetch(Request, MoveTemp(OnComplete));
+}
+
 void FPostHogConsentController::DrainPendingStorageWrites()
 {
 	if (StorageProvider.IsValid())
@@ -549,6 +585,13 @@ bool FPostHogConsentController::EnableCollection(const UPostHogDeveloperSettings
 	Transport = TransportFactory(ValidationResult.ResolvedHost);
 	++TransportCreationCount;
 
+	// Created only on a successful enablement path, so no feature-flag transport (and therefore no
+	// request object) can exist while collection is not permitted.
+	FeatureFlagApiKey = Settings.GetApiKey();
+	bReuseAnonymousId = Settings.ShouldReuseAnonymousId();
+	FeatureFlagTransport = FeatureFlagTransportFactory(ValidationResult.ResolvedHost, Settings.GetFeatureFlagRequestMaxRetries());
+	++FeatureFlagTransportCreationCount;
+
 	ReachabilityProvider = ReachabilityProviderFactory ? ReachabilityProviderFactory() : nullptr;
 
 	EventQueue = MakeUnique<FPostHogEventQueue>(*StorageProvider, *Transport, Settings.GetApiKey(),
@@ -608,6 +651,15 @@ void FPostHogConsentController::DisableCollection()
 	}
 
 	PersistOptIn(false);
+
+	// Cancel before release so no in-flight fetch outlives the identity and storage it was built
+	// from; the transport's own destructor cancels again idempotently.
+	if (FeatureFlagTransport)
+	{
+		FeatureFlagTransport->CancelAll();
+		FeatureFlagTransport.Reset();
+	}
+	FeatureFlagApiKey.Reset();
 
 	EventQueue.Reset();
 	ReachabilityProvider.Reset();
